@@ -235,6 +235,37 @@
       .wifi-hidden{display:none;}
       .wifi-reveal{display:inline!important;}
     }
+
+    /* ── DRAWER ── */
+    .drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.35);z-index:200;opacity:0;pointer-events:none;transition:opacity 0.25s;}
+    .drawer-overlay.open{opacity:1;pointer-events:all;}
+    .drawer{position:fixed;top:0;right:0;width:380px;max-width:100vw;height:100vh;background:var(--white);z-index:201;box-shadow:-8px 0 32px rgba(0,0,0,0.12);transform:translateX(100%);transition:transform 0.28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+    .drawer.open{transform:translateX(0);}
+    .drawer-header{padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0;}
+    .drawer-title{font-size:15px;font-weight:700;color:var(--text);}
+    .drawer-subtitle{font-size:12px;color:var(--text-muted);margin-top:3px;}
+    .drawer-close{background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);}
+    .drawer-close:hover{background:var(--bg);}
+    .drawer-sort{display:flex;gap:6px;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .sort-btn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:'Inter',sans-serif;color:var(--text-muted);transition:all 0.15s;}
+    .sort-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .drawer-body{flex:1;overflow-y:auto;padding:16px 20px;}
+    .drawer-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+    .drawer-row:last-child{border-bottom:none;}
+    .drawer-row-rank{font-size:11px;font-weight:700;color:var(--text-muted);width:20px;text-align:center;flex-shrink:0;}
+    .drawer-row-name{flex:1;font-size:13px;font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .drawer-row-val{font-size:13px;font-weight:700;color:var(--blue);flex-shrink:0;}
+    .drawer-row-bar{width:80px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;flex-shrink:0;}
+    .drawer-row-bar-fill{height:100%;background:var(--blue);border-radius:3px;}
+    .drawer-row-pct{font-size:11px;color:var(--text-muted);width:36px;text-align:right;flex-shrink:0;}
+    .drawer-row.zero .drawer-row-name{color:var(--text-muted);font-weight:400;}
+    .drawer-row.zero .drawer-row-val{color:var(--text-muted);}
+    .drawer-total{padding:14px 0 0;margin-top:4px;border-top:2px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+    .drawer-total-label{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;}
+    .drawer-total-val{font-size:18px;font-weight:700;color:var(--text);}
+    .day-card.clickable{cursor:pointer;}
+    .day-card.clickable:hover{box-shadow:0 4px 16px rgba(37,99,235,0.15);border-color:var(--blue-mid);}
+    .day-card.active-drawer{border-color:var(--blue);background:var(--blue-light);}
     /* ── APT BREAKDOWN ── */
     .apt-breakdown-wrap{overflow-x:auto;margin-top:0;}
     .apt-breakdown-wrap table{font-size:11px;}
@@ -602,13 +633,18 @@ function buildMonthView(days,opts={}){
 
   const chart=`<div class="chart-card"><div class="card-title">${showForecast?'Przychody dzienne + prognoza':'Przychody dzienne — '+monthLabel}</div><div class="card-subtitle">${showForecast?'Słupki pełne = dane · Jasne = prognoza':'Sb+Nd wyróżnione fioletowo'}</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>`;
 
-  const grid=`<div class="grid-card"><div class="card-title">Podział dzienny</div><div class="daily-grid">
+  // store enriched globally so drawer can access aptBreakdown
+  window._currentEnriched = enriched;
+
+  const grid=`<div class="grid-card"><div class="card-title">Podział dzienny <span style="font-size:11px;font-weight:400;color:var(--text-muted)">· kliknij dzień aby zobaczyć rozbicie per apartament</span></div><div class="daily-grid">
     ${enriched.map((d,i)=>{
       const pct=maxVal>0&&d.value!==null?(d.value/maxVal*100).toFixed(1):0;
-      const cls=['day-card',d.value===null?'empty':'',i===maxIdx?'highest':'',i===minIdx&&withVal.length>1?'lowest':'',d.isWeekend?'weekend':''].filter(Boolean).join(' ');
+      const hasData=d.value!==null&&Object.keys(d.aptBreakdown||{}).length>0;
+      const cls=['day-card',hasData?'clickable':'',d.value===null?'empty':'',i===maxIdx?'highest':'',i===minIdx&&withVal.length>1?'lowest':'',d.isWeekend?'weekend':''].filter(Boolean).join(' ');
       const b=i===maxIdx?'<span class="badge">MAX</span>':(i===minIdx&&withVal.length>1)?'<span class="badge">MIN</span>':'';
       const db=d.isWeekend?`<span class="dow-badge">${DOW_PL[d.dow]}</span>`:'';
-      return`<div class="${cls}" style="animation-delay:${Math.min(i*0.025,0.6)}s">${b}${db}<div class="date" style="margin-top:${d.isWeekend?'16px':'2px'}">${d.name}</div><div class="amount">${d.value!==null?`<span class="sym">zł</span>${fmt(d.value)}`:'<span style="font-size:12px;color:var(--text-muted)">Brak</span>'}</div><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
+      const onclick=hasData?`onclick="openDrawer('${d.name}')" `:'';
+      return`<div class="${cls}" ${onclick}data-day="${d.name}" style="animation-delay:${Math.min(i*0.025,0.6)}s">${b}${db}<div class="date" style="margin-top:${d.isWeekend?'16px':'2px'}">${d.name}</div><div class="amount">${d.value!==null?`<span class="sym">zł</span>${fmt(d.value)}`:'<span style="font-size:12px;color:var(--text-muted)">Brak</span>'}</div><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
     }).join('')}
   </div></div>`;
 
@@ -626,68 +662,53 @@ function buildMonthView(days,opts={}){
   const maxAptTotal=monthlyAptTotals[aptsSortedByTotal[0]]||1;
 
   // Daily breakdown table: rows=apartments, cols=days
-  const dailyCols=enriched.filter(d=>d.value!==null);
-  const dailyColHeaders=dailyCols.map(d=>`<th>${d.name}<br><span style="font-weight:400;color:var(--text-muted)">${DOW_PL[d.dow]}</span></th>`).join('');
-  const dailyRows=aptsSortedByTotal.map(apt=>{
-    const cells=dailyCols.map(d=>{
-      const v=(d.aptBreakdown||{})[apt]||0;
-      return`<td style="text-align:right">${v>0?fmt(v):'<span style="color:var(--text-muted)">—</span>'}</td>`;
-    }).join('');
-    const rowTotal=monthlyAptTotals[apt]||0;
-    return`<tr>
-      <td style="font-weight:600;min-width:120px">${apt}</td>
-      ${cells}
-      <td style="text-align:right;font-weight:700;color:var(--blue)">${fmt(rowTotal)}</td>
-    </tr>`;
-  }).join('');
-  const dailyColTotals=dailyCols.map(d=>`<td style="text-align:right;font-weight:700">${fmt(d.value||0)}</td>`).join('');
 
-  const dailyBreakdown=`<div class="grid-card" style="animation:fadeUp 0.4s 0.2s ease both;margin-top:0">
-    <div class="card-title">Przychód dzienny per apartament</div>
-    <div class="card-subtitle">Każda kolumna = jeden dzień · Wiersze posortowane wg przychodu miesięcznego</div>
-    <div class="apt-breakdown-wrap">
-      <table>
-        <thead><tr><th style="text-align:left">Apartament</th>${dailyColHeaders}<th style="text-align:right">SUMA</th></tr></thead>
-        <tbody>
-          ${dailyRows}
-          <tr class="total-row">
-            <td>SUMA DZIENNA</td>
-            ${dailyColTotals}
-            <td style="text-align:right">${fmt(grandTotal)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+  // daily breakdown now in drawer
 
-  // Monthly summary table: rows=apartments, single total column + bar
-  const monthlyRows=aptsSortedByTotal.map(apt=>{
-    const total=monthlyAptTotals[apt]||0;
-    const pct=(total/grandTotal*100).toFixed(1);
-    const barW=Math.round(total/maxAptTotal*120);
-    return`<tr>
-      <td style="font-weight:600">${apt}</td>
-      <td style="text-align:right;font-weight:700">${fmt(total)} zł</td>
-      <td style="text-align:right;color:var(--text-muted)">${pct}%</td>
-      <td><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px;width:120px"><div style="width:${barW}px;height:100%;background:var(--blue);border-radius:3px"></div></div></td>
-    </tr>`;
-  }).join('');
 
-  const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both;margin-top:0">
+
+  // monthly summary (stays below grid)
+  const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
     <div class="card-title">Podsumowanie miesięczne per apartament</div>
-    <div class="card-subtitle">Łączny przychód każdego apartamentu w ${monthLabel}</div>
+    <div class="card-subtitle">Łączny przychód · kliknij nagłówek kolumny aby sortować</div>
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
-        <thead><tr><th style="text-align:left">Apartament</th><th style="text-align:right">Przychód</th><th style="text-align:right">Udział</th><th></th></tr></thead>
-        <tbody>
-          ${monthlyRows}
-          <tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right">${fmt(grandTotal)} zł</td><td style="text-align:right">100%</td><td></td></tr>
-        </tbody>
+        <thead><tr>
+          <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')">Apartament ↕</th>
+          <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')">Przychód ↕</th>
+          <th style="text-align:right">Udział</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="monthlyAptBody"></tbody>
       </table>
     </div>
   </div>`;
 
-  return{html:kpis+forecast+chart+grid+dailyBreakdown+monthlySummary,enriched,fc};
+  // store monthly data globally for re-sorting
+  window._monthlyAptTotals = monthlyAptTotals;
+  window._allApts = allApts;
+  window._grandTotal = grandTotal;
+  window._monthlySortOrder = 'total'; // default: by total desc
+
+  const drawer=`<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="drawerTitle">—</div>
+        <div class="drawer-subtitle" id="drawerSubtitle"></div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-sort">
+      <span style="font-size:11px;color:var(--text-muted);align-self:center;margin-right:4px">Sortuj:</span>
+      <button class="sort-btn active" id="sortDefault" onclick="setDrawerSort('default')">Domyślnie</button>
+      <button class="sort-btn" id="sortDesc" onclick="setDrawerSort('desc')">Największy ↓</button>
+      <button class="sort-btn" id="sortAsc" onclick="setDrawerSort('asc')">Najmniejszy ↑</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </div>`;
+
+  return{html:kpis+forecast+chart+grid+monthlySummary+drawer,enriched,fc};
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -952,6 +973,112 @@ function toggleWifi(id,pass){
   if(btn)btn.textContent=hidden?'Ukryj':'Pokaż';
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   DRAWER
+═══════════════════════════════════════════════════════ */
+let _drawerSort='default';
+let _drawerDay=null;
+
+function openDrawer(dayName){
+  const enriched=window._currentEnriched||[];
+  const day=enriched.find(d=>d.name===dayName);
+  if(!day)return;
+  _drawerDay=dayName;
+
+  // highlight active card
+  document.querySelectorAll('.day-card').forEach(c=>c.classList.remove('active-drawer'));
+  const card=document.querySelector(`.day-card[data-day="${dayName}"]`);
+  if(card)card.classList.add('active-drawer');
+
+  document.getElementById('drawerTitle').textContent=`${dayName} — rozbicie per apartament`;
+  const dow=DOW_PL[day.date?.getDay()??new Date().getDay()];
+  document.getElementById('drawerSubtitle').textContent=`${dow} · łącznie: ${fmt(day.value||0)} zł`;
+  renderDrawerBody(day);
+
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer(){
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  document.querySelectorAll('.day-card').forEach(c=>c.classList.remove('active-drawer'));
+  _drawerDay=null;
+}
+
+function setDrawerSort(s){
+  _drawerSort=s;
+  document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sort'+s.charAt(0).toUpperCase()+s.slice(1))?.classList.add('active');
+  if(_drawerDay){
+    const day=(window._currentEnriched||[]).find(d=>d.name===_drawerDay);
+    if(day)renderDrawerBody(day);
+  }
+}
+
+function renderDrawerBody(day){
+  const breakdown=day.aptBreakdown||{};
+  const allApts=window._allApts||Object.keys(breakdown);
+  const dayTotal=day.value||0;
+
+  // include ALL apartments (even 0 for this day)
+  let rows=allApts.map(name=>({name,value:breakdown[name]||0}));
+
+  if(_drawerSort==='desc')rows.sort((a,b)=>b.value-a.value);
+  else if(_drawerSort==='asc')rows.sort((a,b)=>a.value-b.value);
+  // else keep default (sheet order)
+
+  const maxVal=Math.max(...rows.map(r=>r.value),1);
+
+  const rowsHtml=rows.map((r,i)=>{
+    const pct=r.value>0?(r.value/dayTotal*100).toFixed(1):'0.0';
+    const barW=Math.round(r.value/maxVal*100);
+    return`<div class="drawer-row ${r.value===0?'zero':''}">
+      <div class="drawer-row-rank">${i+1}</div>
+      <div class="drawer-row-name" title="${r.name}">${r.name}</div>
+      <div class="drawer-row-bar"><div class="drawer-row-bar-fill" style="width:${barW}%"></div></div>
+      <div class="drawer-row-pct">${pct}%</div>
+      <div class="drawer-row-val">${r.value>0?fmt(r.value):'—'}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('drawerBody').innerHTML=rowsHtml+`
+    <div class="drawer-total">
+      <span class="drawer-total-label">Łącznie</span>
+      <span class="drawer-total-val">${fmt(dayTotal)} zł</span>
+    </div>`;
+}
+
+function renderMonthlyTable(){
+  const totals=window._monthlyAptTotals||{};
+  const apts=window._allApts||[];
+  const grand=window._grandTotal||0;
+  const sort=window._monthlySortOrder||'total';
+  let sorted=[...apts];
+  if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
+  else sorted.sort((a,b)=>a.localeCompare(b,'pl'));
+  const maxV=totals[sorted[0]]||1;
+  const body=document.getElementById('monthlyAptBody');
+  if(!body)return;
+  body.innerHTML=sorted.map(apt=>{
+    const total=totals[apt]||0;
+    const pct=grand>0?(total/grand*100).toFixed(1):'0.0';
+    const barW=Math.round(total/maxV*120);
+    return`<tr>
+      <td style="font-weight:600">${apt}</td>
+      <td style="text-align:right;font-weight:700">${fmt(total)} zł</td>
+      <td style="text-align:right;color:var(--text-muted)">${pct}%</td>
+      <td><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px;width:120px"><div style="height:100%;width:${barW}px;background:var(--blue);border-radius:3px"></div></div></td>
+    </tr>`;
+  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
+}
+
+function sortMonthlyTable(by){
+  window._monthlySortOrder=by;
+  renderMonthlyTable();
+}
+
 /* ═══════════════════════════════════════════════════════
    CHARTS
 ═══════════════════════════════════════════════════════ */
@@ -1108,7 +1235,7 @@ function renderApp(){
   }
 
   mount(header+navL1+navL2+content);
-  if(enriched)initRentalChart(enriched,fc);
+  if(enriched){initRentalChart(enriched,fc);setTimeout(renderMonthlyTable,50);}
   if(mediaView)initMediaCharts(mediaView);
 }
 
