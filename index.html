@@ -716,7 +716,7 @@ function buildMonthView(days,opts={}){
   window._monthlyAptTotals = monthlyAptTotals;
   window._allApts = allApts;
   window._grandTotal = grandTotal;
-  window._monthlySortOrder = 'total'; // default: by total desc
+  window._monthlySortOrder = 'default'; // default: custom order
 
   const drawer=`<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
   <div class="drawer" id="drawer">
@@ -1082,25 +1082,37 @@ function renderMonthlyTable(){
   const totals=window._monthlyAptTotals||{};
   const apts=window._allApts||[];
   const grand=window._grandTotal||0;
-  const sort=window._monthlySortOrder||'total';
+  const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
   if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
   else if(sort==='name')sorted.sort((a,b)=>a.localeCompare(b,'pl'));
   else sorted=sortByDefaultOrder(sorted);
-  const maxV=totals[sorted[0]]||1;
+
+  // top3 / bottom3 by value (ignore zeros)
+  const withVal=sorted.filter(a=>(totals[a]||0)>0);
+  const byVal=[...withVal].sort((a,b)=>(totals[b]||0)-(totals[a]||0));
+  const top3=new Set(byVal.slice(0,3));
+  const bot3=new Set(byVal.slice(-3));
+
+  const maxV=Math.max(...sorted.map(a=>totals[a]||0),1);
   const body=document.getElementById('monthlyAptBody');
   if(!body)return;
   body.innerHTML=sorted.map(apt=>{
     const total=totals[apt]||0;
     const pct=grand>0?(total/grand*100).toFixed(1):'0.0';
-    const barW=Math.round(total/maxV*120);
-    return`<tr>
-      <td style="font-weight:600">${apt}</td>
-      <td style="text-align:right;font-weight:700">${fmt(total)} zł</td>
-      <td style="text-align:right;color:var(--text-muted)">${pct}%</td>
-      <td><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px;width:120px"><div style="height:100%;width:${barW}px;background:var(--blue);border-radius:3px"></div></div></td>
+    const barW=Math.round(total/maxV*100);
+    const isTop=top3.has(apt)&&total>0;
+    const isBot=bot3.has(apt)&&total>0&&!isTop;
+    const rowBg=isTop?'var(--green-light)':isBot?'var(--red-light)':'';
+    const valColor=isTop?'var(--green)':isBot?'var(--red)':'var(--blue)';
+    const badge=isTop?'<span style="font-size:10px;margin-left:5px">🟢</span>':isBot?'<span style="font-size:10px;margin-left:5px">🔴</span>':'';
+    return`<tr style="background:${rowBg}">
+      <td style="font-weight:600">${apt}${badge}</td>
+      <td style="text-align:right;font-weight:700;color:${valColor};font-variant-numeric:tabular-nums">${fmt(total)} zł</td>
+      <td style="text-align:right;color:var(--text-muted);font-variant-numeric:tabular-nums">${pct}%</td>
+      <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px"><div style="height:100%;width:${barW}%;background:${isTop?'var(--green)':isBot?'var(--red)':'var(--blue)'};border-radius:3px"></div></div></td>
     </tr>`;
-  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
+  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
 }
 
 function sortMonthlyTable(by){
