@@ -713,15 +713,15 @@ function buildMonthView(days,opts={}){
   const channelSection=`<div class="chart-card" style="animation:fadeUp 0.4s 0.2s ease both" id="channelCard">
     <div class="card-title">Kanały rezerwacji — ${monthLabel}</div>
     <div class="card-subtitle">Udział przychodów według źródła rezerwacji</div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:20px">
-      <div style="position:relative;width:220px;height:220px;flex-shrink:0">
-        <canvas id="channelPie"></canvas>
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
-          <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Łącznie</div>
-          <div id="channelTotal" style="font-size:15px;font-weight:700;color:var(--text)"></div>
+    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap;justify-content:center">
+      <div style="position:relative;width:160px;height:160px;flex-shrink:0">
+        <canvas id="channelPie" width="160" height="160"></canvas>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:10px">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;line-height:1.2">Łącznie</div>
+          <div id="channelTotal" style="font-size:13px;font-weight:700;color:var(--text);line-height:1.3;word-break:break-all"></div>
         </div>
       </div>
-      <div id="channelLegend" style="display:flex;flex-wrap:wrap;gap:8px 28px;justify-content:center;width:100%"></div>
+      <div id="channelLegend" style="display:flex;flex-direction:column;gap:12px;min-width:220px"></div>
     </div>
   </div>`;
 
@@ -1176,8 +1176,8 @@ function initChannelChart(){
   if(_charts.pie){try{_charts.pie.destroy();}catch(e){}}
   _charts.pie=new Chart(canvas.getContext('2d'),{
     type:'doughnut',
-    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
-    options:{responsive:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.label}: zł ${fmt(c.parsed)} (${(c.parsed/grand*100).toFixed(1)}%)`}}}}
+    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:4}]},
+    options:{responsive:false,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.label}: zł ${fmt(c.parsed)} (${(c.parsed/grand*100).toFixed(1)}%)`}}}}
   });
 
   // total in center
