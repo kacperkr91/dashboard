@@ -546,12 +546,17 @@ const APT_ORDER=[
   'Plac Szczepański B41','Plac Szczepański C41'
 ];
 function sortByDefaultOrder(apts){
+  function getIdx(a){
+    let i=APT_ORDER.indexOf(a);
+    if(i!==-1)return i;
+    i=APT_ORDER.findIndex(n=>n.toLowerCase()===a.toLowerCase());
+    if(i!==-1)return i;
+    i=APT_ORDER.findIndex(n=>a.toLowerCase().includes(n.toLowerCase()));
+    return i===-1?9999:i;
+  }
   return [...apts].sort((a,b)=>{
-    const ai=APT_ORDER.findIndex(n=>n===a)||APT_ORDER.findIndex(n=>a.toLowerCase().includes(n.toLowerCase()));
-    const bi=APT_ORDER.findIndex(n=>n===b)||APT_ORDER.findIndex(n=>b.toLowerCase().includes(n.toLowerCase()));
-    const ar=ai===-1?9999:ai;
-    const br=bi===-1?9999:bi;
-    if(ar!==br)return ar-br;
+    const ai=getIdx(a),bi=getIdx(b);
+    if(ai!==bi)return ai-bi;
     return a.localeCompare(b,'pl');
   });
 }
