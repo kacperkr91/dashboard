@@ -431,28 +431,46 @@ async function loadMarchData(){
 
 async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
   const{apiKey,spreadsheetId}=CONFIG;
+  // Fetch C=date, H=channel, J=apt, M=amount
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
-  params.append('ranges',`'${sheet}'!${dateCol}${startRow}:${dateCol}${endRow}`);
-  params.append('ranges',`'${sheet}'!${amtCol}${startRow}:${amtCol}${endRow}`);
+  params.append('ranges',`'${sheet}'!C${startRow}:C${endRow}`);   // date
+  params.append('ranges',`'${sheet}'!H${startRow}:H${endRow}`);   // channel
+  params.append('ranges',`'${sheet}'!J${startRow}:J${endRow}`);   // apt name
+  params.append('ranges',`'${sheet}'!M${startRow}:M${endRow}`);   // amount
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
-  const dates=data.valueRanges[0]?.values||[];
-  const amounts=data.valueRanges[1]?.values||[];
-  const byDate={};
-  for(let i=0;i<dates.length;i++){
-    const dr=dates[i]?.[0],ar=amounts[i]?.[0];
+  const dateVals =data.valueRanges[0]?.values||[];
+  const chanVals =data.valueRanges[1]?.values||[];
+  const aptVals  =data.valueRanges[2]?.values||[];
+  const amtVals  =data.valueRanges[3]?.values||[];
+
+  // group by day key
+  const byDate={};  // key -> {value, aptBreakdown, chanBreakdown}
+  for(let i=0;i<dateVals.length;i++){
+    const dr=dateVals[i]?.[0];
+    const ar=amtVals[i]?.[0];
     if(!dr||!ar)continue;
     const m=String(dr).match(/(\d{4})-(\d{2})-(\d{2})/);
     if(!m)continue;
     const[,yr,mo,dd]=m;
     const key=`${dd}.${mo}`;
     const amt=parseFloat(String(ar).replace(/[^\d.,-]/g,'').replace(',','.'));
-    if(isNaN(amt))continue;
-    byDate[key]=(byDate[key]||0)+amt;
+    if(isNaN(amt)||amt===0)continue;
+
+    if(!byDate[key])byDate[key]={value:0,aptBreakdown:{},chanBreakdown:{}};
+    byDate[key].value+=amt;
+
+    const aptName=String(aptVals[i]?.[0]||'').trim()||'Inny';
+    byDate[key].aptBreakdown[aptName]=(byDate[key].aptBreakdown[aptName]||0)+amt;
+
+    const rawChan=String(chanVals[i]?.[0]||'').trim().toLowerCase();
+    const chan=rawChan.includes('booking')?'Booking.com':rawChan.includes('airbnb')?'Airbnb':rawChan.includes('profitroom')?'Profitroom':'Własna';
+    byDate[key].chanBreakdown[chan]=(byDate[key].chanBreakdown[chan]||0)+amt;
   }
+
   const days=[];
   for(let d=1;d<=totalDays;d++){
     const key=String(d).padStart(2,'0')+'.'+moStr;
-    if(byDate[key]!==undefined)days.push({name:key,value:byDate[key]});
+    if(byDate[key]!==undefined)days.push({name:key,...byDate[key]});
   }
   if(!days.length)throw new Error('NO_DATA');
   return days;
