@@ -235,6 +235,18 @@
       .wifi-hidden{display:none;}
       .wifi-reveal{display:inline!important;}
     }
+    /* ── APT BREAKDOWN ── */
+    .apt-breakdown-wrap{overflow-x:auto;margin-top:0;}
+    .apt-breakdown-wrap table{font-size:11px;}
+    .apt-breakdown-wrap thead th{font-size:10px;padding:7px 10px;background:#f8fafc;}
+    .apt-breakdown-wrap tbody td{padding:6px 10px;font-size:11px;}
+    .apt-breakdown-wrap tr.total-row{background:var(--blue-light);font-weight:700;}
+    .apt-breakdown-wrap tr.total-row td{color:var(--blue);}
+    .monthly-apt-table thead th{font-size:11px;white-space:nowrap;}
+    .monthly-apt-table tbody td{font-size:11px;white-space:nowrap;}
+    .monthly-apt-table tr.grand-total{background:var(--blue-light);font-weight:700;}
+    .monthly-apt-table tr.grand-total td{color:var(--blue);}
+    .apt-bar-inline{display:inline-block;height:6px;background:var(--blue-mid);border-radius:3px;vertical-align:middle;margin-left:6px;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
     @keyframes spin{to{transform:rotate(360deg)}}
     @media(max-width:640px){
@@ -343,21 +355,42 @@ async function fetchSheetNames(id,key){
    DATA LOADERS
 ═══════════════════════════════════════════════════════ */
 async function loadMarchData(){
-  const{apiKey,spreadsheetId,dayTabRegex,cellMarch}=CONFIG;
+  const{apiKey,spreadsheetId,dayTabRegex}=CONFIG;
   const all=await fetchSheetNames(spreadsheetId,apiKey);
   const day=all.filter(n=>dayTabRegex.test(n)).sort((a,b)=>{
     const[ad,am]=a.split('.').map(Number),[bd,bm]=b.split('.').map(Number);
     return am!==bm?am-bm:ad-bd;
   });
   if(!day.length)throw new Error('NO_DAY_TABS');
-  const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
-  day.forEach(n=>params.append('ranges',`'${n}'!${cellMarch}`));
-  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
-  return day.map((name,i)=>{
-    const raw=data.valueRanges?.[i]?.values?.[0]?.[0];
-    const val=(raw!==undefined&&raw!=='')?parseFloat(raw):null;
-    return{name,value:isNaN(val)?null:val};
-  });
+
+  // Fetch J3:J33 (apt names) + M3:M33 (amounts) for each day tab in parallel batches
+  // Google Sheets batchGet supports up to 100 ranges — split into chunks if needed
+  const CHUNK=40; // 2 ranges per tab = 40 tabs per request
+  const results=[];
+  for(let ci=0;ci<day.length;ci+=CHUNK){
+    const chunk=day.slice(ci,ci+CHUNK);
+    const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+    chunk.forEach(n=>{
+      params.append('ranges',`'${n}'!J3:J33`);
+      params.append('ranges',`'${n}'!M3:M33`);
+    });
+    const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+    chunk.forEach((name,i)=>{
+      const aptVals=data.valueRanges[i*2]?.values||[];
+      const amtVals=data.valueRanges[i*2+1]?.values||[];
+      // build per-apt breakdown for this day
+      const aptMap={};
+      for(let r=0;r<amtVals.length;r++){
+        const amt=parseFloat(amtVals[r]?.[0]);
+        if(isNaN(amt)||amt===0)continue;
+        const aptName=String(aptVals[r]?.[0]||'').trim()||'Inny';
+        aptMap[aptName]=(aptMap[aptName]||0)+amt;
+      }
+      const dayTotal=Object.values(aptMap).reduce((s,v)=>s+v,0);
+      results.push({name,value:dayTotal||null,aptBreakdown:aptMap});
+    });
+  }
+  return results;
 }
 
 async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
@@ -440,7 +473,7 @@ async function loadApartmentsData(){
 ═══════════════════════════════════════════════════════ */
 function calcForecast(days){
   const year=new Date().getFullYear();
-  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date)};});
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null&&d.value>=0);
   if(!withVal.length)return null;
   const we=withVal.filter(d=>d.isWeekend),wd=withVal.filter(d=>!d.isWeekend);
@@ -528,7 +561,7 @@ function renderConfig(){
 ═══════════════════════════════════════════════════════ */
 function buildMonthView(days,opts={}){
   const{showForecast=false,monthLabel=''}=opts;
-  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date)};});
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
   const avg=withVal.length?total/withVal.length:0;
@@ -579,7 +612,82 @@ function buildMonthView(days,opts={}){
     }).join('')}
   </div></div>`;
 
-  return{html:kpis+forecast+chart+grid,enriched,fc};
+  // ── Per-apt daily breakdown table ──
+  // Collect all unique apt names across all days
+  const allApts=[...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))].sort();
+
+  // Monthly totals per apt
+  const monthlyAptTotals={};
+  allApts.forEach(a=>{
+    monthlyAptTotals[a]=enriched.reduce((s,d)=>(d.aptBreakdown||{})[a]?s+(d.aptBreakdown[a]||0):s,0);
+  });
+  const aptsSortedByTotal=[...allApts].sort((a,b)=>monthlyAptTotals[b]-monthlyAptTotals[a]);
+  const grandTotal=aptsSortedByTotal.reduce((s,a)=>s+monthlyAptTotals[a],0);
+  const maxAptTotal=monthlyAptTotals[aptsSortedByTotal[0]]||1;
+
+  // Daily breakdown table: rows=apartments, cols=days
+  const dailyCols=enriched.filter(d=>d.value!==null);
+  const dailyColHeaders=dailyCols.map(d=>`<th>${d.name}<br><span style="font-weight:400;color:var(--text-muted)">${DOW_PL[d.dow]}</span></th>`).join('');
+  const dailyRows=aptsSortedByTotal.map(apt=>{
+    const cells=dailyCols.map(d=>{
+      const v=(d.aptBreakdown||{})[apt]||0;
+      return`<td style="text-align:right">${v>0?fmt(v):'<span style="color:var(--text-muted)">—</span>'}</td>`;
+    }).join('');
+    const rowTotal=monthlyAptTotals[apt]||0;
+    return`<tr>
+      <td style="font-weight:600;min-width:120px">${apt}</td>
+      ${cells}
+      <td style="text-align:right;font-weight:700;color:var(--blue)">${fmt(rowTotal)}</td>
+    </tr>`;
+  }).join('');
+  const dailyColTotals=dailyCols.map(d=>`<td style="text-align:right;font-weight:700">${fmt(d.value||0)}</td>`).join('');
+
+  const dailyBreakdown=`<div class="grid-card" style="animation:fadeUp 0.4s 0.2s ease both;margin-top:0">
+    <div class="card-title">Przychód dzienny per apartament</div>
+    <div class="card-subtitle">Każda kolumna = jeden dzień · Wiersze posortowane wg przychodu miesięcznego</div>
+    <div class="apt-breakdown-wrap">
+      <table>
+        <thead><tr><th style="text-align:left">Apartament</th>${dailyColHeaders}<th style="text-align:right">SUMA</th></tr></thead>
+        <tbody>
+          ${dailyRows}
+          <tr class="total-row">
+            <td>SUMA DZIENNA</td>
+            ${dailyColTotals}
+            <td style="text-align:right">${fmt(grandTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  // Monthly summary table: rows=apartments, single total column + bar
+  const monthlyRows=aptsSortedByTotal.map(apt=>{
+    const total=monthlyAptTotals[apt]||0;
+    const pct=(total/grandTotal*100).toFixed(1);
+    const barW=Math.round(total/maxAptTotal*120);
+    return`<tr>
+      <td style="font-weight:600">${apt}</td>
+      <td style="text-align:right;font-weight:700">${fmt(total)} zł</td>
+      <td style="text-align:right;color:var(--text-muted)">${pct}%</td>
+      <td><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px;width:120px"><div style="width:${barW}px;height:100%;background:var(--blue);border-radius:3px"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both;margin-top:0">
+    <div class="card-title">Podsumowanie miesięczne per apartament</div>
+    <div class="card-subtitle">Łączny przychód każdego apartamentu w ${monthLabel}</div>
+    <div class="apt-breakdown-wrap">
+      <table class="monthly-apt-table">
+        <thead><tr><th style="text-align:left">Apartament</th><th style="text-align:right">Przychód</th><th style="text-align:right">Udział</th><th></th></tr></thead>
+        <tbody>
+          ${monthlyRows}
+          <tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right">${fmt(grandTotal)} zł</td><td style="text-align:right">100%</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  return{html:kpis+forecast+chart+grid+dailyBreakdown+monthlySummary,enriched,fc};
 }
 
 /* ═══════════════════════════════════════════════════════
