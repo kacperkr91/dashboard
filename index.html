@@ -533,6 +533,29 @@ function calcForecast(days){
 /* ═══════════════════════════════════════════════════════
    FORMATTERS
 ═══════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════
+   DEFAULT APARTMENT ORDER
+═══════════════════════════════════════════════════════ */
+const APT_ORDER=[
+  'Rynek 1','Rynek 7','Rynek 8','Rynek 9','Rynek 10','Rynek 11',
+  'Rynek 30c','Rynek 31c','Rynek 32c',
+  'Rynek 12r','Rynek 14r','Rynek 15r','Rynek 30r','Rynek 31r','Rynek 32r','Rynek 33r','Rynek 36r','Rynek 37r',
+  'Zamoyskiego A','Zamoyskiego B','Orzeszkowej','Stawowa','Katowicka',
+  'Bronowicka','Wawel','Wawel II no. 14','Wawel II no.15','Zamkowa',
+  'Plac Szczepański B41','Plac Szczepański C41'
+];
+function sortByDefaultOrder(apts){
+  return [...apts].sort((a,b)=>{
+    const ai=APT_ORDER.findIndex(n=>a.toLowerCase().includes(n.toLowerCase())||n.toLowerCase().includes(a.toLowerCase()));
+    const bi=APT_ORDER.findIndex(n=>b.toLowerCase().includes(n.toLowerCase())||n.toLowerCase().includes(b.toLowerCase()));
+    const ar=ai===-1?9999:ai;
+    const br=bi===-1?9999:bi;
+    if(ar!==br)return ar-br;
+    return a.localeCompare(b,'pl');
+  });
+}
+
 const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
 
@@ -650,7 +673,7 @@ function buildMonthView(days,opts={}){
 
   // ── Per-apt daily breakdown table ──
   // Collect all unique apt names across all days
-  const allApts=[...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))].sort();
+  const allApts=sortByDefaultOrder([...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))]);
 
   // Monthly totals per apt
   const monthlyAptTotals={};
@@ -674,8 +697,8 @@ function buildMonthView(days,opts={}){
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
         <thead><tr>
-          <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')">Apartament ↕</th>
-          <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')">Przychód ↕</th>
+          <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')" title="Kliknij aby sortować">Apartament ↕</th>
+          <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')" title="Kliknij aby sortować">Przychód ↕</th>
           <th style="text-align:right">Udział</th>
           <th></th>
         </tr></thead>
@@ -1027,7 +1050,7 @@ function renderDrawerBody(day){
 
   if(_drawerSort==='desc')rows.sort((a,b)=>b.value-a.value);
   else if(_drawerSort==='asc')rows.sort((a,b)=>a.value-b.value);
-  // else keep default (sheet order)
+  else rows=sortByDefaultOrder(rows.map(r=>r.name)).map(name=>rows.find(r=>r.name===name)).filter(Boolean);
 
   const maxVal=Math.max(...rows.map(r=>r.value),1);
 
@@ -1057,7 +1080,8 @@ function renderMonthlyTable(){
   const sort=window._monthlySortOrder||'total';
   let sorted=[...apts];
   if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
-  else sorted.sort((a,b)=>a.localeCompare(b,'pl'));
+  else if(sort==='name')sorted.sort((a,b)=>a.localeCompare(b,'pl'));
+  else sorted=sortByDefaultOrder(sorted);
   const maxV=totals[sorted[0]]||1;
   const body=document.getElementById('monthlyAptBody');
   if(!body)return;
@@ -1075,7 +1099,11 @@ function renderMonthlyTable(){
 }
 
 function sortMonthlyTable(by){
-  window._monthlySortOrder=by;
+  // cycle: total → name → default
+  const current=window._monthlySortOrder||'default';
+  if(by==='name') window._monthlySortOrder= current==='name'?'default':'name';
+  else if(by==='total') window._monthlySortOrder= current==='total'?'default':'total';
+  else window._monthlySortOrder='default';
   renderMonthlyTable();
 }
 
