@@ -713,9 +713,15 @@ function buildMonthView(days,opts={}){
   const channelSection=`<div class="chart-card" style="animation:fadeUp 0.4s 0.2s ease both" id="channelCard">
     <div class="card-title">Kanały rezerwacji — ${monthLabel}</div>
     <div class="card-subtitle">Udział przychodów według źródła rezerwacji</div>
-    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap">
-      <div style="width:220px;height:220px;flex-shrink:0"><canvas id="channelPie"></canvas></div>
-      <div id="channelLegend" style="flex:1;min-width:160px"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:20px">
+      <div style="position:relative;width:220px;height:220px;flex-shrink:0">
+        <canvas id="channelPie"></canvas>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+          <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Łącznie</div>
+          <div id="channelTotal" style="font-size:15px;font-weight:700;color:var(--text)"></div>
+        </div>
+      </div>
+      <div id="channelLegend" style="display:flex;flex-wrap:wrap;gap:8px 28px;justify-content:center;width:100%"></div>
     </div>
   </div>`;
 
@@ -1174,14 +1180,18 @@ function initChannelChart(){
     options:{responsive:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.label}: zł ${fmt(c.parsed)} (${(c.parsed/grand*100).toFixed(1)}%)`}}}}
   });
 
-  // custom legend
+  // total in center
+  const tot=document.getElementById('channelTotal');
+  if(tot)tot.textContent=fmt(grand)+' zł';
+
+  // horizontal legend
   const leg=document.getElementById('channelLegend');
   if(leg)leg.innerHTML=entries.map(([k,v])=>`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <div style="width:12px;height:12px;border-radius:3px;background:${COLORS[k]||'#94a3b8'};flex-shrink:0"></div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${k}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${fmt(v)} zł · ${(v/grand*100).toFixed(1)}%</div>
+    <div style="display:flex;align-items:center;gap:8px;min-width:160px">
+      <div style="width:10px;height:10px;border-radius:2px;background:${COLORS[k]||'#94a3b8'};flex-shrink:0"></div>
+      <div>
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${k}</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px">${fmt(v)} zł · ${(v/grand*100).toFixed(1)}%</span>
       </div>
     </div>`).join('');
 }
