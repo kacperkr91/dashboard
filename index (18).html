@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Old Town Vistula Premium Apartments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --blue:#2563eb;--blue-light:#eff6ff;--blue-mid:#bfdbfe;
+      --green:#16a34a;--green-light:#f0fdf4;
+      --red:#dc2626;--red-light:#fef2f2;
+      --purple:#7c3aed;--purple-light:#f5f3ff;--purple-mid:#ddd6fe;
+      --orange:#ea580c;--orange-light:#fff7ed;--orange-mid:#fed7aa;
+      --bg:#f8fafc;--white:#ffffff;--border:#e2e8f0;
+      --text:#0f172a;--text-mid:#475569;--text-muted:#94a3b8;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
+    .app{max-width:1300px;margin:0 auto;padding:32px 24px 64px;}
+
+    /* ── HEADER ── */
+    header{display:flex;justify-content:space-between;align-items:center;background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px 28px;margin-bottom:20px;}
+    .brand{display:flex;align-items:center;gap:14px;}
+    .brand-icon{width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .brand-name{font-size:16px;font-weight:700;color:var(--text);line-height:1.2;}
+    .brand-sub{font-size:12px;color:var(--text-muted);margin-top:2px;}
+    .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .btn-icon{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:6px;}
+    .btn-icon:hover{background:var(--bg);}
+
+    /* ── NAV LEVEL 1 — main sections ── */
+    .nav-l1{display:flex;gap:8px;margin-bottom:12px;}
+    .nav-l1-btn{display:flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:var(--white);color:var(--text-muted);font-family:'Inter',sans-serif;transition:all 0.15s;}
+    .nav-l1-btn:hover{border-color:#cbd5e1;color:var(--text);background:var(--bg);}
+    .nav-l1-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+    .nav-l1-btn.active.media{background:var(--orange);border-color:var(--orange);}
+    .nav-l1-btn .icon{font-size:18px;}
+    .nav-l1-btn .badge-count{font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:rgba(255,255,255,0.25);}
+
+    /* ── NAV LEVEL 2 — year/month ── */
+    .nav-l2{display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:5px;margin-bottom:20px;flex-wrap:wrap;}
+    .nav-l2-year{display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;font-family:'Inter',sans-serif;color:var(--text-muted);transition:all 0.15s;letter-spacing:0.03em;}
+    .nav-l2-year:hover{background:var(--bg);color:var(--text);}
+    .nav-l2-year.active{background:var(--blue-light);color:var(--blue);}
+    .nav-l2-sep{color:var(--border);font-size:18px;user-select:none;}
+    .nav-l2-months{display:flex;gap:3px;flex-wrap:wrap;}
+    .nav-l2-month{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none;font-family:'Inter',sans-serif;color:var(--text-muted);transition:all 0.15s;}
+    .nav-l2-month:hover{background:var(--bg);color:var(--text);}
+    .nav-l2-month.active{background:var(--blue);color:#fff;font-weight:600;}
+    .nav-l2-month.empty{opacity:0.35;cursor:default;}
+    .nav-l2-month.empty:hover{background:none;color:var(--text-muted);}
+
+    /* ── KPI ── */
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
+    .kpi-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px 24px;animation:fadeUp 0.4s ease both;}
+    .kpi-card .label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;}
+    .kpi-card .value{font-size:26px;font-weight:700;color:var(--text);line-height:1;}
+    .kpi-card .value .sym{font-size:15px;font-weight:500;color:var(--text-muted);margin-right:3px;}
+    .kpi-card .sub{font-size:12px;color:var(--text-muted);margin-top:6px;}
+    .kpi-card.c-blue  {border-left:4px solid var(--blue);}
+    .kpi-card.c-green {border-left:4px solid var(--green);}
+    .kpi-card.c-red   {border-left:4px solid var(--red);}
+    .kpi-card.c-purple{border-left:4px solid var(--purple);}
+    .kpi-card.c-orange{border-left:4px solid var(--orange);}
+
+    /* ── FORECAST ── */
+    .forecast-card{background:var(--white);border:1px solid var(--purple-mid);border-radius:12px;padding:24px 28px;margin-bottom:24px;animation:fadeUp 0.4s 0.05s ease both;position:relative;overflow:hidden;}
+    .forecast-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--purple));}
+    .forecast-top{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:20px;margin-bottom:20px;}
+    .fc-main .fc-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;}
+    .fc-main .fc-value{font-size:36px;font-weight:700;color:var(--purple);line-height:1;}
+    .fc-main .fc-value .sym{font-size:20px;font-weight:500;margin-right:3px;color:#a78bfa;}
+    .fc-main .fc-sub{font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5;}
+    .confidence-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-top:10px;}
+    .confidence-badge.high  {color:var(--green);background:var(--green-light);}
+    .confidence-badge.medium{color:#d97706;background:#fffbeb;}
+    .confidence-badge.low   {color:var(--red);background:var(--red-light);}
+    .fc-stats{display:flex;gap:16px;flex-wrap:wrap;}
+    .fc-stat{background:var(--bg);border-radius:8px;padding:12px 16px;min-width:110px;}
+    .fc-stat .fc-stat-label{font-size:11px;color:var(--text-muted);margin-bottom:4px;}
+    .fc-stat .fc-stat-val{font-size:14px;font-weight:700;color:var(--text);}
+    .progress-wrap{margin-top:4px;}
+    .progress-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px;}
+    .progress-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:4px;transition:width 0.8s ease;}
+    .weekend-info{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:11px;color:var(--text-muted);background:var(--purple-light);border-radius:8px;padding:8px 12px;}
+    .weekend-info strong{color:var(--purple);}
+
+    /* ── CHARTS ── */
+    .chart-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-bottom:24px;animation:fadeUp 0.4s 0.1s ease both;}
+    .card-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
+    .card-subtitle{font-size:12px;color:var(--text-muted);margin-bottom:20px;}
+    .chart-wrap{height:280px;}
+
+    /* ── DAILY GRID ── */
+    .grid-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:24px 28px;animation:fadeUp 0.4s 0.15s ease both;}
+    .daily-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-top:16px;}
+    .day-card{border:1px solid var(--border);border-radius:10px;padding:14px 12px;position:relative;transition:box-shadow 0.2s;background:var(--white);}
+    .day-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.07);}
+    .day-card.highest{background:var(--green-light);border-color:#86efac;}
+    .day-card.lowest{background:var(--red-light);border-color:#fca5a5;}
+    .day-card.empty{opacity:0.45;}
+    .day-card.weekend{border-left:3px solid var(--purple);}
+    .day-card.weekend.empty{border-left:3px solid var(--purple-mid);}
+    .badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;}
+    .day-card.highest .badge{color:var(--green);background:#dcfce7;}
+    .day-card.lowest  .badge{color:var(--red);background:#fee2e2;}
+    .dow-badge{position:absolute;top:8px;left:8px;font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;color:var(--purple);background:var(--purple-light);}
+    .day-card .date{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;margin-top:2px;}
+    .day-card .amount{font-size:18px;font-weight:700;color:var(--text);}
+    .day-card .amount .sym{font-size:12px;font-weight:500;color:var(--text-muted);margin-right:2px;}
+    .day-card .bar{margin-top:10px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+    .day-card .bar-fill{height:100%;background:var(--blue-mid);border-radius:2px;transition:width 0.5s ease;}
+    .day-card.highest .bar-fill{background:#4ade80;}
+    .day-card.lowest  .bar-fill{background:#fca5a5;}
+    .day-card.weekend .bar-fill{background:var(--purple-mid);}
+
+    /* ── MEDIA ── */
+    .media-section{margin-bottom:24px;animation:fadeUp 0.4s ease both;}
+    .media-table-wrap{overflow-x:auto;margin-top:16px;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    thead th{background:var(--bg);padding:10px 12px;text-align:right;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
+    thead th:first-child,thead th:nth-child(2){text-align:left;}
+    tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+    tbody tr:hover{background:#f8fafc;}
+    tbody tr.suma-row{background:var(--orange-light);font-weight:700;border-top:2px solid var(--orange-mid);}
+    tbody tr.selected{background:var(--blue-light)!important;outline:2px solid var(--blue);outline-offset:-2px;}
+    tbody tr.selected td:nth-child(2){color:var(--blue);font-weight:700;}
+    .line-chart-label{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;}
+    .apt-chip{display:inline-flex;align-items:center;gap:6px;background:var(--blue-light);color:var(--blue);font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;}
+    .apt-chip .chip-close{cursor:pointer;opacity:0.6;font-size:13px;line-height:1;}
+    .apt-chip .chip-close:hover{opacity:1;}
+    tbody td{padding:9px 12px;text-align:right;color:var(--text);}
+    .apts-table td{text-align:left;white-space:nowrap;vertical-align:middle;}
+    .apts-table td:nth-child(5){text-align:center;}
+    tbody td:first-child{text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;}
+    tbody td:nth-child(2){text-align:left;font-weight:500;}
+    td.zero{color:var(--text-muted);}
+    td.high{color:var(--red);font-weight:600;}
+    td.total-col{background:var(--orange-light);font-weight:700;color:var(--orange);}
+    .top5-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:16px;}
+    .top5-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:6px;}
+    .top5-card .rank{font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:0.1em;}
+    .top5-card .apt-name{font-size:13px;font-weight:700;color:var(--text);}
+    .top5-card .apt-total{font-size:20px;font-weight:700;color:var(--orange);}
+    .top5-card .apt-avg{font-size:11px;color:var(--text-muted);}
+    .top5-card .apt-bar{height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;}
+    .top5-card .apt-bar-fill{height:100%;background:var(--orange);border-radius:2px;}
+    .compare-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+    @media(max-width:700px){.compare-row{grid-template-columns:1fr;}}
+    .compare-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px 24px;}
+    .compare-card .cc-title{font-size:13px;font-weight:600;margin-bottom:4px;}
+    .compare-card .cc-sub{font-size:11px;color:var(--text-muted);margin-bottom:12px;}
+    .compare-card .cc-value{font-size:28px;font-weight:700;}
+    .compare-card .cc-value.up{color:var(--red);}
+    .compare-card .cc-value.down{color:var(--green);}
+    .compare-card .cc-diff{font-size:12px;margin-top:4px;}
+    .year-btn{padding:7px 18px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--white);color:var(--text-muted);cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;}
+    .year-btn.active{background:var(--orange);color:#fff;border-color:var(--orange);}
+
+    /* ── EMPTY STATE ── */
+    .empty-section{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;gap:16px;background:var(--white);border:1px solid var(--border);border-radius:12px;color:var(--text-muted);}
+    .empty-section .empty-icon{font-size:48px;opacity:0.3;}
+    .empty-section p{font-size:13px;}
+
+    /* ── STATES ── */
+    .state-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:16px;text-align:center;}
+    .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite;}
+    .state-screen p{font-size:13px;color:var(--text-muted);}
+    .error-box{border:1px solid #fca5a5;background:var(--red-light);border-radius:10px;padding:20px 24px;max-width:480px;width:100%;}
+    .error-box .err-title{color:var(--red);font-size:13px;font-weight:600;margin-bottom:6px;}
+    .error-box .err-msg{font-size:13px;color:#7f1d1d;line-height:1.6;}
+    .config-panel{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:520px;margin:0 auto;}
+    .config-panel h2{font-size:18px;font-weight:700;margin-bottom:6px;}
+    .config-panel .hint{font-size:13px;color:var(--text-muted);margin-bottom:24px;line-height:1.6;}
+    .field{margin-bottom:16px;}
+    .field label{display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px;}
+    .field input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:10px 12px;border-radius:8px;outline:none;transition:border-color 0.15s,box-shadow 0.15s;}
+    .field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+    .field input::placeholder{color:var(--text-muted);}
+    .btn-primary{width:100%;background:var(--blue);color:#fff;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;padding:11px;border:none;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-top:8px;}
+    .btn-primary:hover{background:#1d4ed8;}
+    .divider{border:none;border-top:1px solid var(--border);margin:20px 0;}
+    .section-label{font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em;}
+
+
+    /* ── APARTMENTS ── */
+    .teal{--teal:#0d9488;--teal-light:#f0fdfa;--teal-mid:#99f6e4;}
+    .apt-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center;}
+    .filter-search{flex:1;min-width:200px;background:var(--white);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:9px 14px;border-radius:8px;outline:none;}
+    .filter-search:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,0.1);}
+    .filter-select{background:var(--white);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:9px 12px;border-radius:8px;outline:none;cursor:pointer;}
+    .apt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;}
+    .apt-card{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow 0.2s;animation:fadeUp 0.4s ease both;}
+    .apt-card:hover{box-shadow:0 6px 20px rgba(0,0,0,0.08);}
+    .apt-card-header{padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);}
+    .apt-card-header.type-apt{border-left:4px solid #0d9488;}
+    .apt-card-header.type-biz{border-left:4px solid var(--purple);}
+    .apt-id-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:#f0fdfa;color:#0d9488;flex-shrink:0;margin-top:2px;}
+    .apt-id-badge.type-biz{background:var(--purple-light);color:var(--purple);}
+    .apt-card-name{font-size:15px;font-weight:700;color:var(--text);line-height:1.3;}
+    .apt-card-address{font-size:12px;color:var(--text-muted);margin-top:3px;}
+    .apt-card-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px;}
+    .apt-row{display:flex;align-items:flex-start;gap:10px;}
+    .apt-row-icon{font-size:14px;flex-shrink:0;margin-top:1px;width:18px;text-align:center;}
+    .apt-row-content{flex:1;min-width:0;}
+    .apt-row-label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;}
+    .apt-row-value{font-size:13px;color:var(--text);font-weight:500;word-break:break-word;}
+    .apt-row-value.mono{font-family:monospace;font-size:12px;background:var(--bg);padding:3px 7px;border-radius:4px;display:inline-block;}
+    .wifi-wrap{display:flex;align-items:center;gap:6px;}
+    .wifi-hidden{letter-spacing:2px;color:var(--text-muted);}
+    .btn-show{background:none;border:1px solid var(--border);font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif;flex-shrink:0;}
+    .btn-show:hover{background:var(--bg);}
+    .contract-ok{color:var(--green);font-weight:600;}
+    .contract-warn{color:#d97706;font-weight:700;}
+    .contract-danger{color:var(--red);font-weight:700;animation:pulse 1.5s infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+    .apt-card-footer{padding:12px 20px;background:var(--bg);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+    .apt-stat{text-align:center;}
+    .apt-stat-val{font-size:14px;font-weight:700;color:var(--text);}
+    .apt-stat-label{font-size:10px;color:var(--text-muted);margin-top:1px;}
+    .apt-actions{display:flex;gap:6px;}
+    .btn-apt{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:'Inter',sans-serif;color:var(--text-mid);transition:all 0.15s;}
+    .btn-apt:hover{background:var(--bg);}
+    .apt-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:var(--text-muted);background:var(--white);border:1px solid var(--border);border-radius:12px;}
+    .apt-count-badge{font-size:12px;color:var(--text-muted);padding:6px 0;}
+    /* print/pdf styles */
+    @media print{
+      header,.nav-l1,.nav-l2,.apt-filters,.apt-actions,.btn-show{display:none!important;}
+      .apt-grid{grid-template-columns:1fr 1fr;}
+      .apt-card{break-inside:avoid;box-shadow:none;border:1px solid #ccc;}
+      .wifi-hidden{display:none;}
+      .wifi-reveal{display:inline!important;}
+    }
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:640px){
+      .app{padding:12px 10px 48px;}
+      header{flex-direction:column;align-items:flex-start;gap:12px;}
+      .kpi-card .value{font-size:22px;}
+      .fc-main .fc-value{font-size:24px;}
+      .nav-l1{flex-wrap:wrap;}
+      .nav-l1-btn{font-size:13px;padding:10px 14px;}
+    }
+  </style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+/* ═══════════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════════ */
+const CONFIG={
+  apiKey:             localStorage.getItem('gs_api_key')||'',
+  spreadsheetId:      localStorage.getItem('gs_spreadsheet_id')||'',
+  cellMarch:          'Q4',
+  febSheet:'02/2026', febDateCol:'C', febAmountCol:'M', febStartRow:3, febEndRow:800,
+  janSheet:'01/2026', janDateCol:'C', janAmountCol:'M', janStartRow:3, janEndRow:800,
+  dayTabRegex:        /^\d{2}\.\d{2}$/,
+  mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
+  mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
+  mediaSheet:         'Zestawienie Miesięczne',
+  mediaDataRange:     'A3:Z30',
+  aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
+  aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
+  aptsSheet:          'Apartamenty',
+  aptsRange:          'A2:M100',
+};
+
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION STRUCTURE
+   Easily extendable — add months here as data arrives
+═══════════════════════════════════════════════════════ */
+const NAV={
+  rental:{
+    label:'Przychody',
+    icon:'🏠',
+    years:{
+      2026:{
+        label:'2026',
+        months:[
+          {key:'jan2026', label:'Styczeń',  short:'Sty', hasData:true},
+          {key:'feb2026', label:'Luty',     short:'Lut', hasData:true},
+          {key:'mar2026', label:'Marzec',   short:'Mar', hasData:true},
+          {key:'apr2026', label:'Kwiecień', short:'Kwi', hasData:false},
+          {key:'may2026', label:'Maj',      short:'Maj', hasData:false},
+          {key:'jun2026', label:'Czerwiec', short:'Cze', hasData:false},
+          {key:'jul2026', label:'Lipiec',   short:'Lip', hasData:false},
+          {key:'aug2026', label:'Sierpień', short:'Sie', hasData:false},
+          {key:'sep2026', label:'Wrzesień', short:'Wrz', hasData:false},
+          {key:'oct2026', label:'Październik',short:'Paź',hasData:false},
+          {key:'nov2026', label:'Listopad', short:'Lis', hasData:false},
+          {key:'dec2026', label:'Grudzień', short:'Gru', hasData:false},
+        ]
+      },
+      2025:{
+        label:'2025',
+        months:[
+          {key:'jan2025',label:'Styczeń',  short:'Sty',hasData:false},
+          {key:'feb2025',label:'Luty',     short:'Lut',hasData:false},
+          {key:'mar2025',label:'Marzec',   short:'Mar',hasData:false},
+          {key:'apr2025',label:'Kwiecień', short:'Kwi',hasData:false},
+          {key:'may2025',label:'Maj',      short:'Maj',hasData:false},
+          {key:'jun2025',label:'Czerwiec', short:'Cze',hasData:false},
+          {key:'jul2025',label:'Lipiec',   short:'Lip',hasData:false},
+          {key:'aug2025',label:'Sierpień', short:'Sie',hasData:false},
+          {key:'sep2025',label:'Wrzesień', short:'Wrz',hasData:false},
+          {key:'oct2025',label:'Październik',short:'Paź',hasData:false},
+          {key:'nov2025',label:'Listopad', short:'Lis',hasData:false},
+          {key:'dec2025',label:'Grudzień', short:'Gru',hasData:false},
+        ]
+      }
+    }
+  },
+  media:{label:'Media — Prąd',icon:'⚡'}
+};
+
+/* ═══════════════════════════════════════════════════════
+   DATE HELPERS
+═══════════════════════════════════════════════════════ */
+const DOW_PL=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
+function tabToDate(name){const[dd,mm]=name.split('.').map(Number);return new Date(new Date().getFullYear(),mm-1,dd);}
+function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+
+/* ═══════════════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════════════ */
+async function apiFetch(url){
+  const res=await fetch(url);
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+  return res.json();
+}
+async function fetchSheetNames(id,key){
+  const d=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title&key=${key}`);
+  return d.sheets.map(s=>s.properties.title);
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA LOADERS
+═══════════════════════════════════════════════════════ */
+async function loadMarchData(){
+  const{apiKey,spreadsheetId,dayTabRegex,cellMarch}=CONFIG;
+  const all=await fetchSheetNames(spreadsheetId,apiKey);
+  const day=all.filter(n=>dayTabRegex.test(n)).sort((a,b)=>{
+    const[ad,am]=a.split('.').map(Number),[bd,bm]=b.split('.').map(Number);
+    return am!==bm?am-bm:ad-bd;
+  });
+  if(!day.length)throw new Error('NO_DAY_TABS');
+  const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+  day.forEach(n=>params.append('ranges',`'${n}'!${cellMarch}`));
+  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+  return day.map((name,i)=>{
+    const raw=data.valueRanges?.[i]?.values?.[0]?.[0];
+    const val=(raw!==undefined&&raw!=='')?parseFloat(raw):null;
+    return{name,value:isNaN(val)?null:val};
+  });
+}
+
+async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
+  const{apiKey,spreadsheetId}=CONFIG;
+  const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
+  params.append('ranges',`'${sheet}'!${dateCol}${startRow}:${dateCol}${endRow}`);
+  params.append('ranges',`'${sheet}'!${amtCol}${startRow}:${amtCol}${endRow}`);
+  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+  const dates=data.valueRanges[0]?.values||[];
+  const amounts=data.valueRanges[1]?.values||[];
+  const byDate={};
+  for(let i=0;i<dates.length;i++){
+    const dr=dates[i]?.[0],ar=amounts[i]?.[0];
+    if(!dr||!ar)continue;
+    const m=String(dr).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(!m)continue;
+    const[,yr,mo,dd]=m;
+    const key=`${dd}.${mo}`;
+    const amt=parseFloat(String(ar).replace(/[^\d.,-]/g,'').replace(',','.'));
+    if(isNaN(amt))continue;
+    byDate[key]=(byDate[key]||0)+amt;
+  }
+  const days=[];
+  for(let d=1;d<=totalDays;d++){
+    const key=String(d).padStart(2,'0')+'.'+moStr;
+    if(byDate[key]!==undefined)days.push({name:key,value:byDate[key]});
+  }
+  if(!days.length)throw new Error('NO_DATA');
+  return days;
+}
+
+async function loadMediaData(){
+  const{mediaApiKey,mediaSpreadsheetId,mediaSheet,mediaDataRange}=CONFIG;
+  if(!mediaApiKey||!mediaSpreadsheetId)throw new Error('MISSING_MEDIA_CONFIG');
+  const enc=encodeURIComponent(`'${mediaSheet}'!${mediaDataRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${mediaSpreadsheetId}/values/${enc}?valueRenderOption=UNFORMATTED_VALUE&key=${mediaApiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(!rows.length)throw new Error('NO_MEDIA_DATA');
+  const apartments=[];let sumaRow=null;
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r];
+    const id=String(row[0]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!name)continue;
+    const values=[];
+    for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
+    if(name==='SUMA'||!id){sumaRow={name:'SUMA',values};}
+    else{apartments.push({id,name,values});}
+  }
+  return{apartments,sumaRow};
+}
+
+
+async function loadApartmentsData(){
+  const{aptsApiKey,aptsSpreadsheetId,aptsSheet,aptsRange}=CONFIG;
+  if(!aptsApiKey||!aptsSpreadsheetId)throw new Error('MISSING_APTS_CONFIG');
+  const enc=encodeURIComponent(`'${aptsSheet}'!${aptsRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${aptsSpreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${aptsApiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(!rows.length)throw new Error('NO_APTS_DATA');
+  const dataRows=rows.slice(1); // skip header row 1 (row 3 in sheet = index 0 here)
+  return dataRows.map(r=>({
+    id:     String(r[0]||'').trim(),
+    name:   String(r[1]||'').trim(),
+    type:   String(r[2]||'Apartament').trim(),
+    adres:  String(r[3]||'').trim(),
+    metraz: String(r[4]||'').trim(),
+    owner:  String(r[5]||'').trim(),
+    umowa:    String(r[6]||'').trim(),
+    wifiLogin:String(r[7]||'').trim(),
+    wifiPass: String(r[8]||'').trim(),
+    uwagi:    String(r[9]||'').trim(),
+  })).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
+}
+
+/* ═══════════════════════════════════════════════════════
+   FORECAST
+═══════════════════════════════════════════════════════ */
+function calcForecast(days){
+  const year=new Date().getFullYear();
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date)};});
+  const withVal=enriched.filter(d=>d.value!==null&&d.value>=0);
+  if(!withVal.length)return null;
+  const we=withVal.filter(d=>d.isWeekend),wd=withVal.filter(d=>!d.isWeekend);
+  const pA=a=>a.length?a.reduce((s,d)=>s+d.value,0)/a.length:null;
+  const rA=(a,n=7)=>{const sl=a.slice(-n);return sl.length?sl.reduce((s,d)=>s+d.value,0)/sl.length:null;};
+  const wA=a=>{const o=pA(a),r=rA(a);if(o===null)return null;if(r===null)return o;return r*0.7+o*0.3;};
+  const avgWE=wA(we),avgWD=wA(wd),avgAll=pA(withVal);
+  const fd=enriched[0].date;
+  const total=daysInMonth(fd.getFullYear(),fd.getMonth());
+  const known=new Set(enriched.map(d=>d.date.getDate()));
+  const mm=fd.getMonth();
+  let proj=0,rem=0;const projDays=[];
+  for(let d=1;d<=total;d++){
+    if(known.has(d))continue;
+    const date=new Date(year,mm,d);const isWE=isWeekend(date);
+    const est=isWE&&avgWE!==null?avgWE:(!isWE&&avgWD!==null?avgWD:avgAll);
+    proj+=est;rem++;projDays.push({dayNum:d,date,isWeekend:isWE,est});
+  }
+  const earned=withVal.reduce((s,d)=>s+d.value,0);
+  const pct=Math.round((withVal.length/total)*100);
+  const conf=withVal.length>=12?'high':withVal.length>=6?'medium':'low';
+  const confLabel={high:'🟢 Wysoka pewność (12+ dni)',medium:'🟡 Średnia pewność (6–11 dni)',low:'🔴 Mało danych (< 6 dni)'}[conf];
+  return{forecastTotal:earned+proj,totalEarned:earned,projectedRevenue:proj,daysDone:withVal.length,remainingDays:rem,totalDays:total,pctDone:pct,avgWeekend:avgWE,avgWeekday:avgWD,confidence:conf,confidenceLabel:confLabel,projectedDays:projDays,enriched};
+}
+
+/* ═══════════════════════════════════════════════════════
+   FORMATTERS
+═══════════════════════════════════════════════════════ */
+const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let _state={
+  section:'rental',        // 'rental' | 'media' | 'apartments'
+  aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
+  rentalYear:2026,
+  rentalMonth:'mar2026',   // active month key
+  mediaYear:'2026',
+  data:{
+    mar2026:null, feb2026:null, jan2026:null,
+    media:null, apartments:null
+  }
+};
+let _charts={};
+
+/* ═══════════════════════════════════════════════════════
+   RENDER HELPERS
+═══════════════════════════════════════════════════════ */
+function renderLoading(msg='Pobieranie danych…'){
+  return`<div class="state-screen"><div class="spinner"></div><p>${msg}</p></div>`;
+}
+function renderError(msg){
+  const map={
+    'MISSING_CONFIG':'Brakuje klucza API lub ID arkusza.',
+    'NO_DAY_TABS':'Brak zakładek DD.MM w arkuszu.',
+    'NO_DATA':'Brak danych dla tego miesiąca.',
+    'MISSING_MEDIA_CONFIG':'Brakuje klucza API lub ID arkusza mediów.',
+    'NO_MEDIA_DATA':'Brak danych w zakładce Zestawienie Miesięczne.',
+  };
+  return`<div class="state-screen"><div class="error-box"><div class="err-title">Błąd</div><div class="err-msg">${map[msg]||msg}</div></div><button class="btn-primary" style="max-width:220px;margin-top:8px" onclick="showConfig()">Konfiguracja</button></div>`;
+}
+function renderConfig(){
+  return`<div class="state-screen"><div class="config-panel">
+    <h2>Konfiguracja API</h2>
+    <p class="hint">Dane zapisywane lokalnie w przeglądarce.</p>
+    <p class="section-label">🏠 Arkusz najmu krótkoterminowego</p>
+    <div class="field"><label>Google API Key</label><input id="inp-apikey" type="text" placeholder="AIzaSy…" value="${CONFIG.apiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID</label><input id="inp-sheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.spreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">⚡ Arkusz mediów (prąd Tauron)</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-mediakey" type="text" placeholder="AIzaSy…" value="${CONFIG.mediaApiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza mediów</label><input id="inp-mediasheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.mediaSpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🏠 Arkusz danych apartamentów</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-aptskey" type="text" placeholder="AIzaSy…" value="${CONFIG.aptsApiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza apartamentów</label><input id="inp-aptssheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.aptsSpreadsheetId}"/></div>
+    <button class="btn-primary" onclick="saveConfig()">Zapisz i załaduj dane</button>
+  </div></div>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENTAL MONTH VIEW
+═══════════════════════════════════════════════════════ */
+function buildMonthView(days,opts={}){
+  const{showForecast=false,monthLabel=''}=opts;
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date)};});
+  const withVal=enriched.filter(d=>d.value!==null);
+  const total=withVal.reduce((s,d)=>s+d.value,0);
+  const avg=withVal.length?total/withVal.length:0;
+  const maxVal=withVal.length?Math.max(...withVal.map(d=>d.value)):0;
+  const minVal=withVal.length?Math.min(...withVal.map(d=>d.value)):0;
+  const maxIdx=enriched.findIndex(d=>d.value===maxVal&&d.value!==null);
+  const minIdx=enriched.findIndex(d=>d.value===minVal&&d.value!==null&&withVal.length>1);
+  const fc=showForecast?calcForecast(days):null;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód ${showForecast?'dotychczasowy':'całkowity'}</div><div class="value"><span class="sym">zł</span>${fmt(total)}</div><div class="sub">${withVal.length} dni${fc?' z '+fc.totalDays:''}</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia dzienna</div><div class="value"><span class="sym">zł</span>${fmt(avg)}</div><div class="sub">per dzień z danymi</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.14s"><div class="label">Najlepszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(maxVal)}</div><div class="sub">${enriched[maxIdx]?.name||'—'} (${enriched[maxIdx]?DOW_PL[enriched[maxIdx].dow]:''})</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Najsłabszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(minVal)}</div><div class="sub">${enriched[minIdx]?.name||'—'} (${enriched[minIdx]?DOW_PL[enriched[minIdx].dow]:''})</div></div>
+  </div>`;
+
+  const forecast=(fc&&showForecast)?`<div class="forecast-card">
+    <div class="forecast-top">
+      <div class="fc-main">
+        <div class="fc-label">📈 Prognoza na koniec miesiąca (${fc.totalDays} dni)</div>
+        <div class="fc-value"><span class="sym">zł</span>${fmt(fc.forecastTotal)}</div>
+        <div class="fc-sub">Dotychczas: <strong>zł ${fmt(fc.totalEarned)}</strong> + prognoza ${fc.remainingDays} dni: <strong>zł ${fmt(fc.projectedRevenue)}</strong></div>
+        <span class="confidence-badge ${fc.confidence}">${fc.confidenceLabel}</span>
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-label">Dni z danymi</div><div class="fc-stat-val">${fc.daysDone} / ${fc.totalDays}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Pozostało</div><div class="fc-stat-val">${fc.remainingDays} dni</div></div>
+        ${fc.avgWeekend!==null?`<div class="fc-stat"><div class="fc-stat-label">Śr. Sb+Nd</div><div class="fc-stat-val">zł ${fmt(fc.avgWeekend)}</div></div>`:''}
+        ${fc.avgWeekday!==null?`<div class="fc-stat"><div class="fc-stat-label">Śr. dni rob.</div><div class="fc-stat-val">zł ${fmt(fc.avgWeekday)}</div></div>`:''}
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Postęp miesiąca</span><span>${fc.pctDone}%</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${fc.pctDone}%"></div></div>
+    </div>
+    <div class="weekend-info">📊 Prognoza uwzględnia wzorzec weekendowy — <strong>soboty i niedziele</strong> prognozowane wyżej.</div>
+  </div>`:'';
+
+  const chart=`<div class="chart-card"><div class="card-title">${showForecast?'Przychody dzienne + prognoza':'Przychody dzienne — '+monthLabel}</div><div class="card-subtitle">${showForecast?'Słupki pełne = dane · Jasne = prognoza':'Sb+Nd wyróżnione fioletowo'}</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>`;
+
+  const grid=`<div class="grid-card"><div class="card-title">Podział dzienny</div><div class="daily-grid">
+    ${enriched.map((d,i)=>{
+      const pct=maxVal>0&&d.value!==null?(d.value/maxVal*100).toFixed(1):0;
+      const cls=['day-card',d.value===null?'empty':'',i===maxIdx?'highest':'',i===minIdx&&withVal.length>1?'lowest':'',d.isWeekend?'weekend':''].filter(Boolean).join(' ');
+      const b=i===maxIdx?'<span class="badge">MAX</span>':(i===minIdx&&withVal.length>1)?'<span class="badge">MIN</span>':'';
+      const db=d.isWeekend?`<span class="dow-badge">${DOW_PL[d.dow]}</span>`:'';
+      return`<div class="${cls}" style="animation-delay:${Math.min(i*0.025,0.6)}s">${b}${db}<div class="date" style="margin-top:${d.isWeekend?'16px':'2px'}">${d.name}</div><div class="amount">${d.value!==null?`<span class="sym">zł</span>${fmt(d.value)}`:'<span style="font-size:12px;color:var(--text-muted)">Brak</span>'}</div><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
+    }).join('')}
+  </div></div>`;
+
+  return{html:kpis+forecast+chart+grid,enriched,fc};
+}
+
+/* ═══════════════════════════════════════════════════════
+   MEDIA VIEW
+═══════════════════════════════════════════════════════ */
+const MONTHS_2025=['sty 2025','lut 2025','mar 2025','kwi 2025','maj 2025','cze 2025','lip 2025','sie 2025','wrz 2025','paź 2025','lis 2025','gru 2025'];
+const MONTHS_2026=['sty 2026','lut 2026','mar 2026','kwi 2026','maj 2026','cze 2026','lip 2026','sie 2026','wrz 2026','paź 2026','lis 2026','gru 2026'];
+
+function buildMediaView(data){
+  const year=_state.mediaYear;
+  const months=year==='2025'?MONTHS_2025:MONTHS_2026;
+  const si=year==='2025'?0:12;
+  const{apartments,sumaRow}=data;
+
+  const monthTotals=months.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[si+mi],0));
+  const totalYear=monthTotals.reduce((s,v)=>s+v,0);
+  const maxM=Math.max(...monthTotals),minM=Math.min(...monthTotals.filter(v=>v>0));
+  const maxMi=monthTotals.indexOf(maxM),minMi=monthTotals.findIndex(v=>v===minM);
+  const avgM=monthTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthTotals.filter(v=>v>0).length||1);
+  const t2025=apartments.reduce((s,a)=>s+a.values.slice(0,12).reduce((x,v)=>x+v,0),0);
+  const t2026=apartments.reduce((s,a)=>s+a.values.slice(12,24).reduce((x,v)=>x+v,0),0);
+  const diff=t2026-t2025;
+  const aptTotals=apartments.map(a=>({...a,yt:a.values.slice(si,si+12).reduce((s,v)=>s+v,0)}));
+  const top5=[...aptTotals].sort((a,b)=>b.yt-a.yt).slice(0,5);
+  const maxT5=top5[0]?.yt||1;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">Koszt prądu ${year}</div><div class="value"><span class="sym">zł</span>${fmt(totalYear)}</div><div class="sub">${apartments.length} lokali</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia miesięczna</div><div class="value"><span class="sym">zł</span>${fmt(avgM)}</div><div class="sub">wszystkie lokale</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Najdroższy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(maxM)}</div><div class="sub">${months[maxMi]||'—'}</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Najtańszy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(minM||0)}</div><div class="sub">${months[minMi]||'—'}</div></div>
+  </div>`;
+
+  const compare=`<div class="compare-row">
+    <div class="compare-card"><div class="cc-title">Łączny koszt 2025</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value">${fmt(t2025)} zł</div></div>
+    <div class="compare-card"><div class="cc-title">Łączny koszt 2026 (dotychczas)</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value ${diff>0?'up':'down'}">${fmt(t2026)} zł</div><div class="cc-diff" style="color:${diff>0?'var(--red)':'var(--green)'}">${diff>0?'▲':'▼'} ${fmt(Math.abs(diff))} zł vs 2025</div></div>
+  </div>`;
+
+  const top5html=`<div class="grid-card media-section" style="animation-delay:0.05s">
+    <div class="card-title">TOP 5 — najdroższe lokale (${year})</div>
+    <div class="top5-grid">${top5.map((a,i)=>`<div class="top5-card"><div class="rank">#${i+1}</div><div class="apt-name">${a.name}</div><div class="apt-total">${fmt(a.yt)} zł</div><div class="apt-avg">śr. ${fmt(a.yt/12)} zł/mies.</div><div class="apt-bar"><div class="apt-bar-fill" style="width:${(a.yt/maxT5*100).toFixed(1)}%"></div></div></div>`).join('')}</div>
+  </div>`;
+
+  const charts=`
+    <div class="chart-card media-section" style="animation-delay:0.1s">
+      <div class="card-title">Sumy miesięczne — wszystkie lokale (${year})</div>
+      <div class="card-subtitle">Łączny koszt prądu wszystkich lokali w danym miesiącu</div>
+      <div class="chart-wrap"><canvas id="mediaBarChart"></canvas></div>
+    </div>
+    <div class="chart-card media-section" style="animation-delay:0.15s" id="lineChartCard">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title" id="lineChartTitle">Trend miesięczny — 2025 vs 2026 — wszystkie lokale</div>
+          <div class="card-subtitle">Kliknij wiersz w tabeli aby zobaczyć trend konkretnego lokalu</div>
+        </div>
+        <div id="aptChipWrap"></div>
+      </div>
+      <div class="chart-wrap"><canvas id="mediaLineChart"></canvas></div>
+    </div>`;
+
+  const colHeaders=months.map(m=>`<th>${m}</th>`).join('');
+  const tableRows=apartments.map(a=>{
+    const vals=a.values.slice(si,si+12);
+    const rowTotal=vals.reduce((s,v)=>s+v,0);
+    const maxV=Math.max(...vals);
+    const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?fmt(v):'—'}</td>`).join('');
+    const safeId=a.id.replace(/'/g,"\\'");
+    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="cursor:pointer"><td>${a.id}</td><td>${a.name}</td>${cells}<td class="total-col">${fmt(rowTotal)}</td></tr>`;
+  }).join('');
+  const sv=sumaRow?months.map((_,mi)=>sumaRow.values[si+mi]):months.map(()=>0);
+  const st=sv.reduce((s,v)=>s+v,0);
+  const sumaHtml=sumaRow?`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td></tr>`:'';
+
+  const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
+    <div class="card-title">Zestawienie miesięczne — koszty prądu</div>
+    <div style="display:flex;gap:8px;margin:12px 0">
+      <button class="year-btn ${year==='2025'?'active':''}" onclick="setMediaYear('2025')">2025</button>
+      <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
+    </div>
+    <div class="media-table-wrap"><table>
+      <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th></tr></thead>
+      <tbody>${tableRows}${sumaHtml}</tbody>
+    </table></div>
+  </div>`;
+
+  const mt2025=MONTHS_2025.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[mi],0));
+  const mt2026=MONTHS_2026.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[12+mi],0));
+
+  // store apartments on window for interactive chart updates
+  window._mediaApartments = apartments;
+  return{html:kpis+compare+top5html+charts+table,monthTotals,months,mt2025,mt2026};
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   APARTMENTS VIEW
+═══════════════════════════════════════════════════════ */
+function daysUntil(dateStr){
+  if(!dateStr)return null;
+  const d=new Date(dateStr);if(isNaN(d))return null;
+  return Math.ceil((d-new Date())/(1000*60*60*24));
+}
+function contractBadge(dateStr){
+  const days=daysUntil(dateStr);
+  if(days===null)return`<span class="apt-row-value">—</span>`;
+  const cls=days<0?'contract-danger':days<=30?'contract-warn':'contract-ok';
+  const icon=days<0?'🔴':days<=30?'🟡':'🟢';
+  const label=days<0?`Wygasła ${Math.abs(days)} dni temu`:days===0?'Wygasa dziś!':days<=30?`Wygasa za ${days} dni`:`${dateStr}`;
+  return`<span class="${cls}">${icon} ${label}</span>`;
+}
+
+function buildApartmentsView(apts){
+  const owners=[...new Set(apts.map(a=>a.owner).filter(Boolean))].sort();
+  const filterOwner=_state.aptsFilterOwner||'';
+  const filterSearch=_state.aptsFilterSearch||'';
+  const filterType=_state.aptsFilterType||'';
+
+  let filtered=apts.filter(a=>{
+    if(filterOwner&&a.owner!==filterOwner)return false;
+    if(filterType&&a.type!==filterType)return false;
+    if(filterSearch){
+      const q=filterSearch.toLowerCase();
+      return a.name.toLowerCase().includes(q)||a.adres.toLowerCase().includes(q)||a.id.toLowerCase().includes(q)||a.owner.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // alerts — contracts expiring within 30 days
+  const alerts=apts.filter(a=>{const d=daysUntil(a.umowa);return d!==null&&d>=0&&d<=30;});
+  const alertBanner=alerts.length?`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;display:flex;align-items:center;gap:10px;animation:fadeUp 0.3s ease both">
+    <span style="font-size:18px">⚠️</span>
+    <div><strong>${alerts.length} umow${alerts.length===1?'a':'y'} wygasa wkrótce:</strong> ${alerts.map(a=>`${a.name} (za ${daysUntil(a.umowa)} dni)`).join(', ')}</div>
+  </div>`:'';
+
+  const ownerOpts=owners.map(o=>`<option value="${o}" ${filterOwner===o?'selected':''}>${o}</option>`).join('');
+  const filters=`<div class="apt-filters">
+    <input class="filter-search" type="text" placeholder="🔍  Szukaj po nazwie, adresie, właścicielu…" value="${filterSearch}" oninput="setAptsFilter('search',this.value)"/>
+    <select class="filter-select" onchange="setAptsFilter('owner',this.value)">
+      <option value="">Wszyscy właściciele</option>${ownerOpts}
+    </select>
+    <select class="filter-select" onchange="setAptsFilter('type',this.value)">
+      <option value="" ${!filterType?'selected':''}>Wszystkie typy</option>
+      <option value="Apartament" ${filterType==='Apartament'?'selected':''}>Apartament</option>
+      <option value="Lokal użytkowy" ${filterType==='Lokal użytkowy'?'selected':''}>Lokal użytkowy</option>
+    </select>
+    <button class="btn-icon" onclick="window.print()">🖨 Drukuj / PDF</button>
+    <span class="apt-count-badge">${filtered.length} z ${apts.length} lokali</span>
+  </div>`;
+
+  if(filtered.length===0){
+    return alertBanner+filters+`<div class="apt-empty"><span style="font-size:40px;opacity:0.3">🏠</span><p>Brak wyników dla podanych filtrów</p></div>`;
+  }
+
+  const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:11px;color:var(--text-muted)">
+    <span>🟢 Aktywna umowa</span>
+    <span>🟡 Wygasa wkrótce (&lt;30 dni)</span>
+    <span>🔴 Umowa wygasła (auto)</span>
+    <span>🔵 Okres nieokreślony</span>
+    <span>❌ Nieaktywny (wpisz "wygasły" w kolumnie Koniec umowy)</span>
+  </div>`;
+
+  const rows=filtered.map((a,i)=>{
+    const isApt=a.type==='Apartament';
+    const wifiId=`wifi-${a.id}`;
+    const safePass=a.wifiPass.replace(/'/g,"\\'");
+    const days=daysUntil(a.umowa);
+    const umowaLower=(a.umowa||'').toLowerCase();
+
+    // ── STATUS DETECTION ──
+    // "wygasły" / "wygasla" / "wygasły" in cell → explicitly inactive
+    // empty umowa OR "nieokreślony"/"nieokreslony" → indefinite/unknown
+    // date in past → auto-expired
+    // date in future ≤30d → warning
+    // date in future >30d → active
+    const isExplicitlyExpired = umowaLower.includes('wygasł') || umowaLower.includes('wygasl');
+    const isIndefinite = !a.umowa || umowaLower.includes('nieokreśl') || umowaLower.includes('nieokresl') || umowaLower.includes('bezterm') || umowaLower.includes('ciągły') || umowaLower.includes('ciagly');
+    const isAutoExpired = !isExplicitlyExpired && !isIndefinite && days!==null && days<0;
+
+    // row visual state
+    let rowBg, namePrefix, rowOpacity='1', rowStyle='';
+    if(isExplicitlyExpired){
+      rowBg='#f1f5f9'; rowOpacity='0.6';
+      namePrefix='<span title="Nieaktywny — wygasły" style="margin-right:4px">❌</span>';
+      rowStyle=`background:${rowBg};opacity:${rowOpacity};`;
+    } else if(isAutoExpired){
+      rowBg='#f1f5f9'; rowOpacity='0.65';
+      namePrefix='<span title="Nieaktywny — umowa wygasła" style="margin-right:4px">❌</span>';
+      rowStyle=`background:${rowBg};opacity:${rowOpacity};`;
+    } else if(isIndefinite && a.umowa){
+      // has something in cell but it's "nieokreślony" etc — blue-ish tint
+      rowBg=i%2===0?'#eff6ff':'#dbeafe22';
+      rowStyle=`background:${rowBg};`;
+      namePrefix='';
+    } else {
+      rowBg=i%2===0?'var(--white)':'#fafbfc';
+      rowStyle=`background:${rowBg};`;
+      namePrefix='';
+    }
+
+    // umowa cell
+    let umowaCell;
+    if(isExplicitlyExpired){
+      umowaCell=`<span style="color:var(--text-muted);font-size:11px">❌ Wygasły</span>`;
+    } else if(isIndefinite && a.umowa){
+      umowaCell=`<span style="color:var(--blue);font-weight:600">🔵 Nieokreślony</span>`;
+    } else if(!a.umowa){
+      umowaCell='—';
+    } else if(isAutoExpired){
+      umowaCell=`<span class="contract-danger">🔴 Wygasła</span>`;
+    } else if(days!==null&&days<=30){
+      umowaCell=`<span class="contract-warn">🟡 Za ${days} dni</span>`;
+    } else {
+      umowaCell=`<span class="contract-ok">🟢 ${a.umowa}</span>`;
+    }
+
+    const wifiCell=(a.wifiLogin||a.wifiPass)?`<div style="display:flex;align-items:center;gap:6px"><span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiLogin||'—'}</span><span style="color:var(--text-muted)">/</span><span id="${wifiId}" style="font-size:11px;letter-spacing:2px;color:var(--text-muted)">••••••</span><span id="${wifiId}-val" style="display:none;font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiPass}</span><button class="btn-show" onclick="toggleWifi('${wifiId}','${safePass}')">Pokaż</button></div>`:'—';
+    const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
+    const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
+    return`<tr style="${rowStyle}">
+      <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
+      <td style="${nameStyle}">${namePrefix}${a.name}</td>
+      <td>${typePill}</td>
+      <td style="color:var(--text-muted);font-size:12px;max-width:220px">${a.adres||'—'}</td>
+      <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
+      <td>${a.owner||'—'}</td>
+      <td style="white-space:nowrap">${umowaCell}</td>
+      <td>${wifiCell}</td>
+      <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
+    <div class="media-table-wrap">
+      <table>
+        <thead class="apts-table"><tr>
+          <th style="text-align:left">ID</th>
+          <th style="text-align:left">Nazwa</th>
+          <th style="text-align:left">Typ</th>
+          <th style="text-align:left">Adres</th>
+          <th>m²</th>
+          <th style="text-align:left">Właściciel</th>
+          <th style="text-align:left">Koniec umowy</th>
+          <th style="text-align:left">WiFi</th>
+          <th style="text-align:left">Uwagi</th>
+        </tr></thead>
+        <tbody class="apts-table">${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  return alertBanner+filters+legend+table;
+}
+
+function toggleWifi(id,pass){
+  const dot=document.getElementById(id);
+  const val=document.getElementById(id+'-val');
+  const btn=dot?.parentElement?.querySelector('.btn-show');
+  if(!dot||!val)return;
+  const hidden=dot.style.display!=='none';
+  dot.style.display=hidden?'none':'inline';
+  val.style.display=hidden?'inline':'none';
+  if(btn)btn.textContent=hidden?'Ukryj':'Pokaż';
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHARTS
+═══════════════════════════════════════════════════════ */
+function destroyCharts(){Object.values(_charts).forEach(c=>{try{c.destroy();}catch(e){}});_charts={};}
+
+function initRentalChart(enriched,fc){
+  const canvas=document.getElementById('revenueChart');if(!canvas)return;
+  const labels=[],values=[],colors=[],borders=[];
+  enriched.forEach(d=>{
+    labels.push(d.name+' '+DOW_PL[d.dow]);values.push(d.value!==null?d.value:0);
+    if(d.value===null){colors.push('rgba(148,163,184,0.2)');borders.push('rgba(148,163,184,0.4)');}
+    else if(d.isWeekend){colors.push('rgba(124,58,237,0.75)');borders.push('rgba(124,58,237,1)');}
+    else{colors.push('rgba(37,99,235,0.7)');borders.push('rgba(37,99,235,1)');}
+  });
+  if(fc?.projectedDays){
+    const mm=String(enriched[0]?.date.getMonth()+1||3).padStart(2,'0');
+    fc.projectedDays.forEach(pd=>{
+      labels.push(String(pd.dayNum).padStart(2,'0')+'.'+mm+' '+DOW_PL[pd.date.getDay()]);
+      values.push(pd.est);
+      colors.push(pd.isWeekend?'rgba(124,58,237,0.18)':'rgba(37,99,235,0.12)');
+      borders.push(pd.isWeekend?'rgba(124,58,237,0.45)':'rgba(37,99,235,0.3)');
+    });
+  }
+  const ac=enriched.length;
+  _charts.revenue=new Chart(canvas.getContext('2d'),{type:'bar',data:{labels,datasets:[{data:values,backgroundColor:colors,borderColor:borders,borderWidth:1,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,titleColor:'#94a3b8',bodyColor:'#f8fafc',titleFont:{family:'Inter',size:11},bodyFont:{family:'Inter',size:13,weight:'600'},callbacks:{label:c=>(c.dataIndex>=ac?' 🔮 prognoza: zł ':' zł ')+new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2}).format(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:10},maxRotation:45}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+new Intl.NumberFormat('pl-PL').format(v)}}}}});
+}
+
+let _selectedAptId = null;
+
+function selectApartment(id){
+  // toggle off if same
+  if(_selectedAptId===id){
+    _selectedAptId=null;
+    document.querySelectorAll('tbody tr.selected').forEach(r=>r.classList.remove('selected'));
+    document.getElementById('aptChipWrap').innerHTML='';
+    document.getElementById('lineChartTitle').textContent='Trend miesięczny — 2025 vs 2026 — wszystkie lokale';
+    updateLineChart(null);
+    return;
+  }
+  _selectedAptId=id;
+  // highlight row
+  document.querySelectorAll('tbody tr.selected').forEach(r=>r.classList.remove('selected'));
+  const row=document.querySelector(`tbody tr[data-aptid="${id}"]`);
+  if(row){row.classList.add('selected');row.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  // find apt
+  const apt=window._mediaApartments?.find(a=>a.id===id);
+  if(!apt)return;
+  // update chip
+  const chip=document.getElementById('aptChipWrap');
+  if(chip)chip.innerHTML=`<span class="apt-chip">${apt.name}<span class="chip-close" onclick="selectApartment('${id.replace(/'/g,"\'")}')">✕</span></span>`;
+  const title=document.getElementById('lineChartTitle');
+  if(title)title.textContent=`Trend miesięczny — 2025 vs 2026 — ${apt.name}`;
+  updateLineChart(apt);
+}
+
+function updateLineChart(apt){
+  const lc=_charts.line;
+  if(!lc)return;
+  const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  if(!apt){
+    // back to all
+    const apts=window._mediaApartments||[];
+    lc.data.datasets[0].data=sm.map((_,i)=>apts.reduce((s,a)=>s+a.values[i],0));
+    lc.data.datasets[1].data=sm.map((_,i)=>apts.reduce((s,a)=>s+a.values[12+i],0));
+    lc.data.datasets[0].label='2025 — wszystkie';
+    lc.data.datasets[1].label='2026 — wszystkie';
+  } else {
+    lc.data.datasets[0].data=apt.values.slice(0,12);
+    lc.data.datasets[1].data=apt.values.slice(12,24);
+    lc.data.datasets[0].label='2025 — '+apt.name;
+    lc.data.datasets[1].label='2026 — '+apt.name;
+  }
+  lc.update('active');
+}
+
+function initMediaCharts(view){
+  const bc=document.getElementById('mediaBarChart');
+  if(bc)_charts.bar=new Chart(bc.getContext('2d'),{type:'bar',data:{labels:view.months,datasets:[{data:view.monthTotals,backgroundColor:'rgba(234,88,12,0.7)',borderColor:'rgba(234,88,12,1)',borderWidth:1,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>' zł '+fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}});
+  const lc=document.getElementById('mediaLineChart');
+  const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  if(lc)_charts.line=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:view.mt2025,borderColor:'rgba(37,99,235,0.8)',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:view.mt2026,borderColor:'rgba(234,88,12,0.9)',backgroundColor:'rgba(234,88,12,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}});
+}
+
+/* ═══════════════════════════════════════════════════════
+   MAIN RENDER
+═══════════════════════════════════════════════════════ */
+const mount=html=>{document.getElementById('app').innerHTML=html;};
+
+function renderApp(){
+  const{section,rentalYear,rentalMonth,data}=_state;
+  destroyCharts();
+
+  const header=`<header>
+    <div class="brand">
+      <div class="brand-icon">🏛️</div>
+      <div><div class="brand-name">Old Town Vistula Premium Apartments</div><div class="brand-sub">Dashboard zarządzania najmem i mediami</div></div>
+    </div>
+    <div class="header-right">
+      <button class="btn-icon" onclick="refresh()">↻ Odśwież</button>
+      <button class="btn-icon" onclick="showConfig()">⚙ Konfiguracja</button>
+    </div>
+  </header>`;
+
+  // ── Level 1 nav ──
+  const navL1=`<div class="nav-l1">
+    <button class="nav-l1-btn ${section==='rental'?'active':''}" onclick="setSection('rental')">
+      <span class="icon">🏠</span> Przychody
+    </button>
+    <button class="nav-l1-btn media ${section==='media'?'active media':''}" onclick="setSection('media')">
+      <span class="icon">⚡</span> Media — Prąd
+    </button>
+    <button class="nav-l1-btn ${section==='apartments'?'active':''}" style="${section==='apartments'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('apartments')">
+      <span class="icon">🏠</span> Apartamenty
+    </button>
+  </div>`;
+
+  let navL2='', content='', enriched=null, fc=null, mediaView=null;
+
+  if(section==='rental'){
+    // ── Level 2 nav: year tabs + month pills ──
+    const years=Object.keys(NAV.rental.years).sort((a,b)=>b-a);
+    const yearBtns=years.map(y=>`<button class="nav-l2-year ${rentalYear==y?'active':''}" onclick="setRentalYear(${y})">${y}</button>`).join('');
+    const activeMths=NAV.rental.years[rentalYear]?.months||[];
+    const mthBtns=activeMths.map(m=>`<button class="nav-l2-month ${!m.hasData?'empty':''} ${rentalMonth===m.key?'active':''}" onclick="${m.hasData?`setRentalMonth('${m.key}')`:''}">${m.short}</button>`).join('');
+    navL2=`<div class="nav-l2">${yearBtns}<span class="nav-l2-sep">›</span><div class="nav-l2-months">${mthBtns}</div></div>`;
+
+    // ── Content ──
+    const d=data[rentalMonth];
+    const activeM=activeMths.find(m=>m.key===rentalMonth);
+    if(!activeM?.hasData){
+      content=`<div class="empty-section"><div class="empty-icon">📭</div><p>Brak danych dla tego miesiąca</p><p style="font-size:11px;margin-top:4px">Dane pojawią się tutaj gdy zostaną dodane do arkusza</p></div>`;
+    } else if(!d){
+      content=renderLoading(`Ładowanie — ${activeM?.label}…`);
+    } else if(d.error){
+      content=renderError(d.error);
+    } else {
+      const isCurrent=rentalMonth==='mar2026';
+      const v=buildMonthView(d,{showForecast:isCurrent,monthLabel:activeM?.label+' '+rentalYear});
+      content=v.html;enriched=v.enriched;fc=v.fc;
+    }
+
+  } else if(section==='media'){
+    // ── Media ──
+    const d=data.media;
+    if(!d){content=renderLoading('Ładowanie mediów…');}
+    else if(d.error){content=renderError(d.error);}
+    else{const v=buildMediaView(d);content=v.html;mediaView=v;}
+  } else {
+    // ── Apartments ──
+    const d=data.apartments;
+    if(!d){content=renderLoading('Ładowanie apartamentów…');}
+    else if(d.error){content=renderError(d.error);}
+    else{content=`<div id="apt-section-wrap">${buildApartmentsView(d)}</div>`;}
+  }
+
+  mount(header+navL1+navL2+content);
+  if(enriched)initRentalChart(enriched,fc);
+  if(mediaView)initMediaCharts(mediaView);
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTROLLER
+═══════════════════════════════════════════════════════ */
+function showConfig(){mount(renderConfig());}
+
+function saveConfig(){
+  const k=document.getElementById('inp-apikey').value.trim();
+  const s=document.getElementById('inp-sheetid').value.trim();
+  const mk=document.getElementById('inp-mediakey').value.trim();
+  const ms=document.getElementById('inp-mediasheetid').value.trim();
+  const ak=document.getElementById('inp-aptskey').value.trim();
+  const as_=document.getElementById('inp-aptssheetid').value.trim();
+  if(!k||!s){alert('Uzupełnij klucz API i ID arkusza najmu.');return;}
+  CONFIG.apiKey=k;CONFIG.spreadsheetId=s;
+  CONFIG.mediaApiKey=mk;CONFIG.mediaSpreadsheetId=ms;
+  CONFIG.aptsApiKey=ak;CONFIG.aptsSpreadsheetId=as_;
+  localStorage.setItem('gs_api_key',k);localStorage.setItem('gs_spreadsheet_id',s);
+  localStorage.setItem('gs_media_api_key',mk);localStorage.setItem('gs_media_spreadsheet_id',ms);
+  localStorage.setItem('gs_apts_api_key',ak);localStorage.setItem('gs_apts_spreadsheet_id',as_);
+  init();
+}
+
+function setSection(s){_state.section=s;renderApp();}
+function setAptsFilter(type,val){
+  if(type==='search')_state.aptsFilterSearch=val;
+  else if(type==='owner')_state.aptsFilterOwner=val;
+  else if(type==='type')_state.aptsFilterType=val;
+  // re-render only content area without full reload
+  const d=_state.data.apartments;
+  if(d&&!d.error){
+    const wrap=document.getElementById('apt-section-wrap');
+    if(wrap)wrap.innerHTML=buildApartmentsView(d);
+  }
+}
+function setRentalYear(y){
+  _state.rentalYear=y;
+  // auto-select first available month in that year
+  const first=NAV.rental.years[y]?.months.find(m=>m.hasData);
+  if(first)_state.rentalMonth=first.key;
+  renderApp();
+}
+function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
+function setMediaYear(y){_state.mediaYear=y;renderApp();}
+
+async function refresh(){await init();}
+
+async function init(){
+  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
+  _state.data={mar2026:null,feb2026:null,jan2026:null,media:null,apartments:null};
+  renderApp();
+  const[mr,fr,jr,mdr,ar]=await Promise.allSettled([
+    loadMarchData(),
+    loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
+    loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
+    loadMediaData(),
+    loadApartmentsData(),
+  ]);
+  _state.data.mar2026    =mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
+  _state.data.feb2026    =fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
+  _state.data.jan2026    =jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
+  _state.data.media      =mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
+  _state.data.apartments =ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
+  renderApp();
+}
+
+if(!CONFIG.apiKey||!CONFIG.spreadsheetId)showConfig();else init();
+</script>
+</body>
+</html>
