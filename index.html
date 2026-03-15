@@ -402,23 +402,28 @@ async function loadMarchData(){
     const chunk=day.slice(ci,ci+CHUNK);
     const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
     chunk.forEach(n=>{
-      params.append('ranges',`'${n}'!J3:J33`);
-      params.append('ranges',`'${n}'!M3:M33`);
+      params.append('ranges',`'${n}'!H3:H33`);  // channel
+      params.append('ranges',`'${n}'!J3:J33`);  // apt name
+      params.append('ranges',`'${n}'!M3:M33`);  // amount
     });
     const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
     chunk.forEach((name,i)=>{
-      const aptVals=data.valueRanges[i*2]?.values||[];
-      const amtVals=data.valueRanges[i*2+1]?.values||[];
-      // build per-apt breakdown for this day
+      const chanVals=data.valueRanges[i*3]?.values||[];
+      const aptVals =data.valueRanges[i*3+1]?.values||[];
+      const amtVals =data.valueRanges[i*3+2]?.values||[];
       const aptMap={};
+      const chanMap={};
       for(let r=0;r<amtVals.length;r++){
         const amt=parseFloat(amtVals[r]?.[0]);
         if(isNaN(amt)||amt===0)continue;
         const aptName=String(aptVals[r]?.[0]||'').trim()||'Inny';
         aptMap[aptName]=(aptMap[aptName]||0)+amt;
+        const raw=String(chanVals[r]?.[0]||'').trim().toLowerCase();
+        const chan=raw.includes('booking')?'Booking.com':raw.includes('airbnb')?'Airbnb':raw.includes('profitroom')?'Profitroom':'Własna';
+        chanMap[chan]=(chanMap[chan]||0)+amt;
       }
       const dayTotal=Object.values(aptMap).reduce((s,v)=>s+v,0);
-      results.push({name,value:dayTotal||null,aptBreakdown:aptMap});
+      results.push({name,value:dayTotal||null,aptBreakdown:aptMap,chanBreakdown:chanMap});
     });
   }
   return results;
@@ -504,7 +509,7 @@ async function loadApartmentsData(){
 ═══════════════════════════════════════════════════════ */
 function calcForecast(days){
   const year=new Date().getFullYear();
-  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{}};});
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null&&d.value>=0);
   if(!withVal.length)return null;
   const we=withVal.filter(d=>d.isWeekend),wd=withVal.filter(d=>!d.isWeekend);
@@ -620,7 +625,7 @@ function renderConfig(){
 ═══════════════════════════════════════════════════════ */
 function buildMonthView(days,opts={}){
   const{showForecast=false,monthLabel=''}=opts;
-  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{}};});
+  const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
   const avg=withVal.length?total/withVal.length:0;
@@ -686,6 +691,15 @@ function buildMonthView(days,opts={}){
     monthlyAptTotals[a]=enriched.reduce((s,d)=>(d.aptBreakdown||{})[a]?s+(d.aptBreakdown[a]||0):s,0);
   });
   const aptsSortedByTotal=[...allApts].sort((a,b)=>monthlyAptTotals[b]-monthlyAptTotals[a]);
+
+  // channel totals for pie chart
+  const channelTotals={};
+  enriched.forEach(d=>{
+    Object.entries(d.chanBreakdown||{}).forEach(([ch,v])=>{
+      channelTotals[ch]=(channelTotals[ch]||0)+v;
+    });
+  });
+  window._channelTotals=channelTotals;
   const grandTotal=aptsSortedByTotal.reduce((s,a)=>s+monthlyAptTotals[a],0);
   const maxAptTotal=monthlyAptTotals[aptsSortedByTotal[0]]||1;
 
@@ -694,6 +708,16 @@ function buildMonthView(days,opts={}){
   // daily breakdown now in drawer
 
 
+
+  // channel pie section
+  const channelSection=`<div class="chart-card" style="animation:fadeUp 0.4s 0.2s ease both" id="channelCard">
+    <div class="card-title">Kanały rezerwacji — ${monthLabel}</div>
+    <div class="card-subtitle">Udział przychodów według źródła rezerwacji</div>
+    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap">
+      <div style="width:220px;height:220px;flex-shrink:0"><canvas id="channelPie"></canvas></div>
+      <div id="channelLegend" style="flex:1;min-width:160px"></div>
+    </div>
+  </div>`;
 
   // monthly summary (stays below grid)
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
@@ -736,7 +760,7 @@ function buildMonthView(days,opts={}){
     <div class="drawer-body" id="drawerBody"></div>
   </div>`;
 
-  return{html:kpis+forecast+chart+grid+monthlySummary+drawer,enriched,fc};
+  return{html:kpis+forecast+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1124,6 +1148,44 @@ function sortMonthlyTable(by){
   renderMonthlyTable();
 }
 
+
+function initChannelChart(){
+  const totals=window._channelTotals||{};
+  const entries=Object.entries(totals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length)return;
+  const canvas=document.getElementById('channelPie');
+  if(!canvas)return;
+
+  const COLORS={
+    'Booking.com':'#003580',
+    'Airbnb':'#FF5A5F',
+    'Profitroom':'#6366f1',
+    'Własna':'#16a34a',
+  };
+  const labels=entries.map(([k])=>k);
+  const values=entries.map(([,v])=>v);
+  const colors=labels.map(l=>COLORS[l]||'#94a3b8');
+  const grand=values.reduce((s,v)=>s+v,0);
+
+  if(_charts.pie){try{_charts.pie.destroy();}catch(e){}}
+  _charts.pie=new Chart(canvas.getContext('2d'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
+    options:{responsive:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.label}: zł ${fmt(c.parsed)} (${(c.parsed/grand*100).toFixed(1)}%)`}}}}
+  });
+
+  // custom legend
+  const leg=document.getElementById('channelLegend');
+  if(leg)leg.innerHTML=entries.map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:12px;height:12px;border-radius:3px;background:${COLORS[k]||'#94a3b8'};flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${k}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${fmt(v)} zł · ${(v/grand*100).toFixed(1)}%</div>
+      </div>
+    </div>`).join('');
+}
+
 /* ═══════════════════════════════════════════════════════
    CHARTS
 ═══════════════════════════════════════════════════════ */
@@ -1280,7 +1342,7 @@ function renderApp(){
   }
 
   mount(header+navL1+navL2+content);
-  if(enriched){initRentalChart(enriched,fc);setTimeout(renderMonthlyTable,50);}
+  if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
 }
 
