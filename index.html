@@ -538,17 +538,17 @@ function calcForecast(days){
    DEFAULT APARTMENT ORDER
 ═══════════════════════════════════════════════════════ */
 const APT_ORDER=[
-  'Rynek 1','Rynek 7','Rynek 8','Rynek 9','Rynek 10','Rynek 11',
-  'Rynek 30c','Rynek 31c','Rynek 32c',
-  'Rynek 12r','Rynek 14r','Rynek 15r','Rynek 30r','Rynek 31r','Rynek 32r','Rynek 33r','Rynek 36r','Rynek 37r',
-  'Zamoyskiego A','Zamoyskiego B','Orzeszkowej','Stawowa','Katowicka',
-  'Bronowicka','Wawel','Wawel II no. 14','Wawel II no.15','Zamkowa',
+  'Apt 1','Apt 7','Apt 8','Apt 9','Apt 10','Apt 11',
+  'Apt 30c','Apt 32c','Apt 31c',
+  'Apt 12r','Apt 14r','Apt 15r','Apt 30r','Apt 31r','Apt 32r','Apt 33r','Apt 36r','Apt 37r',
+  'Apt A','Apt B','Orzeszkowej','Stawowa','Katowicka',
+  'Bronowicka','Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa',
   'Plac Szczepański B41','Plac Szczepański C41'
 ];
 function sortByDefaultOrder(apts){
   return [...apts].sort((a,b)=>{
-    const ai=APT_ORDER.findIndex(n=>a.toLowerCase().includes(n.toLowerCase())||n.toLowerCase().includes(a.toLowerCase()));
-    const bi=APT_ORDER.findIndex(n=>b.toLowerCase().includes(n.toLowerCase())||n.toLowerCase().includes(b.toLowerCase()));
+    const ai=APT_ORDER.findIndex(n=>n===a)||APT_ORDER.findIndex(n=>a.toLowerCase().includes(n.toLowerCase()));
+    const bi=APT_ORDER.findIndex(n=>n===b)||APT_ORDER.findIndex(n=>b.toLowerCase().includes(n.toLowerCase()));
     const ar=ai===-1?9999:ai;
     const br=bi===-1?9999:bi;
     if(ar!==br)return ar-br;
