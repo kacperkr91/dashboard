@@ -302,6 +302,7 @@ const CONFIG={
   cellMarch:          'Q4',
   febSheet:'02/2026', febDateCol:'C', febAmountCol:'M', febStartRow:3, febEndRow:800,
   janSheet:'01/2026', janDateCol:'C', janAmountCol:'M', janStartRow:3, janEndRow:800,
+  decSheet:'12/2025', decDateCol:'C', decAmountCol:'M', decStartRow:3, decEndRow:800,
   dayTabRegex:        /^\d{2}\.\d{2}$/,
   mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
   mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
@@ -353,7 +354,7 @@ const NAV={
           {key:'sep2025',label:'Wrzesień', short:'Wrz',hasData:false},
           {key:'oct2025',label:'Październik',short:'Paź',hasData:false},
           {key:'nov2025',label:'Listopad', short:'Lis',hasData:false},
-          {key:'dec2025',label:'Grudzień', short:'Gru',hasData:false},
+          {key:'dec2025',label:'Grudzień', short:'Gru',hasData:true},
         ]
       }
     }
@@ -597,7 +598,7 @@ let _state={
   rentalMonth:'mar2026',   // active month key
   mediaYear:'2026',
   data:{
-    mar2026:null, feb2026:null, jan2026:null,
+    mar2026:null, feb2026:null, jan2026:null, dec2025:null,
     media:null, apartments:null
   }
 };
@@ -1422,18 +1423,20 @@ async function refresh(){await init();}
 
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
-  _state.data={mar2026:null,feb2026:null,jan2026:null,media:null,apartments:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,media:null,apartments:null};
   renderApp();
-  const[mr,fr,jr,mdr,ar]=await Promise.allSettled([
+  const[mr,fr,jr,dr,mdr,ar]=await Promise.allSettled([
     loadMarchData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
+    loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'),
     loadMediaData(),
     loadApartmentsData(),
   ]);
   _state.data.mar2026    =mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.feb2026    =fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
   _state.data.jan2026    =jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
+  _state.data.dec2025    =dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
   _state.data.media      =mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
   _state.data.apartments =ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
   renderApp();
