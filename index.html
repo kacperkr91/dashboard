@@ -390,7 +390,6 @@ const NAV={
 const DOW_PL=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
 
 /* ── POLISH HOLIDAYS ── */
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
 function getPolishHolidays(year){
   // Fixed holidays
   const fixed=[
@@ -646,7 +645,6 @@ function getPolishHolidays(year){
   return new Set([...fixed,...movable]);
 }
 
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
 
 function parseDatePL(str){
   // handles formats: DD.MM.YYYY, D.M.YYYY, YYYY-MM-DD
@@ -834,7 +832,6 @@ function sortByDefaultOrder(apts){
 /* ═══════════════════════════════════════════════════════
    POLISH HOLIDAYS & DAY HELPERS
 ═══════════════════════════════════════════════════════ */
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
 
 function getEaster(year){
   // Anonymous Gregorian algorithm
@@ -1524,13 +1521,24 @@ function buildHousekeepingView(){
     dateMap[d].push(r);
   });
 
+  // precompute holidays
+  const yearsNeeded=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
+  const allHolidays={};
+  yearsNeeded.forEach(y=>Object.assign(allHolidays,getPolishHolidays(y)));
+
   const cleanRows=byDateOrder.map(date=>{
     const dayRows=dateMap[date];
     const dayTotal=dayRows.reduce((s,r)=>s+r.suma,0);
-    const{bg:dayBg,label:dayLabel,isRed}=dateRowStyle(date);
-    const dateCellStyle=isRed?'color:#dc2626;font-weight:700':'';
-    const rowsHtml=dayRows.map((r,i)=>`<tr style="background:${dayBg||(i%2===0?'var(--white)':'#fafbfc')}">
-      <td style="${dateCellStyle}">${r.date||'—'} <span style="font-size:10px;color:${isRed?'#dc2626':'var(--text-muted)'};font-weight:400">${dayLabel}</span></td>
+    const dateObj=parseDateDMY(date);
+    const dk=dateObj?dateKey(dateObj):'';
+    const dow=dateObj?dateObj.getDay():-1;
+    const isSun=dow===0;
+    const holName=allHolidays[dk]||'';
+    const isRed=isSun||!!holName;
+    const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
+    const dayBg=isRed?'#fff5f5':'';
+    const rowsHtml=dayRows.map((r,i)=>`<tr style="background:${isRed?'#fff5f5':i%2===0?'var(--white)':'#fafbfc'}">
+      <td style="${isRed?'color:#dc2626;font-weight:700':''}">${r.date||'—'} <span style="font-size:10px;color:${isRed?'#dc2626':'var(--text-muted)'};font-weight:600;margin-left:3px">${dowLabel}${holName?' · '+holName:''}</span></td>
       <td style="font-weight:600">${r.apt}</td>
       <td class="num">${r.guests||'—'}</td>
       <td class="num" style="font-weight:700;color:#0d9488">${fmt(r.suma)} zł</td>
@@ -1538,11 +1546,9 @@ function buildHousekeepingView(){
       <td class="num">${r.aptCena>0?fmt(r.aptCena)+' zł':'—'}</td>
       <td class="num">${r.gosCena>0?fmt(r.gosCena)+' zł':'—'}</td>
       <td><span class="hk-note" title="${r.note}">${r.note||'—'}</span></td>
-    </tr>`;}).join('');
-    const subtotalBg=isRed?'#ffe4e4':'#f0fdfa';
-    const subtotalBorder=isRed?'#fca5a5':'#99f6e4';
-    const subtotal=`<tr style="background:${subtotalBg};border-top:1px solid ${subtotalBorder}">
-      <td style="font-weight:700;color:${isRed?'#dc2626':'#0d9488'};font-size:11px">SUMA ${date} ${dayLabel}</td>
+    </tr>`).join('');
+    const subtotal=`<tr style="background:${isRed?'#ffe4e6':'#f0fdfa'};border-top:1px solid ${isRed?'#fecdd3':'#99f6e4'}">
+      <td style="font-weight:700;color:${isRed?'#dc2626':'#0d9488'};font-size:11px">SUMA ${date} ${dowLabel}</td>
       <td colspan="2"></td>
       <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'#0d9488'}">${fmt(dayTotal)} zł</td>
       <td colspan="4"></td>
