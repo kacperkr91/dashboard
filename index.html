@@ -736,24 +736,29 @@ async function loadHousekeepingMonth(monthKey){
   const{hkApiKey,hkSpreadsheetId,hkStartRow,hkEndRow}=CONFIG;
   if(!hkApiKey||!hkSpreadsheetId)throw new Error('MISSING_HK_CONFIG');
 
-  // Use spreadsheets.get with includeGridData to detect strikethrough formatting
-  const encRange=encodeURIComponent(`'${monthKey}'!B${hkStartRow}:L${hkEndRow}`);
-  const fmtUrl=`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}?ranges=${encRange}&includeGridData=true&key=${hkApiKey}`;
-  const fmtData=await apiFetch(fmtUrl);
-  const sheetData=fmtData.sheets?.[0]?.data?.[0];
-  if(!sheetData)throw new Error('NO_HK_DATA');
-  const gridRows=sheetData.rowData||[];
+  // Use includeGridData to get values + strikethrough in one request
+  // Fetch columns individually to avoid hidden column issues
+  // B=data, D=goście, G=notatka, H=apartament, I=suma, J=pranie, K=apt, L=sprzątanie
+  const colMap={B:0,D:2,G:5,H:6,I:7,J:8,K:9,L:10}; // col letter -> index in B:L (0-based, with hidden cols)
 
-  // Also fetch values separately by column to avoid hidden column issues
+  // Use includeGridData on specific columns to avoid hidden col confusion
+  const encB=encodeURIComponent(`'${monthKey}'!B${hkStartRow}:B${hkEndRow}`);
+  const encD=encodeURIComponent(`'${monthKey}'!D${hkStartRow}:D${hkEndRow}`);
+  const encG=encodeURIComponent(`'${monthKey}'!G${hkStartRow}:G${hkEndRow}`);
+  const encH=encodeURIComponent(`'${monthKey}'!H${hkStartRow}:H${hkEndRow}`);
+  const encI=encodeURIComponent(`'${monthKey}'!I${hkStartRow}:I${hkEndRow}`);
+  const encJ=encodeURIComponent(`'${monthKey}'!J${hkStartRow}:J${hkEndRow}`);
+  const encK=encodeURIComponent(`'${monthKey}'!K${hkStartRow}:K${hkEndRow}`);
+  const encL=encodeURIComponent(`'${monthKey}'!L${hkStartRow}:L${hkEndRow}`);
+
+  // Get H column with formatting (for strikethrough)
+  const fmtUrl=`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}?ranges=${encH}&includeGridData=true&key=${hkApiKey}`;
+  const fmtData=await apiFetch(fmtUrl);
+  const gridRows=fmtData.sheets?.[0]?.data?.[0]?.rowData||[];
+
+  // Get all values via batchGet
   const params=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
-  params.append('ranges',`'${monthKey}'!B${hkStartRow}:B${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!D${hkStartRow}:D${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!G${hkStartRow}:G${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!H${hkStartRow}:H${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!I${hkStartRow}:I${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!J${hkStartRow}:J${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!K${hkStartRow}:K${hkEndRow}`);
-  params.append('ranges',`'${monthKey}'!L${hkStartRow}:L${hkEndRow}`);
+  [encB,encD,encG,encH,encI,encJ,encK,encL].forEach(r=>params.append('ranges',decodeURIComponent(r)));
   const valData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${params}`);
   const vr=valData.valueRanges;
   const dateVals =vr[0]?.values||[];
@@ -765,24 +770,20 @@ async function loadHousekeepingMonth(monthKey){
   const aptCVals =vr[6]?.values||[];
   const gosCVals =vr[7]?.values||[];
 
-  // Detect strikethrough from grid formatting
-  // Column H in B:L range = index 6 (B=0,C=1,D=2,E=3,F=4,G=5,H=6)
-  const isRowStrikethrough=(rowIdx)=>{
-    const row=gridRows[rowIdx];
-    if(!row?.values)return false;
-    // check col H (index 6 in B:L) for strikethrough
-    const cell=row.values[6];
-    return cell?.effectiveFormat?.textFormat?.strikethrough===true;
-  };
-
-  const maxLen=Math.max(dateVals.length,aptVals.length,sumaVals.length);
+  // gridRows and value arrays now share the same row index (both start at hkStartRow)
+  const maxLen=Math.max(dateVals.length,aptVals.length,sumaVals.length,gridRows.length);
   const result=[];
   for(let i=0;i<maxLen;i++){
     const apt =String(aptVals[i]?.[0]||'').trim();
-    const suma=parseFloat(String(sumaVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    if(!apt||suma===0)continue;
+    const sumaRaw=sumaVals[i]?.[0];
+    const suma=parseFloat(String(sumaRaw||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    // Check strikethrough on H column (index 0 in single-col grid)
+    const strikethrough=gridRows[i]?.values?.[0]?.effectiveFormat?.textFormat?.strikethrough===true;
     const note=String(noteVals[i]?.[0]||'').trim();
-    const cancelled=isRowStrikethrough(i)||note.toLowerCase().includes('kasuj');
+    const cancelled=strikethrough||note.toLowerCase().includes('kasuj');
+    // Include cancelled rows too (show them greyed out)
+    if(!apt&&!strikethrough)continue;
+    if(!apt)continue;
     result.push({
       date:    String(dateVals[i]?.[0]||'').trim(),
       guests:  parseInt(guestVals[i]?.[0])||0,
@@ -796,13 +797,7 @@ async function loadHousekeepingMonth(monthKey){
     });
   }
   if(!result.length)throw new Error('NO_HK_DATA');
-  const cancelledRows=result.filter(r=>r.cancelled);
-  console.log(`HK ${monthKey}: ${result.length} wierszy, ${cancelledRows.length} anulowanych`);
-  // Debug first gridRow to see structure
-  if(gridRows[0])console.log('GridRow[0] sample:', JSON.stringify(gridRows[0]?.values?.[6]?.effectiveFormat?.textFormat));
-  // Check rows around G241 (index = 241 - hkStartRow = 241-3 = 238)
-  const debugIdx=238;
-  if(gridRows[debugIdx])console.log(`GridRow[${debugIdx}] H cell:`, JSON.stringify(gridRows[debugIdx]?.values?.[6]?.effectiveFormat?.textFormat));
+  console.log(`HK ${monthKey}: ${result.length} wierszy, ${result.filter(r=>r.cancelled).length} anulowanych`);
   return result;
 }
 
