@@ -735,18 +735,27 @@ const HK_MONTHS=[
 async function loadHousekeepingMonth(monthKey){
   const{hkApiKey,hkSpreadsheetId,hkStartRow,hkEndRow}=CONFIG;
   if(!hkApiKey||!hkSpreadsheetId)throw new Error('MISSING_HK_CONFIG');
-  // Fetch each column separately to avoid issues with hidden columns
+
+  // Use spreadsheets.get with includeGridData to detect strikethrough formatting
+  const encRange=encodeURIComponent(`'${monthKey}'!B${hkStartRow}:L${hkEndRow}`);
+  const fmtUrl=`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}?ranges=${encRange}&includeGridData=true&key=${hkApiKey}`;
+  const fmtData=await apiFetch(fmtUrl);
+  const sheetData=fmtData.sheets?.[0]?.data?.[0];
+  if(!sheetData)throw new Error('NO_HK_DATA');
+  const gridRows=sheetData.rowData||[];
+
+  // Also fetch values separately by column to avoid hidden column issues
   const params=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
-  params.append('ranges',`'${monthKey}'!B${hkStartRow}:B${hkEndRow}`); // 0: data wyjazdu
-  params.append('ranges',`'${monthKey}'!D${hkStartRow}:D${hkEndRow}`); // 1: liczba gości
-  params.append('ranges',`'${monthKey}'!G${hkStartRow}:G${hkEndRow}`); // 2: notatka
-  params.append('ranges',`'${monthKey}'!H${hkStartRow}:H${hkEndRow}`); // 3: apartament
-  params.append('ranges',`'${monthKey}'!I${hkStartRow}:I${hkEndRow}`); // 4: suma
-  params.append('ranges',`'${monthKey}'!J${hkStartRow}:J${hkEndRow}`); // 5: pranie
-  params.append('ranges',`'${monthKey}'!K${hkStartRow}:K${hkEndRow}`); // 6: apt-cena
-  params.append('ranges',`'${monthKey}'!L${hkStartRow}:L${hkEndRow}`); // 7: sprzątanie
-  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${params}`);
-  const vr=data.valueRanges;
+  params.append('ranges',`'${monthKey}'!B${hkStartRow}:B${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!D${hkStartRow}:D${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!G${hkStartRow}:G${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!H${hkStartRow}:H${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!I${hkStartRow}:I${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!J${hkStartRow}:J${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!K${hkStartRow}:K${hkEndRow}`);
+  params.append('ranges',`'${monthKey}'!L${hkStartRow}:L${hkEndRow}`);
+  const valData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${params}`);
+  const vr=valData.valueRanges;
   const dateVals =vr[0]?.values||[];
   const guestVals=vr[1]?.values||[];
   const noteVals =vr[2]?.values||[];
@@ -755,31 +764,38 @@ async function loadHousekeepingMonth(monthKey){
   const pranieVals=vr[5]?.values||[];
   const aptCVals =vr[6]?.values||[];
   const gosCVals =vr[7]?.values||[];
+
+  // Detect strikethrough from grid formatting
+  // Column H in B:L range = index 6 (B=0,C=1,D=2,E=3,F=4,G=5,H=6)
+  const isRowStrikethrough=(rowIdx)=>{
+    const row=gridRows[rowIdx];
+    if(!row?.values)return false;
+    // check col H (index 6 in B:L) for strikethrough
+    const cell=row.values[6];
+    return cell?.effectiveFormat?.textFormat?.strikethrough===true;
+  };
+
   const maxLen=Math.max(dateVals.length,aptVals.length,sumaVals.length);
   const result=[];
   for(let i=0;i<maxLen;i++){
-    const apt   =String(aptVals[i]?.[0]||'').trim();
-    const suma  =parseFloat(String(sumaVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const apt =String(aptVals[i]?.[0]||'').trim();
+    const suma=parseFloat(String(sumaVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
     if(!apt||suma===0)continue;
-    const note  =String(noteVals[i]?.[0]||'').trim();
+    const note=String(noteVals[i]?.[0]||'').trim();
+    const cancelled=isRowStrikethrough(i)||note.toLowerCase().includes('kasuj');
     result.push({
-      date:     String(dateVals[i]?.[0]||'').trim(),
-      guests:   parseInt(guestVals[i]?.[0])||0,
+      date:    String(dateVals[i]?.[0]||'').trim(),
+      guests:  parseInt(guestVals[i]?.[0])||0,
       note,
       apt,
       suma,
-      pranie:   parseFloat(String(pranieVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      aptCena:  parseFloat(String(aptCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      gosCena:  parseFloat(String(gosCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      cancelled:note.toLowerCase().includes('kasuj'),
+      pranie:  parseFloat(String(pranieVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      aptCena: parseFloat(String(aptCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      gosCena: parseFloat(String(gosCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      cancelled,
     });
   }
   if(!result.length)throw new Error('NO_HK_DATA');
-  // DEBUG — usuń po weryfikacji
-  const cancelledRows=result.filter(r=>r.cancelled);
-  console.log(`HK ${monthKey}: ${result.length} wierszy, ${cancelledRows.length} z Kasuj`);
-  console.log('Przykładowe notatki:', result.slice(0,5).map(r=>r.note));
-  if(cancelledRows.length)console.log('Kasuj rows:', cancelledRows.map(r=>({apt:r.apt,note:r.note})));
   return result;
 }
 
