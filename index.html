@@ -796,6 +796,13 @@ async function loadHousekeepingMonth(monthKey){
     });
   }
   if(!result.length)throw new Error('NO_HK_DATA');
+  const cancelledRows=result.filter(r=>r.cancelled);
+  console.log(`HK ${monthKey}: ${result.length} wierszy, ${cancelledRows.length} anulowanych`);
+  // Debug first gridRow to see structure
+  if(gridRows[0])console.log('GridRow[0] sample:', JSON.stringify(gridRows[0]?.values?.[6]?.effectiveFormat?.textFormat));
+  // Check rows around G241 (index = 241 - hkStartRow = 241-3 = 238)
+  const debugIdx=238;
+  if(gridRows[debugIdx])console.log(`GridRow[${debugIdx}] H cell:`, JSON.stringify(gridRows[debugIdx]?.values?.[6]?.effectiveFormat?.textFormat));
   return result;
 }
 
