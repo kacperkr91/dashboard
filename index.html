@@ -735,37 +735,47 @@ const HK_MONTHS=[
 async function loadHousekeepingMonth(monthKey){
   const{hkApiKey,hkSpreadsheetId,hkStartRow,hkEndRow}=CONFIG;
   if(!hkApiKey||!hkSpreadsheetId)throw new Error('MISSING_HK_CONFIG');
-  // Sheet tab named e.g. "2026-03", data in cols B,D,G,H,I,J,K,L
-  const enc=encodeURIComponent(`'${monthKey}'!B${hkStartRow}:L${hkEndRow}`);
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${hkApiKey}`;
-  const data=await apiFetch(url);
-  const rows=data.values||[];
-  if(!rows.length)throw new Error('NO_HK_DATA');
-
-  // Cols relative to B (index 0):
-  // B=0 data wyjazdu, C=1(skip), D=2 liczba gości, E=3(skip), F=4(skip), G=5 notatka
-  // H=6 apartament, I=7 suma, J=8 pranie, K=9 apt-cena, L=10 goście-cena
-  return rows.map(r=>{
-    const apt   = String(r[6]||'').trim();
-    const suma    = parseFloat(String(r[7]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const pranie  = parseFloat(String(r[8]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const aptCena = parseFloat(String(r[9]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const gosCena = parseFloat(String(r[10]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    if(!apt||suma===0)return null;
-    const note=String(r[5]||'').trim();
-    const cancelled=note.toLowerCase().includes('kasuj');
-    return{
-      date:   String(r[0]||'').trim(),
-      guests: parseInt(r[2])||0,
+  // Fetch each column separately to avoid issues with hidden columns
+  const params=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
+  params.append('ranges',`'${monthKey}'!B${hkStartRow}:B${hkEndRow}`); // 0: data wyjazdu
+  params.append('ranges',`'${monthKey}'!D${hkStartRow}:D${hkEndRow}`); // 1: liczba gości
+  params.append('ranges',`'${monthKey}'!G${hkStartRow}:G${hkEndRow}`); // 2: notatka
+  params.append('ranges',`'${monthKey}'!H${hkStartRow}:H${hkEndRow}`); // 3: apartament
+  params.append('ranges',`'${monthKey}'!I${hkStartRow}:I${hkEndRow}`); // 4: suma
+  params.append('ranges',`'${monthKey}'!J${hkStartRow}:J${hkEndRow}`); // 5: pranie
+  params.append('ranges',`'${monthKey}'!K${hkStartRow}:K${hkEndRow}`); // 6: apt-cena
+  params.append('ranges',`'${monthKey}'!L${hkStartRow}:L${hkEndRow}`); // 7: sprzątanie
+  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${params}`);
+  const vr=data.valueRanges;
+  const dateVals =vr[0]?.values||[];
+  const guestVals=vr[1]?.values||[];
+  const noteVals =vr[2]?.values||[];
+  const aptVals  =vr[3]?.values||[];
+  const sumaVals =vr[4]?.values||[];
+  const pranieVals=vr[5]?.values||[];
+  const aptCVals =vr[6]?.values||[];
+  const gosCVals =vr[7]?.values||[];
+  const maxLen=Math.max(dateVals.length,aptVals.length,sumaVals.length);
+  const result=[];
+  for(let i=0;i<maxLen;i++){
+    const apt   =String(aptVals[i]?.[0]||'').trim();
+    const suma  =parseFloat(String(sumaVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    if(!apt||suma===0)continue;
+    const note  =String(noteVals[i]?.[0]||'').trim();
+    result.push({
+      date:     String(dateVals[i]?.[0]||'').trim(),
+      guests:   parseInt(guestVals[i]?.[0])||0,
       note,
       apt,
       suma,
-      pranie,
-      aptCena,
-      gosCena,
-      cancelled,
-    };
-  }).filter(Boolean);
+      pranie:   parseFloat(String(pranieVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      aptCena:  parseFloat(String(aptCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      gosCena:  parseFloat(String(gosCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      cancelled:note.toLowerCase().includes('kasuj'),
+    });
+  }
+  if(!result.length)throw new Error('NO_HK_DATA');
+  return result;
 }
 
 /* ═══════════════════════════════════════════════════════
