@@ -1552,7 +1552,7 @@ function buildHousekeepingView(){
   // Group rows by date and add subtotals after each day
   const byDateOrder=[];
   const dateMap={};
-  activeRows.forEach(r=>{
+  rows.forEach(r=>{
     const d=r.date||'—';
     if(!dateMap[d]){dateMap[d]=[];byDateOrder.push(d);}
     dateMap[d].push(r);
