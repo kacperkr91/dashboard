@@ -572,17 +572,20 @@ async function loadHousekeepingMonth(monthKey){
   // H=6 apartament, I=7 suma, J=8 pranie, K=9 apt-cena, L=10 goście-cena
   return rows.map(r=>{
     const apt   = String(r[6]||'').trim();
-    const suma  = parseFloat(String(r[7]||'0').replace(/[^\d.,-]/g,'').replace(',','.'));
-    if(!apt||isNaN(suma)||suma===0)return null;
+    const pranie  = parseFloat(String(r[8]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const aptCena = parseFloat(String(r[9]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const gosCena = parseFloat(String(r[10]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const suma    = pranie + aptCena + gosCena;
+    if(!apt||suma===0)return null;
     return{
       date:   String(r[0]||'').trim(),
       guests: parseInt(r[2])||0,
       note:   String(r[5]||'').trim(),
       apt,
-      suma:   isNaN(suma)?0:suma,
-      pranie: parseFloat(String(r[8]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      aptCena:parseFloat(String(r[9]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      gosCena:parseFloat(String(r[10]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      suma,
+      pranie,
+      aptCena,
+      gosCena,
     };
   }).filter(Boolean);
 }
