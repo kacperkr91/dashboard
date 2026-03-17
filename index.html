@@ -781,9 +781,9 @@ async function loadHousekeepingMonth(monthKey){
     const strikethrough=gridRows[i]?.values?.[0]?.effectiveFormat?.textFormat?.strikethrough===true;
     const note=String(noteVals[i]?.[0]||'').trim();
     const cancelled=strikethrough||note.toLowerCase().includes('kasuj');
-    // Include cancelled rows too (show them greyed out)
-    if(!apt&&!strikethrough)continue;
     if(!apt)continue;
+    // Always include cancelled rows even if suma=0, skip only non-cancelled zero rows
+    if(!cancelled&&suma===0)continue;
     result.push({
       date:    String(dateVals[i]?.[0]||'').trim(),
       guests:  parseInt(guestVals[i]?.[0])||0,
