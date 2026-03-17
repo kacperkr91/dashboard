@@ -278,6 +278,24 @@
     .monthly-apt-table tr.grand-total{background:var(--blue-light);font-weight:700;}
     .monthly-apt-table tr.grand-total td{color:var(--blue);}
     .apt-bar-inline{display:inline-block;height:6px;background:var(--blue-mid);border-radius:3px;vertical-align:middle;margin-left:6px;}
+
+    /* ── HOUSEKEEPING ── */
+    .hk-teal{color:#0d9488;}
+    .hk-month-nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;}
+    .hk-month-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--white);color:var(--text-muted);cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;}
+    .hk-month-btn:hover{background:var(--bg);color:var(--text);}
+    .hk-month-btn.active{background:#0d9488;color:#fff;border-color:#0d9488;}
+    .hk-table-wrap{overflow-x:auto;}
+    .hk-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .hk-table thead th{background:var(--bg);padding:9px 12px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
+    .hk-table thead th.num{text-align:right;}
+    .hk-table tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+    .hk-table tbody tr:hover{background:var(--bg);}
+    .hk-table tbody td{padding:8px 12px;color:var(--text);white-space:nowrap;font-size:12px;}
+    .hk-table tbody td.num{text-align:right;font-variant-numeric:tabular-nums;}
+    .hk-table tr.hk-total{background:#f0fdfa;font-weight:700;border-top:2px solid #99f6e4;}
+    .hk-table tr.hk-total td{color:#0d9488;}
+    .hk-note{font-size:11px;color:var(--text-muted);font-style:italic;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
     @keyframes spin{to{transform:rotate(360deg)}}
     @media(max-width:640px){
@@ -312,6 +330,10 @@ const CONFIG={
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
   aptsRange:          'A2:M100',
+  hkApiKey:           localStorage.getItem('gs_hk_api_key')||'',
+  hkSpreadsheetId:    localStorage.getItem('gs_hk_spreadsheet_id')||'',
+  hkStartRow:         2,
+  hkEndRow:           500,
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -523,6 +545,48 @@ async function loadApartmentsData(){
   })).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   HOUSEKEEPING LOADER
+═══════════════════════════════════════════════════════ */
+// Available months — add as data arrives
+const HK_MONTHS=[
+  {key:'2025-12',label:'Grudzień 2025',short:'Gru 25'},
+  {key:'2026-01',label:'Styczeń 2026', short:'Sty 26'},
+  {key:'2026-02',label:'Luty 2026',    short:'Lut 26'},
+  {key:'2026-03',label:'Marzec 2026',  short:'Mar 26'},
+];
+
+async function loadHousekeepingMonth(monthKey){
+  const{hkApiKey,hkSpreadsheetId,hkStartRow,hkEndRow}=CONFIG;
+  if(!hkApiKey||!hkSpreadsheetId)throw new Error('MISSING_HK_CONFIG');
+  // Sheet tab named e.g. "2026-03", data in cols B,D,G,H,I,J,K,L
+  const enc=encodeURIComponent(`'${monthKey}'!B${hkStartRow}:L${hkEndRow}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${hkApiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(!rows.length)throw new Error('NO_HK_DATA');
+
+  // Cols relative to B (index 0):
+  // B=0 data wyjazdu, C=1(skip), D=2 liczba gości, E=3(skip), F=4(skip), G=5 notatka
+  // H=6 apartament, I=7 suma, J=8 pranie, K=9 apt-cena, L=10 goście-cena
+  return rows.map(r=>{
+    const apt   = String(r[6]||'').trim();
+    const suma  = parseFloat(String(r[7]||'0').replace(/[^\d.,-]/g,'').replace(',','.'));
+    if(!apt||isNaN(suma)||suma===0)return null;
+    return{
+      date:   String(r[0]||'').trim(),
+      guests: parseInt(r[2])||0,
+      note:   String(r[5]||'').trim(),
+      apt,
+      suma:   isNaN(suma)?0:suma,
+      pranie: parseFloat(String(r[8]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      aptCena:parseFloat(String(r[9]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      gosCena:parseFloat(String(r[10]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+    };
+  }).filter(Boolean);
+}
+
 /* ═══════════════════════════════════════════════════════
    FORECAST
 ═══════════════════════════════════════════════════════ */
@@ -592,14 +656,15 @@ const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFrac
    STATE
 ═══════════════════════════════════════════════════════ */
 let _state={
-  section:'rental',        // 'rental' | 'media' | 'apartments'
+  section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
+  hkMonth:'2026-03',
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:'mar2026',   // active month key
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null,
-    media:null, apartments:null
+    media:null, apartments:null, housekeeping:{}
   }
 };
 let _charts={};
@@ -635,6 +700,10 @@ function renderConfig(){
     <p class="section-label">🏠 Arkusz danych apartamentów</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-aptskey" type="text" placeholder="AIzaSy…" value="${CONFIG.aptsApiKey}"/></div>
     <div class="field"><label>Spreadsheet ID arkusza apartamentów</label><input id="inp-aptssheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.aptsSpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🧹 Arkusz housekeeping</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-hkkey" type="text" placeholder="AIzaSy…" value="${CONFIG.hkApiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza housekeeping</label><input id="inp-hksheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.hkSpreadsheetId}"/></div>
     <button class="btn-primary" onclick="saveConfig()">Zapisz i załaduj dane</button>
   </div></div>`;
 }
@@ -1051,6 +1120,119 @@ function toggleWifi(id,pass){
 }
 
 
+
+/* ═══════════════════════════════════════════════════════
+   HOUSEKEEPING VIEW
+═══════════════════════════════════════════════════════ */
+function buildHousekeepingView(){
+  const monthKey=_state.hkMonth;
+  const rows=_state.data.housekeeping[monthKey];
+  const activeMonth=HK_MONTHS.find(m=>m.key===monthKey);
+
+  const monthNav=`<div class="hk-month-nav">
+    ${HK_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setHkMonth('${m.key}')">${m.short}</button>`).join('')}
+  </div>`;
+
+  if(!rows){
+    return monthNav+renderLoading('Ładowanie housekeeping…');
+  }
+  if(rows.error){
+    return monthNav+renderError(rows.error);
+  }
+  if(!rows.length){
+    return monthNav+`<div class="empty-section"><div class="empty-icon">🧹</div><p>Brak danych dla ${activeMonth?.label||monthKey}</p></div>`;
+  }
+
+  // KPIs
+  const totalSuma=rows.reduce((s,r)=>s+r.suma,0);
+  const totalPranie=rows.reduce((s,r)=>s+r.pranie,0);
+  const totalApt=rows.reduce((s,r)=>s+r.aptCena,0);
+  const totalGos=rows.reduce((s,r)=>s+r.gosCena,0);
+  const avgSuma=rows.length?totalSuma/rows.length:0;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-green" style="animation-delay:0s"><div class="label">Koszt łączny</div><div class="value"><span class="sym">zł</span>${fmt(totalSuma)}</div><div class="sub">${rows.length} sprzątań</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średni koszt</div><div class="value"><span class="sym">zł</span>${fmt(avgSuma)}</div><div class="sub">per sprzątanie</div></div>
+    <div class="kpi-card" style="animation-delay:0.14s"><div class="label">Pranie</div><div class="value"><span class="sym">zł</span>${fmt(totalPranie)}</div><div class="sub">łącznie</div></div>
+    <div class="kpi-card" style="animation-delay:0.21s"><div class="label">Dopłata za gości</div><div class="value"><span class="sym">zł</span>${fmt(totalGos)}</div><div class="sub">łącznie</div></div>
+  </div>`;
+
+  // Per-apt summary
+  const byApt={};
+  rows.forEach(r=>{
+    if(!byApt[r.apt])byApt[r.apt]={suma:0,count:0,pranie:0,aptCena:0,gosCena:0};
+    byApt[r.apt].suma+=r.suma;
+    byApt[r.apt].count++;
+    byApt[r.apt].pranie+=r.pranie;
+    byApt[r.apt].aptCena+=r.aptCena;
+    byApt[r.apt].gosCena+=r.gosCena;
+  });
+  const aptsSorted=sortByDefaultOrder(Object.keys(byApt));
+  const maxAptSuma=Math.max(...aptsSorted.map(a=>byApt[a].suma),1);
+
+  const aptRows=aptsSorted.map(apt=>{
+    const d=byApt[apt];
+    const barW=Math.round(d.suma/maxAptSuma*100);
+    return`<tr>
+      <td style="font-weight:600">${apt}</td>
+      <td class="num">${d.count}</td>
+      <td class="num" style="font-weight:700;color:#0d9488">${fmt(d.suma)} zł</td>
+      <td class="num">${fmt(d.pranie)} zł</td>
+      <td class="num">${fmt(d.aptCena)} zł</td>
+      <td class="num">${fmt(d.gosCena)} zł</td>
+      <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:7px"><div style="height:100%;width:${barW}%;background:#0d9488;border-radius:3px"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  const aptTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
+    <div class="card-title">Koszty per apartament — ${activeMonth?.label||monthKey}</div>
+    <div class="hk-table-wrap"><table class="hk-table">
+      <thead><tr><th>Apartament</th><th class="num">Ilość</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Goście</th><th></th></tr></thead>
+      <tbody>
+        ${aptRows}
+        <tr class="hk-total">
+          <td>ŁĄCZNIE</td>
+          <td class="num">${rows.length}</td>
+          <td class="num">${fmt(totalSuma)} zł</td>
+          <td class="num">${fmt(totalPranie)} zł</td>
+          <td class="num">${fmt(totalApt)} zł</td>
+          <td class="num">${fmt(totalGos)} zł</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>`;
+
+  // Comparison chart across months
+  const compChart=`<div class="chart-card" style="animation:fadeUp 0.4s 0.15s ease both">
+    <div class="card-title">Trend miesięczny — koszty sprzątania</div>
+    <div class="card-subtitle">Łączny koszt housekeeping per miesiąc</div>
+    <div class="chart-wrap"><canvas id="hkTrendChart"></canvas></div>
+  </div>`;
+
+  // Full cleanings table
+  const cleanRows=rows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
+    <td>${r.date||'—'}</td>
+    <td style="font-weight:600">${r.apt}</td>
+    <td class="num">${r.guests||'—'}</td>
+    <td class="num" style="font-weight:700;color:#0d9488">${fmt(r.suma)} zł</td>
+    <td class="num">${r.pranie>0?fmt(r.pranie)+' zł':'—'}</td>
+    <td class="num">${r.aptCena>0?fmt(r.aptCena)+' zł':'—'}</td>
+    <td class="num">${r.gosCena>0?fmt(r.gosCena)+' zł':'—'}</td>
+    <td><span class="hk-note" title="${r.note}">${r.note||'—'}</span></td>
+  </tr>`).join('');
+
+  const fullTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.2s ease both">
+    <div class="card-title">Wszystkie sprzątania — ${activeMonth?.label||monthKey}</div>
+    <div class="hk-table-wrap"><table class="hk-table">
+      <thead><tr><th>Data wyjazdu</th><th>Apartament</th><th class="num">Goście</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Goście+</th><th>Notatka</th></tr></thead>
+      <tbody>${cleanRows}</tbody>
+    </table></div>
+  </div>`;
+
+  return monthNav+kpis+compChart+aptTable+fullTable;
+}
+
 /* ═══════════════════════════════════════════════════════
    DRAWER
 ═══════════════════════════════════════════════════════ */
@@ -1298,6 +1480,25 @@ function initMediaCharts(view){
   if(lc)_charts.line=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:view.mt2025,borderColor:'rgba(37,99,235,0.8)',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:view.mt2026,borderColor:'rgba(234,88,12,0.9)',backgroundColor:'rgba(234,88,12,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}});
 }
 
+
+function initHkChart(){
+  const hkData=_state.data.housekeeping||{};
+  const labels=HK_MONTHS.map(m=>m.short);
+  const values=HK_MONTHS.map(m=>{
+    const rows=hkData[m.key];
+    if(!rows||rows.error||!Array.isArray(rows))return 0;
+    return rows.reduce((s,r)=>s+r.suma,0);
+  });
+  const canvas=document.getElementById('hkTrendChart');
+  if(!canvas)return;
+  if(_charts.hkTrend){try{_charts.hkTrend.destroy();}catch(e){}}
+  _charts.hkTrend=new Chart(canvas.getContext('2d'),{
+    type:'bar',
+    data:{labels,datasets:[{data:values,backgroundColor:'rgba(13,148,136,0.7)',borderColor:'rgba(13,148,136,1)',borderWidth:1,borderRadius:5,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>' zł '+fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}
+  });
+}
+
 /* ═══════════════════════════════════════════════════════
    MAIN RENDER
 ═══════════════════════════════════════════════════════ */
@@ -1328,6 +1529,9 @@ function renderApp(){
     </button>
     <button class="nav-l1-btn ${section==='apartments'?'active':''}" style="${section==='apartments'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('apartments')">
       <span class="icon">🏠</span> Apartamenty
+    </button>
+    <button class="nav-l1-btn ${section==='housekeeping'?'active':''}" style="${section==='housekeeping'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('housekeeping')">
+      <span class="icon">🧹</span> Housekeeping
     </button>
   </div>`;
 
@@ -1362,17 +1566,20 @@ function renderApp(){
     if(!d){content=renderLoading('Ładowanie mediów…');}
     else if(d.error){content=renderError(d.error);}
     else{const v=buildMediaView(d);content=v.html;mediaView=v;}
-  } else {
-    // ── Apartments ──
+  } else if(section==='apartments'){
     const d=data.apartments;
     if(!d){content=renderLoading('Ładowanie apartamentów…');}
     else if(d.error){content=renderError(d.error);}
     else{content=`<div id="apt-section-wrap">${buildApartmentsView(d)}</div>`;}
+  } else {
+    // ── Housekeeping ──
+    content=buildHousekeepingView();
   }
 
   mount(header+navL1+navL2+content);
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
+  if(section==='housekeeping')setTimeout(initHkChart,50);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1394,6 +1601,10 @@ function saveConfig(){
   localStorage.setItem('gs_api_key',k);localStorage.setItem('gs_spreadsheet_id',s);
   localStorage.setItem('gs_media_api_key',mk);localStorage.setItem('gs_media_spreadsheet_id',ms);
   localStorage.setItem('gs_apts_api_key',ak);localStorage.setItem('gs_apts_spreadsheet_id',as_);
+  const hk=document.getElementById('inp-hkkey')?.value.trim()||'';
+  const hs=document.getElementById('inp-hksheetid')?.value.trim()||'';
+  CONFIG.hkApiKey=hk;CONFIG.hkSpreadsheetId=hs;
+  localStorage.setItem('gs_hk_api_key',hk);localStorage.setItem('gs_hk_spreadsheet_id',hs);
   init();
 }
 
@@ -1418,20 +1629,39 @@ function setRentalYear(y){
 }
 function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
+function setHkMonth(key){
+  _state.hkMonth=key;
+  // load if not yet loaded
+  if(!_state.data.housekeeping[key]){
+    _state.data.housekeeping[key]=null; // null = loading
+    renderApp();
+    loadHousekeepingMonth(key).then(rows=>{
+      _state.data.housekeeping[key]=rows;
+      if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.housekeeping[key]={error:e.message||'Błąd'};
+      if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
+    });
+  } else {
+    renderApp();
+  }
+}
 
 async function refresh(){await init();}
 
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,media:null,apartments:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,media:null,apartments:null,housekeeping:{}};
   renderApp();
-  const[mr,fr,jr,dr,mdr,ar]=await Promise.allSettled([
+  const initHkKey=_state.hkMonth;
+  const[mr,fr,jr,dr,mdr,ar,hkr]=await Promise.allSettled([
     loadMarchData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
     loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'),
     loadMediaData(),
     loadApartmentsData(),
+    loadHousekeepingMonth(initHkKey),
   ]);
   _state.data.mar2026    =mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.feb2026    =fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
@@ -1439,6 +1669,7 @@ async function init(){
   _state.data.dec2025    =dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
   _state.data.media      =mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
   _state.data.apartments =ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
+  _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
   renderApp();
 }
 
