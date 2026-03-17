@@ -775,6 +775,11 @@ async function loadHousekeepingMonth(monthKey){
     });
   }
   if(!result.length)throw new Error('NO_HK_DATA');
+  // DEBUG — usuń po weryfikacji
+  const cancelledRows=result.filter(r=>r.cancelled);
+  console.log(`HK ${monthKey}: ${result.length} wierszy, ${cancelledRows.length} z Kasuj`);
+  console.log('Przykładowe notatki:', result.slice(0,5).map(r=>r.note));
+  if(cancelledRows.length)console.log('Kasuj rows:', cancelledRows.map(r=>({apt:r.apt,note:r.note})));
   return result;
 }
 
