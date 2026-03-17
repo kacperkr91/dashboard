@@ -658,6 +658,7 @@ const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFrac
 let _state={
   section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
   hkMonth:'2026-03',
+  hkAptSort:'default',
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:'mar2026',   // active month key
@@ -1154,7 +1155,7 @@ function buildHousekeepingView(){
     <div class="kpi-card c-green" style="animation-delay:0s"><div class="label">Koszt łączny</div><div class="value"><span class="sym">zł</span>${fmt(totalSuma)}</div><div class="sub">${rows.length} sprzątań</div></div>
     <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średni koszt</div><div class="value"><span class="sym">zł</span>${fmt(avgSuma)}</div><div class="sub">per sprzątanie</div></div>
     <div class="kpi-card" style="animation-delay:0.14s"><div class="label">Pranie</div><div class="value"><span class="sym">zł</span>${fmt(totalPranie)}</div><div class="sub">łącznie</div></div>
-    <div class="kpi-card" style="animation-delay:0.21s"><div class="label">Dopłata za gości</div><div class="value"><span class="sym">zł</span>${fmt(totalGos)}</div><div class="sub">łącznie</div></div>
+    <div class="kpi-card" style="animation-delay:0.21s"><div class="label">Sprzątanie</div><div class="value"><span class="sym">zł</span>${fmt(totalGos)}</div><div class="sub">łącznie</div></div>
   </div>`;
 
   // Per-apt summary
@@ -1167,7 +1168,10 @@ function buildHousekeepingView(){
     byApt[r.apt].aptCena+=r.aptCena;
     byApt[r.apt].gosCena+=r.gosCena;
   });
-  const aptsSorted=sortByDefaultOrder(Object.keys(byApt));
+  const hkSort=_state.hkAptSort||'default';
+  let aptsSorted=sortByDefaultOrder(Object.keys(byApt));
+  if(hkSort==='suma')aptsSorted=[...aptsSorted].sort((a,b)=>byApt[b].suma-byApt[a].suma);
+  else if(hkSort==='count')aptsSorted=[...aptsSorted].sort((a,b)=>byApt[b].count-byApt[a].count);
   const maxAptSuma=Math.max(...aptsSorted.map(a=>byApt[a].suma),1);
 
   const aptRows=aptsSorted.map(apt=>{
@@ -1185,9 +1189,17 @@ function buildHousekeepingView(){
   }).join('');
 
   const aptTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
-    <div class="card-title">Koszty per apartament — ${activeMonth?.label||monthKey}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div class="card-title">Koszty per apartament — ${activeMonth?.label||monthKey}</div>
+      <div style="display:flex;gap:6px">
+        <span style="font-size:11px;color:var(--text-muted);align-self:center">Sortuj:</span>
+        <button class="sort-btn ${_state.hkAptSort==='default'?'active':''}" onclick="setHkAptSort('default')">Domyślnie</button>
+        <button class="sort-btn ${_state.hkAptSort==='suma'?'active':''}" onclick="setHkAptSort('suma')">Suma ↓</button>
+        <button class="sort-btn ${_state.hkAptSort==='count'?'active':''}" onclick="setHkAptSort('count')">Ilość ↓</button>
+      </div>
+    </div>
     <div class="hk-table-wrap"><table class="hk-table">
-      <thead><tr><th>Apartament</th><th class="num">Ilość</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Goście</th><th></th></tr></thead>
+      <thead><tr><th>Apartament</th><th class="num">Ilość</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Sprzątanie</th><th></th></tr></thead>
       <tbody>
         ${aptRows}
         <tr class="hk-total">
@@ -1225,7 +1237,7 @@ function buildHousekeepingView(){
   const fullTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.2s ease both">
     <div class="card-title">Wszystkie sprzątania — ${activeMonth?.label||monthKey}</div>
     <div class="hk-table-wrap"><table class="hk-table">
-      <thead><tr><th>Data wyjazdu</th><th>Apartament</th><th class="num">Goście</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Goście+</th><th>Notatka</th></tr></thead>
+      <thead><tr><th>Data wyjazdu</th><th>Apartament</th><th class="num">Goście</th><th class="num">Suma</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Sprzątanie</th><th>Notatka</th></tr></thead>
       <tbody>${cleanRows}</tbody>
     </table></div>
   </div>`;
@@ -1629,6 +1641,8 @@ function setRentalYear(y){
 }
 function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
+function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
+
 function setHkMonth(key){
   _state.hkMonth=key;
   // load if not yet loaded
