@@ -1226,16 +1226,36 @@ function buildHousekeepingView(){
   </div>`;
 
   // Full cleanings table
-  const cleanRows=rows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
-    <td>${r.date||'—'}</td>
-    <td style="font-weight:600">${r.apt}</td>
-    <td class="num">${r.guests||'—'}</td>
-    <td class="num" style="font-weight:700;color:#0d9488">${fmt(r.suma)} zł</td>
-    <td class="num">${r.pranie>0?fmt(r.pranie)+' zł':'—'}</td>
-    <td class="num">${r.aptCena>0?fmt(r.aptCena)+' zł':'—'}</td>
-    <td class="num">${r.gosCena>0?fmt(r.gosCena)+' zł':'—'}</td>
-    <td><span class="hk-note" title="${r.note}">${r.note||'—'}</span></td>
-  </tr>`).join('');
+  // Group rows by date and add subtotals after each day
+  const byDateOrder=[];
+  const dateMap={};
+  rows.forEach(r=>{
+    const d=r.date||'—';
+    if(!dateMap[d]){dateMap[d]=[];byDateOrder.push(d);}
+    dateMap[d].push(r);
+  });
+
+  const cleanRows=byDateOrder.map(date=>{
+    const dayRows=dateMap[date];
+    const dayTotal=dayRows.reduce((s,r)=>s+r.suma,0);
+    const rowsHtml=dayRows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
+      <td>${r.date||'—'}</td>
+      <td style="font-weight:600">${r.apt}</td>
+      <td class="num">${r.guests||'—'}</td>
+      <td class="num" style="font-weight:700;color:#0d9488">${fmt(r.suma)} zł</td>
+      <td class="num">${r.pranie>0?fmt(r.pranie)+' zł':'—'}</td>
+      <td class="num">${r.aptCena>0?fmt(r.aptCena)+' zł':'—'}</td>
+      <td class="num">${r.gosCena>0?fmt(r.gosCena)+' zł':'—'}</td>
+      <td><span class="hk-note" title="${r.note}">${r.note||'—'}</span></td>
+    </tr>`).join('');
+    const subtotal=`<tr style="background:#f0fdfa;border-top:1px solid #99f6e4">
+      <td style="font-weight:700;color:#0d9488;font-size:11px">SUMA ${date}</td>
+      <td colspan="2"></td>
+      <td class="num" style="font-weight:700;color:#0d9488">${fmt(dayTotal)} zł</td>
+      <td colspan="4"></td>
+    </tr>`;
+    return rowsHtml+subtotal;
+  }).join('');
 
   const fullTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.2s ease both">
     <div class="card-title">Wszystkie sprzątania — ${activeMonth?.label||monthKey}</div>
