@@ -388,64 +388,6 @@ const NAV={
    DATE HELPERS
 ═══════════════════════════════════════════════════════ */
 const DOW_PL=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
-
-/* ── POLISH HOLIDAYS ── */
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-function getPolishHolidays(year){
-  // Fixed holidays
-  const fixed=[
-    `${year}-01-01`,`${year}-01-06`,
-    `${year}-05-01`,`${year}-05-03`,
-    `${year}-08-15`,`${year}-11-01`,`${year}-11-11`,
-    `${year}-12-25`,`${year}-12-26`,
-  ];
-  // Easter (Meeus/Jones/Butcher algorithm)
-  const a=year%19,b=Math.floor(year/100),c=year%100;
-  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
-  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
-  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
-  const m=Math.floor((a+11*h+22*l)/451);
-  const month=Math.floor((h+l-7*m+114)/31);
-  const day=((h+l-7*m+114)%31)+1;
-  const easter=new Date(year,month-1,day);
-  const easterStr=easter.toISOString().slice(0,10);
-  // Easter Monday
-  const em=new Date(easter);em.setDate(em.getDate()+1);
-  const emStr=em.toISOString().slice(0,10);
-  // Corpus Christi (60 days after Easter)
-  const cc=new Date(easter);cc.setDate(cc.getDate()+60);
-  const ccStr=cc.toISOString().slice(0,10);
-  // Pentecost (49 days after Easter)
-  const pent=new Date(easter);pent.setDate(pent.getDate()+49);
-  const pentStr=pent.toISOString().slice(0,10);
-  return new Set([...fixed,easterStr,emStr,ccStr,pentStr]);
-}
-function parseHKDate(dateStr){
-  // accepts DD.MM.YYYY or DD.MM.YYYY or YYYY-MM-DD
-  if(!dateStr||dateStr==='—')return null;
-  let m=dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  m=dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  return null;
-}
-function isHoliday(dateStr,year){
-  const holidays=getPolishHolidays(year);
-  const d=parseHKDate(dateStr);
-  if(!d)return false;
-  return holidays.has(d.toISOString().slice(0,10));
-}
-function isSunday(dateStr){
-  const d=parseHKDate(dateStr);
-  return d?d.getDay()===0:false;
-}
-function getDowLabel(dateStr){
-  const d=parseHKDate(dateStr);
-  return d?DOW_PL[d.getDay()]:'';
-}
-
-
-
 function tabToDate(name){const[dd,mm]=name.split('.').map(Number);return new Date(new Date().getFullYear(),mm-1,dd);}
 function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
@@ -604,125 +546,6 @@ async function loadApartmentsData(){
 }
 
 
-
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS
-═══════════════════════════════════════════════════════ */
-function easterDate(year){
-  // Anonymous Gregorian algorithm
-  const a=year%19,b=Math.floor(year/100),c=year%100;
-  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
-  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
-  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
-  const m=Math.floor((a+11*h+22*l)/451);
-  const month=Math.floor((h+l-7*m+114)/31);
-  const day=((h+l-7*m+114)%31)+1;
-  return new Date(year,month-1,day);
-}
-
-function getPolishHolidays(year){
-  const easter=easterDate(year);
-  const easterMs=easter.getTime();
-  const addDays=(d,n)=>new Date(d.getTime()+n*86400000);
-  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-
-  const fixed=[
-    `${year}-01-01`, // Nowy Rok
-    `${year}-01-06`, // Trzech Króli
-    `${year}-05-01`, // Święto Pracy
-    `${year}-05-03`, // Konstytucja 3 Maja
-    `${year}-08-15`, // Wniebowzięcie NMP
-    `${year}-11-01`, // Wszystkich Świętych
-    `${year}-11-11`, // Niepodległości
-    `${year}-12-25`, // Boże Narodzenie
-    `${year}-12-26`, // Drugi dzień BN
-  ];
-  const movable=[
-    key(easter),                    // Wielkanoc
-    key(addDays(easter,1)),         // Poniedziałek Wielkanocny
-    key(addDays(easter,49)),        // Zielone Świątki
-    key(addDays(easter,60)),        // Boże Ciało
-  ];
-  return new Set([...fixed,...movable]);
-}
-
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-
-function parseDatePL(str){
-  // handles formats: DD.MM.YYYY, D.M.YYYY, YYYY-MM-DD
-  if(!str)return null;
-  let m=str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  return null;
-}
-
-
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS & DAY HELPERS
-═══════════════════════════════════════════════════════ */
-const PL_DOW = ['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
-
-// Fixed Polish public holidays MM-DD
-const PL_HOLIDAYS_FIXED = new Set([
-  '01-01','01-06','05-01','05-03',
-  '08-15','11-01','11-11','12-25','12-26'
-]);
-
-// Moveable holidays per year (Easter Sunday + derived)
-const PL_HOLIDAYS_MOVEABLE = {
-  2025: new Set(['2025-04-20','2025-04-21','2025-06-19','2025-06-08']),
-  2026: new Set(['2026-04-05','2026-04-06','2026-06-04','2026-05-24']),
-};
-
-function isPolishHoliday(dateStr){
-  // dateStr format from arkusz: "1.3.2026" or "01.03.2026" or "2026-03-01"
-  if(!dateStr)return false;
-  let d;
-  // try YYYY-MM-DD
-  let m=dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  else {
-    // try D.M.YYYY or DD.MM.YYYY
-    m=dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if(m)d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  }
-  if(!d||isNaN(d))return false;
-  const yyyy=d.getFullYear();
-  const mmdd=String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  const isoStr=yyyy+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  if(PL_HOLIDAYS_FIXED.has(mmdd))return true;
-  if(PL_HOLIDAYS_MOVEABLE[yyyy]?.has(isoStr))return true;
-  return false;
-}
-
-function isSunday(dateStr){
-  if(!dateStr)return false;
-  let d,m;
-  m=dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  else{
-    m=dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if(m)d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  }
-  if(!d||isNaN(d))return false;
-  return d.getDay()===0;
-}
-
-function getDowPl(dateStr){
-  if(!dateStr)return'';
-  let d,m;
-  m=dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  else{
-    m=dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if(m)d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  }
-  if(!d||isNaN(d))return'';
-  return PL_DOW[d.getDay()];
-}
-
 /* ═══════════════════════════════════════════════════════
    HOUSEKEEPING LOADER
 ═══════════════════════════════════════════════════════ */
@@ -827,117 +650,6 @@ function sortByDefaultOrder(apts){
     if(ai!==bi)return ai-bi;
     return a.localeCompare(b,'pl');
   });
-}
-
-
-
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS & DAY HELPERS
-═══════════════════════════════════════════════════════ */
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-
-function getEaster(year){
-  // Anonymous Gregorian algorithm
-  const a=year%19,b=Math.floor(year/100),c=year%100;
-  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
-  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
-  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
-  const m=Math.floor((a+11*h+22*l)/451);
-  const month=Math.floor((h+l-7*m+114)/31);
-  const day=((h+l-7*m+114)%31)+1;
-  return new Date(year,month-1,day);
-}
-
-function getPolishHolidays(year){
-  const easter=getEaster(year);
-  const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
-  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const holidays=new Set([
-    // Fixed holidays
-    `${year}-01-01`, // Nowy Rok
-    `${year}-01-06`, // Trzech Króli
-    `${year}-05-01`, // Święto Pracy
-    `${year}-05-03`, // Konstytucja 3 Maja
-    `${year}-08-15`, // Wniebowzięcie NMP
-    `${year}-11-01`, // Wszystkich Świętych
-    `${year}-11-11`, // Niepodległość
-    `${year}-12-25`, // Boże Narodzenie
-    `${year}-12-26`, // Drugi dzień Bożego Narodzenia
-    // Moveable
-    key(easter),                    // Wielkanoc
-    key(addDays(easter,1)),          // Poniedziałek Wielkanocny
-    key(addDays(easter,49)),         // Zielone Świątki
-    key(addDays(easter,60)),         // Boże Ciało
-  ]);
-  return holidays;
-}
-
-function parseDateDMY(str){
-  // Accepts: "01.03.2026", "1.3.2026", "2026-03-01"
-  if(!str)return null;
-  const iso=str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(iso)return new Date(parseInt(iso[1]),parseInt(iso[2])-1,parseInt(iso[3]));
-  const dmy=str.match(/^(\d{1,2})\.(\d{1,2})\.?(\d{4})?$/);
-  if(dmy){
-    const year=dmy[3]?parseInt(dmy[3]):new Date().getFullYear();
-    return new Date(year,parseInt(dmy[2])-1,parseInt(dmy[1]));
-  }
-  return null;
-}
-
-
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS + DAY HELPERS
-═══════════════════════════════════════════════════════ */
-const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-const DOW_PL_SHORT=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
-
-function getEaster(year){
-  // Butcher's algorithm
-  const a=year%19,b=Math.floor(year/100),c=year%100;
-  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
-  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
-  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
-  const m=Math.floor((a+11*h+22*l)/451);
-  const month=Math.floor((h+l-7*m+114)/31);
-  const day=((h+l-7*m+114)%31)+1;
-  return new Date(year,month-1,day);
-}
-
-function getPolishHolidays(year){
-  const easter=getEaster(year);
-  const add=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
-  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const holidays={};
-  // Fixed holidays
-  [[1,1,'Nowy Rok'],[1,6,'Trzech Króli'],[5,1,'Święto Pracy'],[5,3,'Święto Konstytucji'],
-   [8,15,'Wniebowzięcie NMP'],[11,1,'Wszystkich Świętych'],[11,11,'Niepodległości'],
-   [12,25,'Boże Narodzenie'],[12,26,'Boże Narodzenie (2. dzień)']
-  ].forEach(([m,d,name])=>{
-    holidays[key(new Date(year,m-1,d))]=name;
-  });
-  // Moveable
-  holidays[key(easter)]='Wielkanoc';
-  holidays[key(add(easter,1))]='Poniedziałek Wielkanocny';
-  holidays[key(add(easter,49))]='Zielone Świątki';
-  holidays[key(add(easter,60))]='Boże Ciało';
-  return holidays;
-}
-
-function parseDateDMY(str){
-  // accepts "1.3.2026", "01.03.2026", "2026-03-01"
-  if(!str)return null;
-  const s=String(str).trim();
-  let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
-  return null;
-}
-
-function dateKey(d){
-  if(!d)return'';
-  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
@@ -1413,7 +1125,6 @@ function toggleWifi(id,pass){
 
 
 
-
 /* ═══════════════════════════════════════════════════════
    HOUSEKEEPING VIEW
 ═══════════════════════════════════════════════════════ */
@@ -1527,10 +1238,8 @@ function buildHousekeepingView(){
   const cleanRows=byDateOrder.map(date=>{
     const dayRows=dateMap[date];
     const dayTotal=dayRows.reduce((s,r)=>s+r.suma,0);
-    const{bg:dayBg,label:dayLabel,isRed}=dateRowStyle(date);
-    const dateCellStyle=isRed?'color:#dc2626;font-weight:700':'';
-    const rowsHtml=dayRows.map((r,i)=>`<tr style="background:${dayBg||(i%2===0?'var(--white)':'#fafbfc')}">
-      <td style="${dateCellStyle}">${r.date||'—'} <span style="font-size:10px;color:${isRed?'#dc2626':'var(--text-muted)'};font-weight:400">${dayLabel}</span></td>
+    const rowsHtml=dayRows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
+      <td>${r.date||'—'}</td>
       <td style="font-weight:600">${r.apt}</td>
       <td class="num">${r.guests||'—'}</td>
       <td class="num" style="font-weight:700;color:#0d9488">${fmt(r.suma)} zł</td>
@@ -1538,13 +1247,11 @@ function buildHousekeepingView(){
       <td class="num">${r.aptCena>0?fmt(r.aptCena)+' zł':'—'}</td>
       <td class="num">${r.gosCena>0?fmt(r.gosCena)+' zł':'—'}</td>
       <td><span class="hk-note" title="${r.note}">${r.note||'—'}</span></td>
-    </tr>`;}).join('');
-    const subtotalBg=isRed?'#ffe4e4':'#f0fdfa';
-    const subtotalBorder=isRed?'#fca5a5':'#99f6e4';
-    const subtotal=`<tr style="background:${subtotalBg};border-top:1px solid ${subtotalBorder}">
-      <td style="font-weight:700;color:${isRed?'#dc2626':'#0d9488'};font-size:11px">SUMA ${date} ${dayLabel}</td>
+    </tr>`).join('');
+    const subtotal=`<tr style="background:#f0fdfa;border-top:1px solid #99f6e4">
+      <td style="font-weight:700;color:#0d9488;font-size:11px">SUMA ${date}</td>
       <td colspan="2"></td>
-      <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'#0d9488'}">${fmt(dayTotal)} zł</td>
+      <td class="num" style="font-weight:700;color:#0d9488">${fmt(dayTotal)} zł</td>
       <td colspan="4"></td>
     </tr>`;
     return rowsHtml+subtotal;
