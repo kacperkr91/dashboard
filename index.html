@@ -1705,8 +1705,7 @@ function buildOtvView(){
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód całkowity</div><div class="value"><span class="sym">zł</span>${fmt(totalCena)}</div><div class="sub">${rows.length} rezerwacji</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.07s"><div class="label">Goła cena</div><div class="value"><span class="sym">zł</span>${fmt(totalGola)}</div><div class="sub">bez prowizji</div></div>
-    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Prowizja łączna</div><div class="value"><span class="sym">zł</span>${fmt(totalProw)}</div><div class="sub">${totalCena>0?(totalProw/totalCena*100).toFixed(1)+'%':''}</div></div>
-    <div class="kpi-card c-purple" style="animation-delay:0.21s"><div class="label">Łączne noce</div><div class="value">${totalNoce}</div><div class="sub">śr. ${fmt(avgCena)} zł/rez.</div></div>
+    <div class="kpi-card c-purple" style="animation-delay:0.21s"><div class="label">Prowizja łączna</div><div class="value"><span class="sym">zł</span>${fmt(totalProw)}</div><div class="sub">${totalCena>0?(totalProw/totalCena*100).toFixed(1)+'%':''}</div></div>
   </div>`;
 
   // ── Channel pie ──
