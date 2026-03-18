@@ -1099,7 +1099,7 @@ function renderConfig(){
    RENTAL MONTH VIEW
 ═══════════════════════════════════════════════════════ */
 function buildMonthView(days,opts={}){
-  const{showForecast=false,monthLabel=''}=opts;
+  const{showForecast=false,monthLabel='',otvMonthKey=null}=opts;
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
@@ -1110,11 +1110,16 @@ function buildMonthView(days,opts={}){
   const minIdx=enriched.findIndex(d=>d.value===minVal&&d.value!==null&&withVal.length>1);
   const fc=showForecast?calcForecast(days):null;
 
+  // OTV total from OTV reservations data
+  const otvRows=otvMonthKey&&_state.data.otv[otvMonthKey];
+  const otvTotal=Array.isArray(otvRows)?otvRows.reduce((s,r)=>s+r.cenaCalk,0):null;
+
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód ${showForecast?'dotychczasowy':'całkowity'}</div><div class="value"><span class="sym">zł</span>${fmt(total)}</div><div class="sub">${withVal.length} dni${fc?' z '+fc.totalDays:''}</div></div>
     <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia dzienna</div><div class="value"><span class="sym">zł</span>${fmt(avg)}</div><div class="sub">per dzień z danymi</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.14s"><div class="label">Najlepszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(maxVal)}</div><div class="sub">${enriched[maxIdx]?.name||'—'} (${enriched[maxIdx]?DOW_PL[enriched[maxIdx].dow]:''})</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Najsłabszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(minVal)}</div><div class="sub">${enriched[minIdx]?.name||'—'} (${enriched[minIdx]?DOW_PL[enriched[minIdx].dow]:''})</div></div>
+    ${otvTotal!==null?`<div class="kpi-card c-purple" style="animation-delay:0.28s"><div class="label">Przychód OTV</div><div class="value"><span class="sym">zł</span>${fmt(otvTotal)}</div><div class="sub">wg arkusza rezerwacji</div></div>`:''}
   </div>`;
 
   const forecast=(fc&&showForecast)?`<div class="forecast-card">
