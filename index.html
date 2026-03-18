@@ -1674,6 +1674,8 @@ function buildOtvView(){
   const monthKey=_state.otvMonth;
   const rows=_state.data.otv[monthKey];
   const activeMonth=OTV_MONTHS.find(m=>m.key===monthKey);
+  const CHAN_COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#6366f1','Własna':'#16a34a'};
+  function chanKey(p){return p.toLowerCase().includes('airbnb')?'Airbnb':p.toLowerCase().includes('booking')?'Booking.com':p.toLowerCase().includes('profitroom')?'Profitroom':'Własna';}
 
   const monthNav=`<div class="hk-month-nav">
     ${OTV_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setOtvMonth('${m.key}')">${m.short}</button>`).join('')}
@@ -1688,20 +1690,18 @@ function buildOtvView(){
   const totalGola=rows.reduce((s,r)=>s+r.golaCena,0);
   const totalProw=rows.reduce((s,r)=>s+r.prowizja,0);
   const totalNoce=rows.reduce((s,r)=>s+r.noce,0);
+  const avgCena=rows.length?totalCena/rows.length:0;
 
-  // Channel breakdown
+  // Channel breakdown for pie
   const chanMap={};
-  rows.forEach(r=>{
-    const ch=r.partner.toLowerCase().includes('airbnb')?'Airbnb':r.partner.toLowerCase().includes('booking')?'Booking.com':r.partner.toLowerCase().includes('profitroom')?'Profitroom':'Własna';
-    chanMap[ch]=(chanMap[ch]||0)+r.cenaCalk;
-  });
+  rows.forEach(r=>{const ch=chanKey(r.partner);chanMap[ch]=(chanMap[ch]||0)+r.cenaCalk;});
   window._otvChannels=chanMap;
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód całkowity</div><div class="value"><span class="sym">zł</span>${fmt(totalCena)}</div><div class="sub">${rows.length} rezerwacji</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.07s"><div class="label">Goła cena</div><div class="value"><span class="sym">zł</span>${fmt(totalGola)}</div><div class="sub">bez prowizji</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Prowizja łączna</div><div class="value"><span class="sym">zł</span>${fmt(totalProw)}</div><div class="sub">${totalCena>0?(totalProw/totalCena*100).toFixed(1)+'%':''}</div></div>
-    <div class="kpi-card c-purple" style="animation-delay:0.21s"><div class="label">Łączne noce</div><div class="value">${totalNoce}</div><div class="sub">wszystkie rezerwacje</div></div>
+    <div class="kpi-card c-purple" style="animation-delay:0.21s"><div class="label">Łączne noce</div><div class="value">${totalNoce}</div><div class="sub">śr. ${fmt(avgCena)} zł/rez.</div></div>
   </div>`;
 
   // ── Channel pie ──
@@ -1720,7 +1720,7 @@ function buildOtvView(){
     </div>
   </div>`;
 
-  // ── Daily table grouped by dataDo ──
+  // ── Group by dataDo ──
   const byDate={};const dateOrder=[];
   rows.forEach(r=>{
     const d=r.dataDo||'—';
@@ -1728,62 +1728,125 @@ function buildOtvView(){
     byDate[d].push(r);
   });
 
+  // Sort dates
+  dateOrder.sort((a,b)=>{
+    const da=parseDateDMY(a),db=parseDateDMY(b);
+    if(!da||!db)return 0;
+    return da-db;
+  });
+
   // precompute holidays
   const yearsNeeded=[...new Set(rows.map(r=>{const d=parseDateDMY(r.dataDo);return d?d.getFullYear():null}).filter(Boolean))];
   const allHol={};
   yearsNeeded.forEach(y=>Object.assign(allHol,getPolishHolidays(y)));
 
-  const CHAN_COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#6366f1','Własna':'#16a34a'};
+  // Store for drawer
+  window._otvByDate=byDate;
+  window._otvAllHol=allHol;
+  window._otvChanColors=CHAN_COLORS;
+  window._otvChanKey=chanKey;
 
-  const dailyRows=dateOrder.map(date=>{
+  // max value for bar scaling
+  const maxDayVal=Math.max(...dateOrder.map(d=>byDate[d].reduce((s,r)=>s+r.cenaCalk,0)),1);
+
+  // ── Tiles ──
+  const tiles=dateOrder.map((date,i)=>{
     const dayRows=byDate[date];
     const dayTotal=dayRows.reduce((s,r)=>s+r.cenaCalk,0);
     const dateObj=parseDateDMY(date);
     const dk=dateObj?dateKey(dateObj):'';
     const dow=dateObj?dateObj.getDay():-1;
-    const isSun=dow===0;
     const holName=allHol[dk]||'';
+    const isSun=dow===0;
     const isRed=isSun||!!holName;
+    const isWE=dow===0||dow===6;
     const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
-
-    const resRows=dayRows.map((r,i)=>{
-      const chanColor=CHAN_COLORS[r.partner.toLowerCase().includes('airbnb')?'Airbnb':r.partner.toLowerCase().includes('booking')?'Booking.com':r.partner.toLowerCase().includes('profitroom')?'Profitroom':'Własna']||'#94a3b8';
-      const partnerLabel=`<span style="background:${chanColor};color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px">${r.partner}</span>`;
-      return`<tr style="background:${isRed?'#fff5f5':i%2===0?'var(--white)':'#fafbfc'}">
-        <td style="${isRed?'color:#dc2626;font-weight:600':''}">${r.dataDo} <span style="font-size:10px;color:${isRed?'#dc2626':'var(--text-muted)'};font-weight:600">${dowLabel}${holName?' · '+holName:''}</span></td>
-        <td style="font-weight:600">${r.apt}</td>
-        <td>${partnerLabel}</td>
-        <td class="num">${r.noce}</td>
-        <td class="num">${r.osoby}</td>
-        <td class="num" style="color:var(--text-muted)">${fmt(r.golaCena)} zł</td>
-        <td class="num" style="color:var(--red)">${fmt(r.prowizja)} zł</td>
-        <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.cenaCalk)} zł</td>
-      </tr>`;
-    }).join('');
-
-    const subtotal=`<tr style="background:${isRed?'#ffe4e6':'var(--blue-light)'};border-top:1px solid ${isRed?'#fecdd3':'var(--blue-mid)'}">
-      <td style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'};font-size:11px">SUMA ${date} ${dowLabel}</td>
-      <td colspan="5"></td>
-      <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'}"></td>
-      <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'}">${fmt(dayTotal)} zł</td>
-    </tr>`;
-    return resRows+subtotal;
+    const pct=maxDayVal>0?(dayTotal/maxDayVal*100).toFixed(1):0;
+    const tileColor=isRed?'var(--red-light)':isWE?'var(--purple-light)':'var(--white)';
+    const barColor=isRed?'#fca5a5':isWE?'var(--purple-mid)':'var(--blue-mid)';
+    const borderStyle=isWE?'border-left:3px solid var(--purple)':'';
+    return`<div class="day-card clickable" style="background:${tileColor};${borderStyle};animation-delay:${Math.min(i*0.02,0.5)}s" onclick="openOtvDrawer('${date.replace(/'/g,"\'")}')">
+      ${isWE?`<span class="dow-badge">${dowLabel}</span>`:''}
+      <div class="date" style="margin-top:${isWE?'16px':'2px'};color:${isRed?'var(--red)':'var(--text-muted)'}">${date}${holName?` <span style="font-size:9px">🔴</span>`:''}</div>
+      <div class="amount"><span class="sym">zł</span>${fmt(dayTotal)}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${dayRows.length} rez.</div>
+      <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    </div>`;
   }).join('');
 
-  const table=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
-    <div class="card-title">Rezerwacje dzienne — ${activeMonth?.label||monthKey}</div>
-    <div class="card-subtitle">Pogrupowane wg daty wyjazdu · ${rows.length} rezerwacji OTV</div>
-    <div class="hk-table-wrap"><table class="hk-table">
-      <thead><tr>
-        <th>Data wyjazdu</th><th>Apartament</th><th>Kanał</th>
-        <th class="num">Noce</th><th class="num">Os.</th>
-        <th class="num">Goła cena</th><th class="num">Prowizja</th><th class="num">Cena całk.</th>
-      </tr></thead>
-      <tbody>${dailyRows}</tbody>
-    </table></div>
+  const grid=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
+    <div class="card-title">Podział dzienny — ${activeMonth?.label||monthKey} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">· kliknij dzień aby zobaczyć rezerwacje</span></div>
+    <div class="daily-grid">${tiles}</div>
   </div>`;
 
-  return monthNav+kpis+chanPie+table;
+  // ── OTV drawer ──
+  const drawer=`<div class="drawer-overlay" id="otvDrawerOverlay" onclick="closeOtvDrawer()"></div>
+  <div class="drawer" id="otvDrawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="otvDrawerTitle">—</div>
+        <div class="drawer-subtitle" id="otvDrawerSubtitle"></div>
+      </div>
+      <button class="drawer-close" onclick="closeOtvDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="otvDrawerBody" style="padding:0"></div>
+  </div>`;
+
+  return monthNav+kpis+chanPie+grid+drawer;
+}
+
+function openOtvDrawer(date){
+  const byDate=window._otvByDate||{};
+  const allHol=window._otvAllHol||{};
+  const COLORS=window._otvChanColors||{};
+  const chanKey=window._otvChanKey||(p=>p);
+  const dayRows=byDate[date]||[];
+  const dayTotal=dayRows.reduce((s,r)=>s+r.cenaCalk,0);
+  const dateObj=parseDateDMY(date);
+  const dk=dateObj?dateKey(dateObj):'';
+  const dow=dateObj?dateObj.getDay():-1;
+  const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
+  const holName=allHol[dk]||'';
+
+  document.getElementById('otvDrawerTitle').textContent=`${date} ${dowLabel}${holName?' · '+holName:''}`;
+  document.getElementById('otvDrawerSubtitle').textContent=`${dayRows.length} rezerwacji · łącznie: ${fmt(dayTotal)} zł`;
+
+  const rows=dayRows.map((r,i)=>{
+    const ch=chanKey(r.partner);
+    const cc=COLORS[ch]||'#94a3b8';
+    const badge=`<span style="background:${cc};color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px">${r.partner}</span>`;
+    return`<div style="padding:12px 20px;border-bottom:1px solid var(--border);background:${i%2===0?'var(--white)':'#fafbfc'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${r.apt}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(r.cenaCalk)} zł</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        ${badge}
+        <span style="font-size:11px;color:var(--text-muted)">${r.dataOd} → ${r.dataDo}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'} · ${r.osoby} os.</span>
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px">
+        <span style="color:var(--text-muted)">Goła cena: <strong>${fmt(r.golaCena)} zł</strong></span>
+        <span style="color:var(--red)">Prowizja: <strong>${fmt(r.prowizja)} zł</strong></span>
+        ${r.zaplata?`<span style="color:var(--text-muted)">Zapł: ${r.zaplata}</span>`:''}
+        ${r.status?`<span style="color:var(--text-muted)">Status: ${r.status}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const summary=`<div style="padding:14px 20px;background:var(--blue-light);border-top:2px solid var(--blue-mid);display:flex;justify-content:space-between">
+    <span style="font-size:12px;font-weight:600;color:var(--blue)">ŁĄCZNIE ${dayRows.length} REZ.</span>
+    <span style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(dayTotal)} zł</span>
+  </div>`;
+
+  document.getElementById('otvDrawerBody').innerHTML=rows+summary;
+  document.getElementById('otvDrawerOverlay').classList.add('open');
+  document.getElementById('otvDrawer').classList.add('open');
+}
+
+function closeOtvDrawer(){
+  document.getElementById('otvDrawerOverlay')?.classList.remove('open');
+  document.getElementById('otvDrawer')?.classList.remove('open');
 }
 
 function initOtvChart(){
@@ -2140,7 +2203,10 @@ function renderApp(){
       content=renderError(d.error);
     } else {
       const isCurrent=rentalMonth==='mar2026';
-      const v=buildMonthView(d,{showForecast:isCurrent,monthLabel:activeM?.label+' '+rentalYear});
+      // map rental month key to OTV month key
+      const otvKeyMap={'mar2026':'2026-03','feb2026':'2026-02','jan2026':'2026-01','dec2025':'2025-12'};
+      const otvMK=otvKeyMap[rentalMonth]||null;
+      const v=buildMonthView(d,{showForecast:isCurrent,monthLabel:activeM?.label+' '+rentalYear,otvMonthKey:otvMK});
       content=v.html;enriched=v.enriched;fc=v.fc;
     }
 
