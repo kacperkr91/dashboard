@@ -334,6 +334,12 @@ const CONFIG={
   hkSpreadsheetId:    localStorage.getItem('gs_hk_spreadsheet_id')||'',
   hkStartRow:         3,
   hkEndRow:           500,
+  otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
+  otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
+  otvStartRow:        4,
+  otvEndRow:          1000,
+  // Apartments to EXCLUDE from OTV view
+  otvExclude:['Wawel','Wawel II no. 14','Wawel II no.15','Wawel II no. 15','Zamkowa','Plac Szczepański B41','Plac Szczepański C41','Bronowicka'],
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -725,6 +731,13 @@ function getDowPl(dateStr){
    HOUSEKEEPING LOADER
 ═══════════════════════════════════════════════════════ */
 // Available months — add as data arrives
+const OTV_MONTHS=[
+  {key:'2025-12',label:'Grudzień 2025', short:'Gru 25'},
+  {key:'2026-01',label:'Styczeń 2026',  short:'Sty 26'},
+  {key:'2026-02',label:'Luty 2026',     short:'Lut 26'},
+  {key:'2026-03',label:'Marzec 2026',   short:'Mar 26'},
+];
+
 const HK_MONTHS=[
   {key:'2025-12',label:'Grudzień 2025',short:'Gru 25'},
   {key:'2026-01',label:'Styczeń 2026', short:'Sty 26'},
@@ -798,6 +811,50 @@ async function loadHousekeepingMonth(monthKey){
   }
   if(!result.length)throw new Error('NO_HK_DATA');
   console.log(`HK ${monthKey}: ${result.length} wierszy, ${result.filter(r=>r.cancelled).length} anulowanych`);
+  return result;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   OTV RESERVATIONS LOADER
+═══════════════════════════════════════════════════════ */
+async function loadOtvMonth(monthKey){
+  const{otvApiKey,otvSpreadsheetId,otvStartRow,otvEndRow,otvExclude}=CONFIG;
+  if(!otvApiKey||!otvSpreadsheetId)throw new Error('MISSING_OTV_CONFIG');
+  // Columns: A=dataRez, B=dataOd, C=dataDo, D=noce, E=osoby, H=partner, I=status, J=zaplata, K=apartament, M=prowizja, N=golaCena, Q=cenaCalk, R=vat
+  const params=new URLSearchParams({key:otvApiKey,valueRenderOption:'FORMATTED_VALUE'});
+  const cols=['A','B','C','D','E','H','I','J','K','M','N','Q','R'];
+  cols.forEach(c=>params.append('ranges',`'${monthKey}'!${c}${otvStartRow}:${c}${otvEndRow}`));
+  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${otvSpreadsheetId}/values:batchGet?${params}`);
+  const vr=data.valueRanges;
+  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').trim();
+  const n=(i,j)=>parseFloat(String(vr[i]?.values?.[j]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+  const maxLen=Math.max(...vr.map(r=>r.values?.length||0));
+  const result=[];
+  for(let i=0;i<maxLen;i++){
+    const apt=v(8,i); // K=apartament
+    if(!apt)continue;
+    // Exclude non-OTV apartments
+    if(otvExclude.some(ex=>apt.toLowerCase().includes(ex.toLowerCase())))continue;
+    const cenaCalk=n(11,i); // Q=cena całkowita
+    if(cenaCalk===0)continue;
+    result.push({
+      dataRez: v(0,i),
+      dataOd:  v(1,i),
+      dataDo:  v(2,i),
+      noce:    parseInt(vr[3]?.values?.[i]?.[0])||0,
+      osoby:   parseInt(vr[4]?.values?.[i]?.[0])||0,
+      partner: v(5,i),
+      status:  v(6,i),
+      zaplata: v(7,i),
+      apt,
+      prowizja:  n(9,i),
+      golaCena:  n(10,i),
+      cenaCalk,
+      vat:       n(12,i),
+    });
+  }
+  if(!result.length)throw new Error('NO_OTV_DATA');
   return result;
 }
 
@@ -983,13 +1040,14 @@ let _state={
   section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
   hkMonth:'2026-03',
   hkAptSort:'default',
+  otvMonth:'2026-03',
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:'mar2026',   // active month key
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null,
-    media:null, apartments:null, housekeeping:{}
+    media:null, apartments:null, housekeeping:{}, otv:{}
   }
 };
 let _charts={};
@@ -1029,6 +1087,10 @@ function renderConfig(){
     <p class="section-label">🧹 Arkusz housekeeping</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-hkkey" type="text" placeholder="AIzaSy…" value="${CONFIG.hkApiKey}"/></div>
     <div class="field"><label>Spreadsheet ID arkusza housekeeping</label><input id="inp-hksheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.hkSpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">📋 Arkusz rezerwacji OTV</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-otvkey" type="text" placeholder="AIzaSy…" value="${CONFIG.otvApiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza rezerwacji OTV</label><input id="inp-otvsheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.otvSpreadsheetId}"/></div>
     <button class="btn-primary" onclick="saveConfig()">Zapisz i załaduj dane</button>
   </div></div>`;
 }
@@ -1604,6 +1666,154 @@ function buildHousekeepingView(){
   return monthNav+kpis+compChart+aptTable+fullTable;
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   OTV RESERVATIONS VIEW
+═══════════════════════════════════════════════════════ */
+function buildOtvView(){
+  const monthKey=_state.otvMonth;
+  const rows=_state.data.otv[monthKey];
+  const activeMonth=OTV_MONTHS.find(m=>m.key===monthKey);
+
+  const monthNav=`<div class="hk-month-nav">
+    ${OTV_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setOtvMonth('${m.key}')">${m.short}</button>`).join('')}
+  </div>`;
+
+  if(!rows)return monthNav+renderLoading('Ładowanie rezerwacji OTV…');
+  if(rows.error)return monthNav+renderError(rows.error);
+  if(!rows.length)return monthNav+`<div class="empty-section"><div class="empty-icon">📋</div><p>Brak danych dla ${activeMonth?.label||monthKey}</p></div>`;
+
+  // ── KPIs ──
+  const totalCena=rows.reduce((s,r)=>s+r.cenaCalk,0);
+  const totalGola=rows.reduce((s,r)=>s+r.golaCena,0);
+  const totalProw=rows.reduce((s,r)=>s+r.prowizja,0);
+  const totalNoce=rows.reduce((s,r)=>s+r.noce,0);
+
+  // Channel breakdown
+  const chanMap={};
+  rows.forEach(r=>{
+    const ch=r.partner.toLowerCase().includes('airbnb')?'Airbnb':r.partner.toLowerCase().includes('booking')?'Booking.com':r.partner.toLowerCase().includes('profitroom')?'Profitroom':'Własna';
+    chanMap[ch]=(chanMap[ch]||0)+r.cenaCalk;
+  });
+  window._otvChannels=chanMap;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód całkowity</div><div class="value"><span class="sym">zł</span>${fmt(totalCena)}</div><div class="sub">${rows.length} rezerwacji</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.07s"><div class="label">Goła cena</div><div class="value"><span class="sym">zł</span>${fmt(totalGola)}</div><div class="sub">bez prowizji</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Prowizja łączna</div><div class="value"><span class="sym">zł</span>${fmt(totalProw)}</div><div class="sub">${totalCena>0?(totalProw/totalCena*100).toFixed(1)+'%':''}</div></div>
+    <div class="kpi-card c-purple" style="animation-delay:0.21s"><div class="label">Łączne noce</div><div class="value">${totalNoce}</div><div class="sub">wszystkie rezerwacje</div></div>
+  </div>`;
+
+  // ── Channel pie ──
+  const chanPie=`<div class="chart-card" style="animation:fadeUp 0.4s 0.05s ease both">
+    <div class="card-title">Kanały rezerwacji — ${activeMonth?.label||monthKey}</div>
+    <div class="card-subtitle">Udział przychodów według źródła</div>
+    <div style="display:flex;align-items:center;gap:32px;flex-wrap:wrap;justify-content:center">
+      <div style="position:relative;width:160px;height:160px;flex-shrink:0">
+        <canvas id="otvChannelPie" width="160" height="160"></canvas>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:10px">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Łącznie</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${fmt(totalCena)} zł</div>
+        </div>
+      </div>
+      <div id="otvChanLegend" style="display:flex;flex-direction:column;gap:12px;min-width:220px"></div>
+    </div>
+  </div>`;
+
+  // ── Daily table grouped by dataDo ──
+  const byDate={};const dateOrder=[];
+  rows.forEach(r=>{
+    const d=r.dataDo||'—';
+    if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
+    byDate[d].push(r);
+  });
+
+  // precompute holidays
+  const yearsNeeded=[...new Set(rows.map(r=>{const d=parseDateDMY(r.dataDo);return d?d.getFullYear():null}).filter(Boolean))];
+  const allHol={};
+  yearsNeeded.forEach(y=>Object.assign(allHol,getPolishHolidays(y)));
+
+  const CHAN_COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#6366f1','Własna':'#16a34a'};
+
+  const dailyRows=dateOrder.map(date=>{
+    const dayRows=byDate[date];
+    const dayTotal=dayRows.reduce((s,r)=>s+r.cenaCalk,0);
+    const dateObj=parseDateDMY(date);
+    const dk=dateObj?dateKey(dateObj):'';
+    const dow=dateObj?dateObj.getDay():-1;
+    const isSun=dow===0;
+    const holName=allHol[dk]||'';
+    const isRed=isSun||!!holName;
+    const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
+
+    const resRows=dayRows.map((r,i)=>{
+      const chanColor=CHAN_COLORS[r.partner.toLowerCase().includes('airbnb')?'Airbnb':r.partner.toLowerCase().includes('booking')?'Booking.com':r.partner.toLowerCase().includes('profitroom')?'Profitroom':'Własna']||'#94a3b8';
+      const partnerLabel=`<span style="background:${chanColor};color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px">${r.partner}</span>`;
+      return`<tr style="background:${isRed?'#fff5f5':i%2===0?'var(--white)':'#fafbfc'}">
+        <td style="${isRed?'color:#dc2626;font-weight:600':''}">${r.dataDo} <span style="font-size:10px;color:${isRed?'#dc2626':'var(--text-muted)'};font-weight:600">${dowLabel}${holName?' · '+holName:''}</span></td>
+        <td style="font-weight:600">${r.apt}</td>
+        <td>${partnerLabel}</td>
+        <td class="num">${r.noce}</td>
+        <td class="num">${r.osoby}</td>
+        <td class="num" style="color:var(--text-muted)">${fmt(r.golaCena)} zł</td>
+        <td class="num" style="color:var(--red)">${fmt(r.prowizja)} zł</td>
+        <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.cenaCalk)} zł</td>
+      </tr>`;
+    }).join('');
+
+    const subtotal=`<tr style="background:${isRed?'#ffe4e6':'var(--blue-light)'};border-top:1px solid ${isRed?'#fecdd3':'var(--blue-mid)'}">
+      <td style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'};font-size:11px">SUMA ${date} ${dowLabel}</td>
+      <td colspan="5"></td>
+      <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'}"></td>
+      <td class="num" style="font-weight:700;color:${isRed?'#dc2626':'var(--blue)'}">${fmt(dayTotal)} zł</td>
+    </tr>`;
+    return resRows+subtotal;
+  }).join('');
+
+  const table=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
+    <div class="card-title">Rezerwacje dzienne — ${activeMonth?.label||monthKey}</div>
+    <div class="card-subtitle">Pogrupowane wg daty wyjazdu · ${rows.length} rezerwacji OTV</div>
+    <div class="hk-table-wrap"><table class="hk-table">
+      <thead><tr>
+        <th>Data wyjazdu</th><th>Apartament</th><th>Kanał</th>
+        <th class="num">Noce</th><th class="num">Os.</th>
+        <th class="num">Goła cena</th><th class="num">Prowizja</th><th class="num">Cena całk.</th>
+      </tr></thead>
+      <tbody>${dailyRows}</tbody>
+    </table></div>
+  </div>`;
+
+  return monthNav+kpis+chanPie+table;
+}
+
+function initOtvChart(){
+  const totals=window._otvChannels||{};
+  const entries=Object.entries(totals).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length)return;
+  const canvas=document.getElementById('otvChannelPie');
+  if(!canvas)return;
+  const COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#6366f1','Własna':'#16a34a'};
+  const labels=entries.map(([k])=>k);
+  const values=entries.map(([,v])=>v);
+  const colors=labels.map(l=>COLORS[l]||'#94a3b8');
+  const grand=values.reduce((s,v)=>s+v,0);
+  if(_charts.otvPie){try{_charts.otvPie.destroy();}catch(e){}}
+  _charts.otvPie=new Chart(canvas.getContext('2d'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:4}]},
+    options:{responsive:false,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.label}: zł ${fmt(c.parsed)} (${(c.parsed/grand*100).toFixed(1)}%)`}}}}
+  });
+  const leg=document.getElementById('otvChanLegend');
+  if(leg)leg.innerHTML=entries.map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:8px;min-width:160px">
+      <div style="width:10px;height:10px;border-radius:2px;background:${COLORS[k]||'#94a3b8'};flex-shrink:0"></div>
+      <div>
+        <span style="font-size:12px;font-weight:600;color:var(--text)">${k}</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px">${fmt(v)} zł · ${(v/grand*100).toFixed(1)}%</span>
+      </div>
+    </div>`).join('');
+}
+
 /* ═══════════════════════════════════════════════════════
    DRAWER
 ═══════════════════════════════════════════════════════ */
@@ -1904,6 +2114,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='housekeeping'?'active':''}" style="${section==='housekeeping'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('housekeeping')">
       <span class="icon">🧹</span> Housekeeping
     </button>
+    <button class="nav-l1-btn ${section==='otv'?'active':''}" style="${section==='otv'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('otv')">
+      <span class="icon">📋</span> Rezerwacje OTV
+    </button>
   </div>`;
 
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
@@ -1942,15 +2155,18 @@ function renderApp(){
     if(!d){content=renderLoading('Ładowanie apartamentów…');}
     else if(d.error){content=renderError(d.error);}
     else{content=`<div id="apt-section-wrap">${buildApartmentsView(d)}</div>`;}
-  } else {
-    // ── Housekeeping ──
+  } else if(section==='housekeeping'){
     content=buildHousekeepingView();
+  } else {
+    // ── OTV ──
+    content=buildOtvView();
   }
 
   mount(header+navL1+navL2+content);
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
   if(section==='housekeeping')setTimeout(initHkChart,50);
+  if(section==='otv')setTimeout(initOtvChart,50);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1976,6 +2192,10 @@ function saveConfig(){
   const hs=document.getElementById('inp-hksheetid')?.value.trim()||'';
   CONFIG.hkApiKey=hk;CONFIG.hkSpreadsheetId=hs;
   localStorage.setItem('gs_hk_api_key',hk);localStorage.setItem('gs_hk_spreadsheet_id',hs);
+  const ok=document.getElementById('inp-otvkey')?.value.trim()||'';
+  const os=document.getElementById('inp-otvsheetid')?.value.trim()||'';
+  CONFIG.otvApiKey=ok;CONFIG.otvSpreadsheetId=os;
+  localStorage.setItem('gs_otv_api_key',ok);localStorage.setItem('gs_otv_spreadsheet_id',os);
   init();
 }
 
@@ -2001,6 +2221,20 @@ function setRentalYear(y){
 function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
 function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
+function setOtvMonth(key){
+  _state.otvMonth=key;
+  if(!_state.data.otv[key]){
+    _state.data.otv[key]=null;
+    renderApp();
+    loadOtvMonth(key).then(rows=>{
+      _state.data.otv[key]=rows;
+      if(_state.section==='otv'&&_state.otvMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.otv[key]={error:e.message||'Błąd'};
+      if(_state.section==='otv'&&_state.otvMonth===key)renderApp();
+    });
+  } else renderApp();
+}
 
 function setHkMonth(key){
   _state.hkMonth=key;
@@ -2024,10 +2258,11 @@ async function refresh(){await init();}
 
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,media:null,apartments:null,housekeeping:{}};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,media:null,apartments:null,housekeeping:{},otv:{}};
   renderApp();
   const initHkKey=_state.hkMonth;
-  const[mr,fr,jr,dr,mdr,ar,hkr]=await Promise.allSettled([
+  const initOtvKey=_state.otvMonth;
+  const[mr,fr,jr,dr,mdr,ar,hkr,otvr]=await Promise.allSettled([
     loadMarchData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
@@ -2035,6 +2270,7 @@ async function init(){
     loadMediaData(),
     loadApartmentsData(),
     loadHousekeepingMonth(initHkKey),
+    loadOtvMonth(initOtvKey),
   ]);
   _state.data.mar2026    =mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.feb2026    =fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
@@ -2043,6 +2279,7 @@ async function init(){
   _state.data.media      =mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
   _state.data.apartments =ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
   _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
+  _state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
   renderApp();
 }
 
