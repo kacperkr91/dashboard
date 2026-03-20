@@ -2134,7 +2134,7 @@ function exportHkPdf(monthKey, monthLabel){
       <div>
         <div class="section-title">🧾 Faktura</div>
         <div class="faktura-box">
-          <div class="frow"><span class="lbl">Suma housekeeping</span><span style="font-weight:600">${fmt(totalSuma)} zł</span></div>
+          <div class="frow"><span class="lbl">Suma</span><span style="font-weight:600">${fmt(totalSuma)} zł</span></div>
           ${pracVal>0?`<div class="frow"><span class="lbl">Pracownicy</span><span style="font-weight:600">${fmt(pracVal)} zł</span></div>`:''}
           <div class="frow"><span class="lbl">Kwota netto</span><span style="font-weight:700;color:#1e40af">${fmt(netto)} zł</span></div>
           <div class="frow"><span class="lbl">VAT 23%</span><span>${fmt(vat)} zł</span></div>
