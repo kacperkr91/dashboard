@@ -1720,11 +1720,17 @@ function buildHousekeepingView(){
       ${Object.keys(faktura).length?`<div style="min-width:200px">
         <div class="card-title" style="margin-bottom:12px">🧾 Faktura</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${faktura.suma?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Suma</span><span style="font-weight:600">${faktura.suma}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Suma (dashboard)</span><span style="font-weight:700">${fmt(totalSuma)} zł</span></div>
           ${faktura.pracownicy?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Pracownicy</span><span style="font-weight:600">${faktura.pracownicy}</span></div>`:''}
-          ${faktura.kwotaNetto?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Kwota netto</span><span style="font-weight:700;color:var(--blue)">${faktura.kwotaNetto}</span></div>`:''}
-          ${faktura.vat?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">VAT</span><span style="font-weight:600">${faktura.vat}</span></div>`:''}
-          ${faktura.kwotaBrutto?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;background:var(--blue-light);margin:0 -4px;padding:8px 4px;border-radius:6px"><span style="font-weight:700;color:var(--blue)">Kwota brutto</span><span style="font-weight:700;color:var(--blue)">${faktura.kwotaBrutto}</span></div>`:''}
+          ${(()=>{
+            const pracVal=parseFloat(String(faktura.pracownicy||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+            const netto=totalSuma-pracVal;
+            const vat=Math.round(netto*0.23*100)/100;
+            const brutto=Math.round((netto+vat)*100)/100;
+            return`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Kwota netto</span><span style="font-weight:700;color:var(--blue)">${fmt(netto)} zł</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">VAT 23%</span><span style="font-weight:600">${fmt(vat)} zł</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;background:var(--blue-light);padding:8px 4px;border-radius:6px;margin-top:4px"><span style="font-weight:700;color:var(--blue)">Kwota brutto</span><span style="font-weight:700;color:var(--blue)">${fmt(brutto)} zł</span></div>`;
+          })()}
         </div>
       </div>`:''}
     </div>
