@@ -1060,13 +1060,18 @@ function getPolishHolidays(year){
 }
 
 function parseDateDMY(str){
-  // accepts "1.3.2026", "01.03.2026", "2026-03-01"
+  // Accepts: "01.03.2026", "1.3.2026", "2026-03-01", "2026-03-01 00:00:00", "01/03/2026"
   if(!str)return null;
-  const s=String(str).trim();
-  let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const s=String(str).trim().split(' ')[0]; // strip time part
+  // YYYY-MM-DD
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(m)return new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3]));
+  // DD.MM.YYYY or D.M.YYYY
+  m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+  // DD/MM/YYYY
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
   return null;
 }
 
@@ -1677,6 +1682,8 @@ function buildHousekeepingView(){
   const yearsNeeded=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
   const allHolidays={};
   yearsNeeded.forEach(y=>Object.assign(allHolidays,getPolishHolidays(y)));
+  // Debug date format
+  if(rows.length)console.log('HK date format sample:',rows[0].date, '→ parsed:',parseDateDMY(rows[0].date));
 
   const cleanRows=byDateOrder.map(date=>{
     const dayRows=dateMap[date];
@@ -2030,12 +2037,28 @@ function exportHkPdf(monthKey, monthLabel){
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
+  // precompute holidays for PDF
+  const pdfYears=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
+  const pdfHols={};
+  pdfYears.forEach(y=>Object.assign(pdfHols,getPolishHolidays(y)));
+
   const allCleanRows=dateOrder.map(date=>{
     const dayRows=byDate[date];
     const dayActive=dayRows.filter(r=>!r.cancelled);
     const dayTotal=dayActive.reduce((s,r)=>s+r.suma,0);
-    const rowsHtml=dayRows.map(r=>`<tr style="${r.cancelled?'opacity:0.4;text-decoration:line-through':''}">
-      <td style="padding:5px 8px;font-size:11px">${r.date||'—'}</td>
+    const dateObj=parseDateDMY(date);
+    const dk=dateObj?dateKey(dateObj):'';
+    const dow=dateObj?dateObj.getDay():-1;
+    const isSun=dow===0;
+    const holName=pdfHols[dk]||'';
+    const isRed=isSun||!!holName;
+    const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
+    const rowBg=isRed?'#fff1f2':'';
+    const subtotalBg=isRed?'#fecdd3':'#dbeafe';
+    const subtotalColor=isRed?'#991b1b':'#1e40af';
+
+    const rowsHtml=dayRows.map(r=>`<tr style="background:${isRed?'#fff5f5':''};${r.cancelled?'opacity:0.4;text-decoration:line-through':''}">
+      <td style="padding:5px 8px;font-size:11px;${isRed?'color:#dc2626;font-weight:600':''}">${r.date||'—'} <span style="font-size:10px;color:${isRed?'#dc2626':'#94a3b8'}">${dowLabel}${holName?' · '+holName:''}</span></td>
       <td style="padding:5px 8px;font-size:11px;font-weight:600">${r.apt}</td>
       <td style="padding:5px 8px;font-size:11px;text-align:center">${r.guests||'—'}</td>
       <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(r.pranie)} zł</td>
@@ -2044,10 +2067,10 @@ function exportHkPdf(monthKey, monthLabel){
       <td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700">${fmt(r.suma)} zł</td>
       <td style="padding:5px 8px;font-size:11px;font-style:italic;color:#666">${r.note||''}</td>
     </tr>`).join('');
-    const subtotal=`<tr style="background:#dbeafe;font-weight:700">
-      <td colspan="2" style="padding:5px 8px;font-size:11px">Suma ${date}</td>
+    const subtotal=`<tr style="background:${subtotalBg};font-weight:700">
+      <td colspan="2" style="padding:5px 8px;font-size:11px;color:${subtotalColor}">Suma ${date} ${dowLabel}</td>
       <td colspan="4"></td>
-      <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(dayTotal)} zł</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right;color:${subtotalColor}">${fmt(dayTotal)} zł</td>
       <td></td>
     </tr>`;
     return rowsHtml+subtotal;
@@ -2118,24 +2141,6 @@ function exportHkPdf(monthKey, monthLabel){
           <div class="frow total"><span class="lbl">Kwota brutto</span><span>${fmt(brutto)} zł</span></div>
         </div>
       </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">📊 Rozbicie na apartamenty</div>
-      <table>
-        <thead><tr><th>Apartament</th><th class="c">Ilość</th><th class="r">Pranie</th><th class="r">Apt</th><th class="r">Sprzątanie</th><th class="r">Suma</th></tr></thead>
-        <tbody>
-          ${aptRows}
-          <tr style="background:#1e40af;color:#fff;font-weight:700">
-            <td style="padding:7px 10px;font-size:12px">ŁĄCZNIE</td>
-            <td style="padding:7px 10px;text-align:center;font-size:12px">${activeRows.length}</td>
-            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalPranie)} zł</td>
-            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalApt)} zł</td>
-            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalGos)} zł</td>
-            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalSuma)} zł</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
     <div class="section">
