@@ -811,7 +811,35 @@ async function loadHousekeepingMonth(monthKey){
   }
   if(!result.length)throw new Error('NO_HK_DATA');
   console.log(`HK ${monthKey}: ${result.length} wierszy, ${result.filter(r=>r.cancelled).length} anulowanych`);
-  return result;
+
+  // Fetch pracownicy (N9:P12) and faktura (N15:O19) from same sheet
+  const paramsS=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
+  paramsS.append('ranges',`'${monthKey}'!N9:P12`);  // pracownicy
+  paramsS.append('ranges',`'${monthKey}'!N15:O19`); // faktura
+  const sumData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${paramsS}`);
+  const pracVals=sumData.valueRanges?.[0]?.values||[];
+  const faktVals=sumData.valueRanges?.[1]?.values||[];
+
+  // Parse pracownicy
+  const pracownicy=pracVals.map(r=>({
+    imie:   String(r[0]||'').trim(),
+    kwota:  String(r[1]||'').trim(),
+    hRob:   String(r[2]||'').trim(),
+    hNied:  String(r[3]||'').trim(),
+  })).filter(r=>r.imie);
+
+  // Parse faktura
+  const faktura={};
+  faktVals.forEach(r=>{
+    const key=String(r[0]||'').trim().toLowerCase();
+    const val=String(r[1]||'').trim();
+    if(key.includes('pracow'))faktura.pracownicy=val;
+    else if(key.includes('netto'))faktura.kwotaNetto=val;
+    else if(key.includes('vat'))faktura.vat=val;
+    else if(key.includes('brutto'))faktura.kwotaBrutto=val;
+  });
+
+  return{rows:result,pracownicy,faktura};
 }
 
 
@@ -1519,7 +1547,10 @@ function toggleWifi(id,pass){
 ═══════════════════════════════════════════════════════ */
 function buildHousekeepingView(){
   const monthKey=_state.hkMonth;
-  const rows=_state.data.housekeeping[monthKey];
+  const hkData=_state.data.housekeeping[monthKey];
+  const rows=hkData?.rows||hkData; // backward compat
+  const pracownicy=hkData?.pracownicy||[];
+  const faktura=hkData?.faktura||{};
   const activeMonth=HK_MONTHS.find(m=>m.key===monthKey);
 
   const monthNav=`<div class="hk-month-nav">
@@ -1668,7 +1699,36 @@ function buildHousekeepingView(){
     </table></div>
   </div>`;
 
-  return monthNav+kpis+compChart+aptTable+fullTable;
+  // ── Pracownicy + Faktura ──
+  const pracHTML=pracownicy.length?`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1;min-width:220px">
+        <div class="card-title" style="margin-bottom:12px">👷 Pracownicy — ${activeMonth?.label||monthKey}</div>
+        <table class="hk-table" style="font-size:12px">
+          <thead><tr><th>Pracownik</th><th class="num">Kwota netto</th><th class="num">H robocze</th><th class="num">H niedziele</th></tr></thead>
+          <tbody>
+            ${pracownicy.map(p=>`<tr>
+              <td style="font-weight:600">${p.imie}</td>
+              <td class="num" style="font-weight:700;color:var(--blue)">${p.kwota}</td>
+              <td class="num">${p.hRob||'—'}</td>
+              <td class="num">${p.hNied||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${Object.keys(faktura).length?`<div style="min-width:200px">
+        <div class="card-title" style="margin-bottom:12px">🧾 Faktura</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${faktura.pracownicy?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Pracownicy</span><span style="font-weight:600">${faktura.pracownicy}</span></div>`:''}
+          ${faktura.kwotaNetto?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Kwota netto</span><span style="font-weight:700;color:var(--blue)">${faktura.kwotaNetto}</span></div>`:''}
+          ${faktura.vat?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">VAT</span><span style="font-weight:600">${faktura.vat}</span></div>`:''}
+          ${faktura.kwotaBrutto?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;background:var(--blue-light);margin:0 -4px;padding:8px 4px;border-radius:6px"><span style="font-weight:700;color:var(--blue)">Kwota brutto</span><span style="font-weight:700;color:var(--blue)">${faktura.kwotaBrutto}</span></div>`:''}
+        </div>
+      </div>`:''}
+    </div>
+  </div>`:'';
+
+  return monthNav+kpis+compChart+aptTable+pracHTML+fullTable;
 }
 
 
@@ -2312,8 +2372,8 @@ function setHkMonth(key){
   if(!_state.data.housekeeping[key]){
     _state.data.housekeeping[key]=null; // null = loading
     renderApp();
-    loadHousekeepingMonth(key).then(rows=>{
-      _state.data.housekeeping[key]=rows;
+    loadHousekeepingMonth(key).then(data=>{
+      _state.data.housekeeping[key]=data;
       if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
     }).catch(e=>{
       _state.data.housekeeping[key]={error:e.message||'Błąd'};
