@@ -296,6 +296,22 @@
     .hk-table tr.hk-total{background:#f0fdfa;font-weight:700;border-top:2px solid #99f6e4;}
     .hk-table tr.hk-total td{color:#0d9488;}
     .hk-note{font-size:11px;color:var(--text-muted);font-style:italic;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+    /* ── PRINT / PDF ── */
+    @media print {
+      .nav-l1,.nav-l2,.hk-month-nav,.btn-icon,.header-right,
+      .chart-card,#hkTrendChart,.hk-export-btn{display:none!important;}
+      .app{padding:0!important;}
+      header{box-shadow:none!important;border-bottom:2px solid #000!important;}
+      .brand-sub{font-size:11px!important;}
+      .kpi-row{grid-template-columns:repeat(4,1fr)!important;}
+      .kpi-card{box-shadow:none!important;border:1px solid #ddd!important;}
+      .grid-card{box-shadow:none!important;border:1px solid #ddd!important;break-inside:avoid;}
+      .hk-table tbody tr{break-inside:avoid;}
+      body{background:#fff!important;}
+      .app{background:#fff!important;}
+      @page{margin:15mm;size:A4;}
+    }
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
     @keyframes spin{to{transform:rotate(360deg)}}
     @media(max-width:640px){
@@ -1736,7 +1752,13 @@ function buildHousekeepingView(){
     </div>
   </div>`:'';
 
-  return monthNav+kpis+compChart+aptTable+pracHTML+fullTable;
+  const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button onclick="exportHkPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#7c3aed;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
+      📄 Eksportuj PDF dla firmy sprzątającej
+    </button>
+  </div>`;
+
+  return monthNav+exportBtn+kpis+compChart+aptTable+pracHTML+fullTable;
 }
 
 
@@ -1947,6 +1969,184 @@ function initOtvChart(){
         <span style="font-size:11px;color:var(--text-muted);margin-left:6px">${fmt(v)} zł · ${(v/grand*100).toFixed(1)}%</span>
       </div>
     </div>`).join('');
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   HK PDF EXPORT
+═══════════════════════════════════════════════════════ */
+function exportHkPdf(monthKey, monthLabel){
+  const hkData=_state.data.housekeeping[monthKey];
+  const rows=hkData?.rows||hkData||[];
+  const pracownicy=hkData?.pracownicy||[];
+  const faktura=hkData?.faktura||{};
+  const activeRows=rows.filter(r=>!r.cancelled);
+  const totalSuma=activeRows.reduce((s,r)=>s+r.suma,0);
+  const totalPranie=activeRows.reduce((s,r)=>s+r.pranie,0);
+  const totalApt=activeRows.reduce((s,r)=>s+r.aptCena,0);
+  const totalGos=activeRows.reduce((s,r)=>s+r.gosCena,0);
+
+  // Per-apt summary
+  const byApt={};
+  activeRows.forEach(r=>{
+    if(!byApt[r.apt])byApt[r.apt]={suma:0,count:0,pranie:0,aptCena:0,gosCena:0};
+    byApt[r.apt].suma+=r.suma;
+    byApt[r.apt].count++;
+    byApt[r.apt].pranie+=r.pranie;
+    byApt[r.apt].aptCena+=r.aptCena;
+    byApt[r.apt].gosCena+=r.gosCena;
+  });
+  const aptsSorted=sortByDefaultOrder(Object.keys(byApt));
+
+  // Faktura values
+  const pracVal=parseFloat(String(faktura.pracownicy||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+  const netto=totalSuma-pracVal;
+  const vat=Math.round(netto*0.23*100)/100;
+  const brutto=Math.round((netto+vat)*100)/100;
+
+  const aptRows=aptsSorted.map((apt,i)=>{
+    const d=byApt[apt];
+    return`<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+      <td style="padding:6px 10px;font-weight:600;font-size:12px">${apt}</td>
+      <td style="padding:6px 10px;text-align:center;font-size:12px">${d.count}</td>
+      <td style="padding:6px 10px;text-align:right;font-size:12px">${fmt(d.pranie)} zł</td>
+      <td style="padding:6px 10px;text-align:right;font-size:12px">${fmt(d.aptCena)} zł</td>
+      <td style="padding:6px 10px;text-align:right;font-size:12px">${fmt(d.gosCena)} zł</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:700;font-size:12px">${fmt(d.suma)} zł</td>
+    </tr>`;
+  }).join('');
+
+  const pracRows=pracownicy.map(p=>`<tr>
+    <td style="padding:7px 10px;font-weight:600;font-size:12px">${p.imie}</td>
+    <td style="padding:7px 10px;text-align:right;font-weight:700;font-size:12px;color:#1e40af">${p.kwota}</td>
+    <td style="padding:7px 10px;text-align:center;font-size:12px">${p.hRob?'✓':'—'}</td>
+    <td style="padding:7px 10px;text-align:center;font-size:12px">${p.hNied?'✓':'—'}</td>
+  </tr>`).join('');
+
+  // Full cleanings table
+  const byDate={};const dateOrder=[];
+  rows.forEach(r=>{
+    const d=r.dataDo||r.date||'—';
+    if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
+    byDate[d].push(r);
+  });
+  const allCleanRows=dateOrder.map(date=>{
+    const dayRows=byDate[date];
+    const dayActive=dayRows.filter(r=>!r.cancelled);
+    const dayTotal=dayActive.reduce((s,r)=>s+r.suma,0);
+    const rowsHtml=dayRows.map(r=>`<tr style="${r.cancelled?'opacity:0.4;text-decoration:line-through':''}">
+      <td style="padding:5px 8px;font-size:11px">${r.date||'—'}</td>
+      <td style="padding:5px 8px;font-size:11px;font-weight:600">${r.apt}</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:center">${r.guests||'—'}</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(r.pranie)} zł</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(r.aptCena)} zł</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(r.gosCena)} zł</td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700">${fmt(r.suma)} zł</td>
+      <td style="padding:5px 8px;font-size:11px;font-style:italic;color:#666">${r.note||''}</td>
+    </tr>`).join('');
+    const subtotal=`<tr style="background:#dbeafe;font-weight:700">
+      <td colspan="2" style="padding:5px 8px;font-size:11px">Suma ${date}</td>
+      <td colspan="4"></td>
+      <td style="padding:5px 8px;font-size:11px;text-align:right">${fmt(dayTotal)} zł</td>
+      <td></td>
+    </tr>`;
+    return rowsHtml+subtotal;
+  }).join('');
+
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <title>Housekeeping ${monthLabel}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:20px;}
+      h1{font-size:22px;font-weight:700;color:#1e293b;margin-bottom:4px;}
+      .subtitle{font-size:13px;color:#64748b;margin-bottom:24px;}
+      .section{margin-bottom:28px;}
+      .section-title{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:0.05em;}
+      table{width:100%;border-collapse:collapse;}
+      thead th{background:#f1f5f9;padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.04em;}
+      thead th.r{text-align:right;}
+      thead th.c{text-align:center;}
+      tbody tr{border-bottom:1px solid #f1f5f9;}
+      .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;}
+      .sum-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;}
+      .sum-card .label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+      .sum-card .value{font-size:20px;font-weight:700;color:#1e40af;}
+      .faktura-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;max-width:360px;}
+      .frow{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e0f2fe;font-size:13px;}
+      .frow.total{background:#1e40af;color:#fff;margin:8px -16px -16px;padding:10px 16px;border-radius:0 0 8px 8px;font-weight:700;font-size:14px;border:none;}
+      .frow .lbl{color:#475569;}
+      .frow.total .lbl{color:#fff;}
+      @media print{
+        body{padding:10mm;}
+        @page{margin:10mm;size:A4;}
+        .no-print{display:none;}
+        .section{page-break-inside:avoid;}
+      }
+    </style>
+  </head><body>
+    <div class="no-print" style="margin-bottom:20px">
+      <button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-right:8px">🖨️ Drukuj / Zapisz PDF</button>
+      <button onclick="window.close()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:10px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">✕ Zamknij</button>
+    </div>
+
+    <h1>Zestawienie Housekeeping</h1>
+    <div class="subtitle">Old Town Vistula Premium Apartments &nbsp;·&nbsp; ${monthLabel} &nbsp;·&nbsp; Wygenerowano: ${new Date().toLocaleDateString('pl-PL')}</div>
+
+    <div class="summary-grid">
+      <div class="sum-card"><div class="label">Suma łączna</div><div class="value">${fmt(totalSuma)} zł</div></div>
+      <div class="sum-card"><div class="label">Pranie</div><div class="value">${fmt(totalPranie)} zł</div></div>
+      <div class="sum-card"><div class="label">Sprzątanie</div><div class="value">${fmt(totalGos)} zł</div></div>
+    </div>
+
+    <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start;margin-bottom:28px">
+      <div style="flex:1;min-width:280px">
+        <div class="section-title">👷 Pracownicy</div>
+        <table>
+          <thead><tr><th>Pracownik</th><th class="r">Kwota netto</th><th class="c">H robocze</th><th class="c">H niedziele</th></tr></thead>
+          <tbody>${pracRows}</tbody>
+        </table>
+      </div>
+      <div>
+        <div class="section-title">🧾 Faktura</div>
+        <div class="faktura-box">
+          <div class="frow"><span class="lbl">Suma housekeeping</span><span style="font-weight:600">${fmt(totalSuma)} zł</span></div>
+          ${pracVal>0?`<div class="frow"><span class="lbl">Pracownicy</span><span style="font-weight:600">${fmt(pracVal)} zł</span></div>`:''}
+          <div class="frow"><span class="lbl">Kwota netto</span><span style="font-weight:700;color:#1e40af">${fmt(netto)} zł</span></div>
+          <div class="frow"><span class="lbl">VAT 23%</span><span>${fmt(vat)} zł</span></div>
+          <div class="frow total"><span class="lbl">Kwota brutto</span><span>${fmt(brutto)} zł</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📊 Rozbicie na apartamenty</div>
+      <table>
+        <thead><tr><th>Apartament</th><th class="c">Ilość</th><th class="r">Pranie</th><th class="r">Apt</th><th class="r">Sprzątanie</th><th class="r">Suma</th></tr></thead>
+        <tbody>
+          ${aptRows}
+          <tr style="background:#1e40af;color:#fff;font-weight:700">
+            <td style="padding:7px 10px;font-size:12px">ŁĄCZNIE</td>
+            <td style="padding:7px 10px;text-align:center;font-size:12px">${activeRows.length}</td>
+            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalPranie)} zł</td>
+            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalApt)} zł</td>
+            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalGos)} zł</td>
+            <td style="padding:7px 10px;text-align:right;font-size:12px">${fmt(totalSuma)} zł</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📋 Szczegółowe zestawienie sprzątań</div>
+      <table>
+        <thead><tr><th>Data</th><th>Apartament</th><th class="c">Goście</th><th class="r">Pranie</th><th class="r">Apt</th><th class="r">Sprzątanie</th><th class="r">Suma</th><th>Notatka</th></tr></thead>
+        <tbody>${allCleanRows}</tbody>
+      </table>
+    </div>
+  </body></html>`);
+  w.document.close();
 }
 
 /* ═══════════════════════════════════════════════════════
