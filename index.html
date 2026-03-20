@@ -814,7 +814,7 @@ async function loadHousekeepingMonth(monthKey){
 
   // Fetch pracownicy (N9:P12) and faktura (N15:O19) from same sheet
   const paramsS=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
-  paramsS.append('ranges',`'${monthKey}'!N9:P12`);  // pracownicy
+  paramsS.append('ranges',`'${monthKey}'!N9:Q12`);  // pracownicy
   paramsS.append('ranges',`'${monthKey}'!N15:O19`); // faktura
   const sumData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${paramsS}`);
   const pracVals=sumData.valueRanges?.[0]?.values||[];
@@ -833,7 +833,8 @@ async function loadHousekeepingMonth(monthKey){
   faktVals.forEach(r=>{
     const key=String(r[0]||'').trim().toLowerCase();
     const val=String(r[1]||'').trim();
-    if(key.includes('pracow'))faktura.pracownicy=val;
+    if(key.includes('suma'))faktura.suma=val;
+    else if(key.includes('pracow'))faktura.pracownicy=val;
     else if(key.includes('netto'))faktura.kwotaNetto=val;
     else if(key.includes('vat'))faktura.vat=val;
     else if(key.includes('brutto'))faktura.kwotaBrutto=val;
@@ -1710,8 +1711,8 @@ function buildHousekeepingView(){
             ${pracownicy.map(p=>`<tr>
               <td style="font-weight:600">${p.imie}</td>
               <td class="num" style="font-weight:700;color:var(--blue)">${p.kwota}</td>
-              <td class="num">${p.hRob||'—'}</td>
-              <td class="num">${p.hNied||'—'}</td>
+              <td class="num" style="text-align:center">${p.hRob?'✓':'—'}</td>
+              <td class="num" style="text-align:center">${p.hNied?'✓':'—'}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -1719,6 +1720,7 @@ function buildHousekeepingView(){
       ${Object.keys(faktura).length?`<div style="min-width:200px">
         <div class="card-title" style="margin-bottom:12px">🧾 Faktura</div>
         <div style="display:flex;flex-direction:column;gap:8px">
+          ${faktura.suma?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Suma</span><span style="font-weight:600">${faktura.suma}</span></div>`:''}
           ${faktura.pracownicy?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Pracownicy</span><span style="font-weight:600">${faktura.pracownicy}</span></div>`:''}
           ${faktura.kwotaNetto?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Kwota netto</span><span style="font-weight:700;color:var(--blue)">${faktura.kwotaNetto}</span></div>`:''}
           ${faktura.vat?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">VAT</span><span style="font-weight:600">${faktura.vat}</span></div>`:''}
