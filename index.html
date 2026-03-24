@@ -921,7 +921,14 @@ async function loadPrevioMonth(monthKey){
       noce:    parseInt(v(5,i))||0,
       apt,
       kanal:   v(7,i),   // H=kanal
-      cena:    n(8,i),    // I=cena
+      cena:    (()=>{
+        const kanal=v(7,i);
+        const cenaNetto=n(8,i);
+        // Airbnb w Previo pokazuje cenę netto bez prowizji 15.5%
+        // Przeliczamy na brutto: netto / (1 - 0.155)
+        return kanal.toLowerCase().includes('airbnb')?Math.round(cenaNetto/0.845*100)/100:cenaNetto;
+      })(),
+      cenaNetto: v(7,i).toLowerCase().includes('airbnb')?n(8,i):null,
       status:  statusId,
       gosc:    v(9,i),    // L=gosc (index 9 in our selected cols)
       kraj:    v(10,i),   // M=kraj (index 10)  
@@ -2086,9 +2093,16 @@ function buildPrevioView(){
   active.forEach(r=>{const ch=r.kanal||'Własna';chanMap[ch]=(chanMap[ch]||0)+r.cena;});
   window._previoChannels=chanMap;
 
+  // Today's date for partial month calculation
+  const today=new Date();
+  today.setHours(0,0,0,0);
+  const activeToday=active.filter(r=>{const d=parseDateDMY(r.dataDo);return d&&d<=today;});
+  const totalCenaToday=activeToday.reduce((s,r)=>s+r.cena,0);
+  const todayDay=today.getDate();
+
   const kpis=`<div class="kpi-row">
-    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód łączny</div><div class="value"><span class="sym">zł</span>${fmt(totalCena)}</div><div class="sub">${active.length} rezerwacji</div></div>
-    <div class="kpi-card c-green" style="animation-delay:0.07s"><div class="label">Średnia rezerwacja</div><div class="value"><span class="sym">zł</span>${fmt(avgCena)}</div><div class="sub">per rezerwacja</div></div>
+    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Do dziś (1–${todayDay})</div><div class="value"><span class="sym">zł</span>${fmt(totalCenaToday)}</div><div class="sub">${activeToday.length} rezerwacji</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.07s"><div class="label">Cały miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(totalCena)}</div><div class="sub">${active.length} rez. (w tym przyszłe)</div></div>
     <div class="kpi-card c-purple" style="animation-delay:0.14s"><div class="label">ADR</div><div class="value"><span class="sym">zł</span>${fmt(adr)}</div><div class="sub">${totalNoce} nocy łącznie</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Anulowane</div><div class="value">${rows.filter(r=>r.cancelled).length}</div><div class="sub">z ${rows.length} rezerwacji</div></div>
   </div>`;
@@ -2196,6 +2210,7 @@ function openPrevioDrawer(date){
         <span style="font-size:11px;color:var(--text-muted)">${r.dataOd} → ${r.dataDo}</span>
         <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}</span>
       </div>
+      ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
       <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
     </div>`;
   }).join('');
