@@ -3051,7 +3051,10 @@ async function init(){
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
   const initPrevioKey=_state.previoMonth;
-  const[mr,fr,jr,dr,mdr,ar,hkr,otvr,previor]=await Promise.allSettled([
+  // Also load last year same month for forecast comparison
+  const [pYr,pMo]=initPrevioKey.split('-');
+  const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
+  const[mr,fr,jr,dr,mdr,ar,hkr,otvr,previor,previoLYr]=await Promise.allSettled([
     loadMarchData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
@@ -3061,6 +3064,7 @@ async function init(){
     loadHousekeepingMonth(initHkKey),
     loadOtvMonth(initOtvKey),
     loadPrevioMonth(initPrevioKey),
+    loadPrevioMonth(lastYearPrevioKey),
   ]);
   _state.data.mar2026    =mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.feb2026    =fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
@@ -3071,6 +3075,7 @@ async function init(){
   _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
   _state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
+  if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
   renderApp();
 }
 
