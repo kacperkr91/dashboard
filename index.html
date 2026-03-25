@@ -1046,6 +1046,76 @@ function calcForecast(days){
   return{forecastTotal:earned+proj,totalEarned:earned,projectedRevenue:proj,daysDone:withVal.length,remainingDays:rem,totalDays:total,pctDone:pct,avgWeekend:avgWE,avgWeekday:avgWD,confidence:conf,confidenceLabel:confLabel,projectedDays:projDays,enriched};
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   PREVIO FORECAST
+═══════════════════════════════════════════════════════ */
+function calcPrevioForecast(monthKey){
+  const rows=_state.data.previo[monthKey];
+  if(!rows||rows.error||!Array.isArray(rows))return null;
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const active=rows.filter(r=>!r.cancelled);
+
+  // Already earned = checkouts up to today
+  const earned=active.filter(r=>{
+    const d=parseDateDMY(r.dataDo);
+    return d&&d<=today;
+  }).reduce((s,r)=>s+r.cena,0);
+
+  // Confirmed future = checkouts after today still in this month
+  const confirmed=active.filter(r=>{
+    const d=parseDateDMY(r.dataDo);
+    return d&&d>today;
+  }).reduce((s,r)=>s+r.cena,0);
+
+  // Last year same month
+  const [yr,mo]=monthKey.split('-').map(Number);
+  const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
+  const lastYearRows=_state.data.previo[lastYearKey];
+  const lastYearTotal=Array.isArray(lastYearRows)?
+    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
+
+  // Total days in month
+  const daysInMon=new Date(yr,mo,0).getDate();
+  const daysDone=today.getDate();
+  const daysLeft=daysInMon-daysDone;
+
+  // Estimate missing days based on last year ratio
+  let estMissing=0;
+  let hasLastYear=false;
+  if(lastYearTotal&&lastYearTotal>0){
+    // What fraction of last year was earned by this day
+    const lastYearEarned=Array.isArray(lastYearRows)?
+      lastYearRows.filter(r=>{
+        if(r.cancelled)return false;
+        const d=parseDateDMY(r.dataDo);
+        return d&&d.getDate()<=daysDone;
+      }).reduce((s,r)=>s+r.cena,0):0;
+    const lastYearConfirmed=lastYearTotal-lastYearEarned;
+    // Scale to current pace
+    const pace=lastYearEarned>0?earned/lastYearEarned:1;
+    estMissing=Math.max(0,lastYearConfirmed*pace-confirmed);
+    hasLastYear=true;
+  }
+
+  const forecastTotal=earned+confirmed+estMissing;
+
+  return{
+    earned,
+    confirmed,
+    estMissing,
+    forecastTotal,
+    lastYearTotal,
+    lastYearKey,
+    hasLastYear,
+    daysDone,
+    daysLeft,
+    daysInMon,
+    pctDone:Math.round(daysDone/daysInMon*100),
+  };
+}
+
 /* ═══════════════════════════════════════════════════════
    FORMATTERS
 ═══════════════════════════════════════════════════════ */
@@ -1291,7 +1361,7 @@ function buildMonthView(days,opts={}){
   const forecast=(fc&&showForecast)?`<div class="forecast-card">
     <div class="forecast-top">
       <div class="fc-main">
-        <div class="fc-label">📈 Prognoza na koniec miesiąca (${fc.totalDays} dni)</div>
+        <div class="fc-label">📈 Prognoza weekendowa (${fc.totalDays} dni)</div>
         <div class="fc-value"><span class="sym">zł</span>${fmt(fc.forecastTotal)}</div>
         <div class="fc-sub">Dotychczas: <strong>zł ${fmt(fc.totalEarned)}</strong> + prognoza ${fc.remainingDays} dni: <strong>zł ${fmt(fc.projectedRevenue)}</strong></div>
         <span class="confidence-badge ${fc.confidence}">${fc.confidenceLabel}</span>
@@ -1308,6 +1378,34 @@ function buildMonthView(days,opts={}){
       <div class="progress-bar"><div class="progress-fill" style="width:${fc.pctDone}%"></div></div>
     </div>
     <div class="weekend-info">📊 Prognoza uwzględnia wzorzec weekendowy — <strong>soboty i niedziele</strong> prognozowane wyżej.</div>
+  </div>`:'';
+
+  // Previo forecast
+  const pfKey=opts.otvMonthKey||null;
+  const pf=pfKey?calcPrevioForecast(pfKey):null;
+  const previoForecast=pf?`<div class="forecast-card" style="border-color:var(--green-mid);margin-top:0">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
+    <div class="forecast-top">
+      <div class="fc-main">
+        <div class="fc-label">🏨 Prognoza Previo — na podstawie potwierdzeń + ${pf.hasLastYear?'historia '+pf.lastYearKey:'trend'}</div>
+        <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
+        <div class="fc-sub">
+          Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
+          Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
+          ${pf.hasLastYear?`· Estymacja: <strong>zł ${fmt(pf.estMissing)}</strong>`:''}
+        </div>
+        ${pf.hasLastYear?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu (${pf.lastYearKey}): <strong>zł ${fmt(pf.lastYearTotal)}</strong></div>`:''}
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-label">Już zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Potwierdzone</div><div class="fc-stat-val" style="color:#0d9488">zł ${fmt(pf.confirmed)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Dni zostało</div><div class="fc-stat-val">${pf.daysLeft}</div></div>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Postęp miesiąca</span><span>${pf.pctDone}%</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pf.pctDone}%;background:#059669"></div></div>
+    </div>
   </div>`:'';
 
   const chart=`<div class="chart-card"><div class="card-title">${showForecast?'Przychody dzienne + prognoza':'Przychody dzienne — '+monthLabel}</div><div class="card-subtitle">${showForecast?'Słupki pełne = dane · Jasne = prognoza':'Sb+Nd wyróżnione fioletowo'}</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>`;
@@ -1412,7 +1510,7 @@ function buildMonthView(days,opts={}){
     <div class="drawer-body" id="drawerBody"></div>
   </div>`;
 
-  return{html:kpis+forecast+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
+  return{html:kpis+forecast+(previoForecast||'')+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
 }
 
 /* ═══════════════════════════════════════════════════════
