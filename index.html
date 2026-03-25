@@ -892,13 +892,13 @@ async function loadPrevioMonth(monthKey){
   );
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
   const vr=data.valueRanges;
-  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').trim();
+  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').replace(/^'/,'').trim();
   const n=(i,j)=>parseFloat(String(vr[i]?.values?.[j]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
   const maxLen=Math.max(...vr.map(r=>r.values?.length||0));
 
   const result=[];
   for(let i=0;i<maxLen;i++){
-    const dataDo=v(4,i);  // E=dataDo
+    const dataDo=v(4,i).replace(/^'/,'').trim();  // E=dataDo, strip apostrophe
     if(!dataDo)continue;
     // Filter by month
     const d=parseDateDMY(dataDo);
@@ -951,7 +951,7 @@ async function loadOtvMonth(monthKey){
   cols.forEach(c=>params.append('ranges',`'${monthKey}'!${c}${otvStartRow}:${c}${otvEndRow}`));
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${otvSpreadsheetId}/values:batchGet?${params}`);
   const vr=data.valueRanges;
-  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').trim();
+  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').replace(/^'/,'').trim();
   const n=(i,j)=>parseFloat(String(vr[i]?.values?.[j]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
   const maxLen=Math.max(...vr.map(r=>r.values?.length||0));
   const result=[];
