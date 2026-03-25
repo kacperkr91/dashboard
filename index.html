@@ -1055,64 +1055,80 @@ function calcPrevioForecast(monthKey){
   if(!rows||rows.error||!Array.isArray(rows))return null;
 
   const today=new Date();today.setHours(0,0,0,0);
+  const [yr,mo]=monthKey.split('-').map(Number);
+  const daysInMon=new Date(yr,mo,0).getDate();
+  const daysDone=today.getDate();
+  const daysLeft=daysInMon-daysDone;
   const active=rows.filter(r=>!r.cancelled);
 
-  // Already earned = checkouts up to today
+  // Already earned = checkouts up to and including today
   const earned=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
     return d&&d<=today;
   }).reduce((s,r)=>s+r.cena,0);
 
   // Confirmed future = checkouts after today still in this month
-  const confirmed=active.filter(r=>{
+  const confirmedRows=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
     return d&&d>today;
-  }).reduce((s,r)=>s+r.cena,0);
+  });
+  const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
 
-  // Last year same month
-  const [yr,mo]=monthKey.split('-').map(Number);
+  // Last year same month — booking window analysis
   const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
   const lastYearRows=_state.data.previo[lastYearKey];
-  const lastYearTotal=Array.isArray(lastYearRows)?
-    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
-
-  // Total days in month
-  const daysInMon=new Date(yr,mo,0).getDate();
-  const daysDone=today.getDate();
-  const daysLeft=daysInMon-daysDone;
-
-  // Estimate missing days based on last year ratio
-  let estMissing=0;
+  let estNewBookings=0;
+  let lastYearTotal=null;
   let hasLastYear=false;
-  if(lastYearTotal&&lastYearTotal>0){
-    // What fraction of last year was earned by this day
-    const lastYearEarned=Array.isArray(lastYearRows)?
-      lastYearRows.filter(r=>{
-        if(r.cancelled)return false;
-        const d=parseDateDMY(r.dataDo);
-        return d&&d.getDate()<=daysDone;
-      }).reduce((s,r)=>s+r.cena,0):0;
-    const lastYearConfirmed=lastYearTotal-lastYearEarned;
-    // Scale to current pace
-    const pace=lastYearEarned>0?earned/lastYearEarned:1;
-    estMissing=Math.max(0,lastYearConfirmed*pace-confirmed);
+  let lastYearSamePeriodEarned=null;
+
+  if(Array.isArray(lastYearRows)&&lastYearRows.length){
+    const lyActive=lastYearRows.filter(r=>!r.cancelled);
+    lastYearTotal=lyActive.reduce((s,r)=>s+r.cena,0);
+
+    // What was earned on days > daysDone in last year's month
+    // that was booked AFTER the equivalent of today last year
+    const lyFutureBooked=lyActive.filter(r=>{
+      const dDo=parseDateDMY(r.dataDo);
+      const dRez=parseDateDMY(r.dataRez);
+      if(!dDo||!dRez)return false;
+      // checkout was in the remaining days of that month
+      return dDo.getDate()>daysDone && dRez.getDate()>daysDone;
+    }).reduce((s,r)=>s+r.cena,0);
+
+    // Also what was already confirmed on same day last year (equivalent of our "confirmed")
+    lastYearSamePeriodEarned=lyActive.filter(r=>{
+      const dDo=parseDateDMY(r.dataDo);
+      return dDo&&dDo.getDate()>daysDone;
+    }).reduce((s,r)=>s+r.cena,0);
+
+    // Estimate new bookings = what came in last-minute last year
+    // scaled by current pace vs last year pace
+    const lyEarned=lyActive.filter(r=>{
+      const d=parseDateDMY(r.dataDo);
+      return d&&d.getDate()<=daysDone;
+    }).reduce((s,r)=>s+r.cena,0);
+
+    const pace=lyEarned>0?earned/lyEarned:1;
+    estNewBookings=Math.round(lyFutureBooked*pace);
     hasLastYear=true;
   }
 
-  const forecastTotal=earned+confirmed+estMissing;
+  // Occupied apartments check
+  // Count unique apts confirmed for future days
+  const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
+  const totalApts=29;
+  const freeApts=Math.max(0,totalApts-confirmedApts.size);
+  const avgPerApt=confirmedApts.size>0?confirmed/confirmedApts.size:0;
+
+  const forecastTotal=earned+confirmed+estNewBookings;
 
   return{
-    earned,
-    confirmed,
-    estMissing,
-    forecastTotal,
-    lastYearTotal,
-    lastYearKey,
-    hasLastYear,
-    daysDone,
-    daysLeft,
-    daysInMon,
+    earned, confirmed, estNewBookings, forecastTotal,
+    lastYearTotal, lastYearKey, lastYearSamePeriodEarned,
+    hasLastYear, daysDone, daysLeft, daysInMon,
     pctDone:Math.round(daysDone/daysInMon*100),
+    confirmedApts:confirmedApts.size, freeApts, totalApts,
   };
 }
 
@@ -1383,22 +1399,23 @@ function buildMonthView(days,opts={}){
   // Previo forecast
   const pfKey=opts.otvMonthKey||null;
   const pf=pfKey?calcPrevioForecast(pfKey):null;
-  const previoForecast=pf?`<div class="forecast-card" style="border-color:var(--green-mid);margin-top:0">
+  const previoForecast=pf?`<div class="forecast-card" style="border-color:#059669;margin-top:0">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
     <div class="forecast-top">
       <div class="fc-main">
-        <div class="fc-label">🏨 Prognoza Previo — na podstawie potwierdzeń + ${pf.hasLastYear?'historia '+pf.lastYearKey:'trend'}</div>
+        <div class="fc-label">🏨 Prognoza Previo — potwierdzone + last-minute ${pf.hasLastYear?'(wzorzec '+pf.lastYearKey+')':''}</div>
         <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
         <div class="fc-sub">
           Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
           Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
-          ${pf.hasLastYear?`· Estymacja: <strong>zł ${fmt(pf.estMissing)}</strong>`:''}
+          ${pf.estNewBookings>0?` · Last-minute: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
         </div>
-        ${pf.hasLastYear?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu (${pf.lastYearKey}): <strong>zł ${fmt(pf.lastYearTotal)}</strong></div>`:''}
+        ${pf.hasLastYear?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · ostatnie dni rok temu: <strong>zł ${fmt(pf.lastYearSamePeriodEarned)}</strong></div>`:''}
       </div>
       <div class="fc-stats">
-        <div class="fc-stat"><div class="fc-stat-label">Już zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
         <div class="fc-stat"><div class="fc-stat-label">Potwierdzone</div><div class="fc-stat-val" style="color:#0d9488">zł ${fmt(pf.confirmed)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Wolne apt.</div><div class="fc-stat-val" style="color:${pf.freeApts>8?'var(--red)':'#059669'}">${pf.freeApts} / ${pf.totalApts}</div></div>
         <div class="fc-stat"><div class="fc-stat-label">Dni zostało</div><div class="fc-stat-val">${pf.daysLeft}</div></div>
       </div>
     </div>
