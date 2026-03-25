@@ -360,7 +360,7 @@ const CONFIG={
   previoSpreadsheetId: '1R1QNqx7LWaeTLuy2QXe2q1nAfUcMUSwqBmRa2Fhje68',
   previoSheet:         'Previo',
   previoStartRow:      2,
-  previoEndRow:        6000,
+  previoEndRow:        10000,
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -886,9 +886,31 @@ async function loadPrevioMonth(monthKey){
   if(!apiKey||!previoSpreadsheetId)throw new Error('MISSING_PREVIO_CONFIG');
 
   // Cols: A=resId, B=voucher, C=dataRez, D=dataOd, E=dataDo, F=noce, G=apt, H=kanal, I=cena, J=waluta, K=status, L=gosc, M=kraj
+  // Step 1: fetch only dataDo column (E) to find rows for this month
+  const encE=encodeURIComponent(`'${previoSheet}'!E${previoStartRow}:E${previoEndRow}`);
+  const dateData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values/${encE}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`);
+  const dateValsAll=dateData.values||[];
+  
+  // Find row indices for this month
+  const matchingRows=[];
+  dateValsAll.forEach((row,i)=>{
+    const raw=String(row[0]||'').replace(/^'/,'').trim();
+    const d=parseDateDMY(raw);
+    if(!d)return;
+    const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(dk===monthKey)matchingRows.push(i);
+  });
+  
+  if(!matchingRows.length)throw new Error('NO_PREVIO_DATA');
+  
+  const firstRow=matchingRows[0]+previoStartRow;
+  const lastRow=matchingRows[matchingRows.length-1]+previoStartRow;
+  console.log(`Previo ${monthKey}: rows ${firstRow}-${lastRow} (${matchingRows.length} records)`);
+  
+  // Step 2: fetch only those rows
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
   ['A','B','C','D','E','F','G','H','I','K','L','M'].forEach(c=>
-    params.append('ranges',`'${previoSheet}'!${c}${previoStartRow}:${c}${previoEndRow}`)
+    params.append('ranges',`'${previoSheet}'!${c}${firstRow}:${c}${lastRow}`)
   );
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
   const vr=data.valueRanges;
@@ -898,13 +920,8 @@ async function loadPrevioMonth(monthKey){
 
   const result=[];
   for(let i=0;i<maxLen;i++){
-    const dataDo=v(4,i).replace(/^'/,'').trim();  // E=dataDo, strip apostrophe
+    const dataDo=v(4,i).replace(/^'/,'').trim();  // E=dataDo
     if(!dataDo)continue;
-    // Filter by month
-    const d=parseDateDMY(dataDo);
-    if(!d)continue;
-    const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    if(dk!==monthKey)continue;
 
     const apt=v(6,i);   // G=apartament
     if(!apt)continue;
@@ -935,14 +952,7 @@ async function loadPrevioMonth(monthKey){
       cancelled,
     });
   }
-  if(!result.length){
-    console.log('NO_PREVIO_DATA debug:');
-    console.log('maxLen:', maxLen);
-    console.log('monthKey:', monthKey);
-    if(vr[4]?.values?.length) console.log('Sample dataDo values:', vr[4].values.slice(0,5).map(r=>r[0]));
-    if(vr[6]?.values?.length) console.log('Sample apt values:', vr[6].values.slice(0,5).map(r=>r[0]));
-    throw new Error('NO_PREVIO_DATA');
-  }
+  if(!result.length)throw new Error('NO_PREVIO_DATA');
   return result;
 }
 
