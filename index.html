@@ -2413,23 +2413,61 @@ function initPrevioChart(){
 /* ═══════════════════════════════════════════════════════
    BOOKING.COM PAYOUT
 ═══════════════════════════════════════════════════════ */
-const BOOKING_COMMISSION = {
-  // 15% commission apartments
-  'Katowicka':               0.15,
-  'Stawowa':                 0.15,
-  'Zamkowa':                 0.15,
-  'Plac Szczepański B41':    0.15,
-  'Plac Szczepański C41':    0.15,
-  'Bronowicka':              0.15,
-};
-const BOOKING_DEFAULT_COMMISSION = 0.18;  // 18% for all Apt X
-const BOOKING_TRANSACTION_FEE   = 0.014; // 1.4% transaction fee on gross
+// Property groups for Booking payout
+const BOOKING_GROUPS=[
+  {
+    name:'Old Town Vistula Premium Apartments',
+    commission:0.18,
+    match: apt=>apt.toLowerCase().startsWith('apt'),
+  },
+  {
+    name:'Wawel II',
+    commission:0.18,
+    match: apt=>apt.toLowerCase().includes('wawel ii'),
+  },
+  {
+    name:'Wawel',
+    commission:0.18,
+    match: apt=>apt.toLowerCase()==='wawel',
+  },
+  {
+    name:'Plac Szczepański',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('plac szczepański')||apt.toLowerCase().includes('plac szczepa'),
+  },
+  {
+    name:'Orzeszkowej',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('orzeszkowej'),
+  },
+  {
+    name:'Stawowa',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('stawowa'),
+  },
+  {
+    name:'Katowicka',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('katowicka'),
+  },
+  {
+    name:'Bronowicka',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('bronowicka'),
+  },
+  {
+    name:'Zamkowa',
+    commission:0.15,
+    match: apt=>apt.toLowerCase().includes('zamkowa'),
+  },
+];
+const BOOKING_TRANSACTION_FEE=0.014;
 
-function getBookingCommission(apt){
-  for(const [key,val] of Object.entries(BOOKING_COMMISSION)){
-    if(apt.toLowerCase().includes(key.toLowerCase()))return val;
+function getBookingGroup(apt){
+  for(const g of BOOKING_GROUPS){
+    if(g.match(apt))return g;
   }
-  return BOOKING_DEFAULT_COMMISSION;
+  return{name:apt,commission:0.18};
 }
 
 // Get Thursday-Wednesday period containing a date
@@ -2512,7 +2550,8 @@ function buildBookingPayoutView(){
   // Calculate payouts for selected period
   let totalGross=0,totalComm=0,totalFee=0,totalNet=0;
   const rows=selPeriod.rows.map(r=>{
-    const comm=getBookingCommission(r.apt);
+    const g=getBookingGroup(r.apt);
+    const comm=g.commission;
     const gross=r.cena;
     const commAmt=Math.round(gross*comm*100)/100;
     const feeAmt=Math.round(gross*BOOKING_TRANSACTION_FEE*100)/100;
@@ -2548,26 +2587,60 @@ function buildBookingPayoutView(){
     <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Do wypłaty netto</div><div class="value"><span class="sym">zł</span>${fmt(totalNet)}</div><div class="sub">${(totalNet/totalGross*100).toFixed(1)}% brutto</div></div>
   </div>`;
 
-  const tableRows=rows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
-    <td style="font-weight:600;font-size:12px">${r.apt}</td>
-    <td style="font-size:12px">${r.dataOd||'—'} → ${r.dataDo}</td>
-    <td style="font-size:12px;color:var(--text-muted)">${r.gosc||'—'}</td>
-    <td class="num" style="font-size:12px">${fmt(r.gross)} zł</td>
-    <td class="num" style="font-size:12px;color:var(--red)">${fmt(r.commAmt)} zł <span style="font-size:10px;color:var(--text-muted)">(${(r.comm*100).toFixed(0)}%)</span></td>
-    <td class="num" style="font-size:12px;color:var(--red)">${fmt(r.feeAmt)} zł</td>
-    <td class="num" style="font-size:12px;font-weight:700;color:#059669">${fmt(r.net)} zł</td>
-  </tr>`).join('');
+  // Group by property object
+  function getPropertyGroup(apt){
+    const a=apt.toLowerCase();
+    if(a.includes('plac szczep'))return'Plac Szczepański';
+    if(a.includes('wawel ii')||a.includes('wawel 2'))return'Wawel II';
+    if(a.includes('wawel'))return'Wawel';
+    if(a.includes('katowicka'))return'Katowicka';
+    if(a.includes('stawowa'))return'Stawowa';
+    if(a.includes('zamkowa'))return'Zamkowa';
+    if(a.includes('bronowicka'))return'Bronowicka';
+    if(a.includes('orzeszkowej'))return'Orzeszkowej';
+    return'Old Town Vistula Premium Apartments';
+  }
+
+  const groups={};
+  rows.forEach(r=>{
+    const g=getPropertyGroup(r.apt);
+    if(!groups[g])groups[g]={gross:0,commAmt:0,feeAmt:0,net:0,count:0,comm:r.comm};
+    groups[g].gross+=r.gross;
+    groups[g].commAmt+=r.commAmt;
+    groups[g].feeAmt+=r.feeAmt;
+    groups[g].net+=r.net;
+    groups[g].count++;
+  });
+
+  // Sort: OTV first, then alphabetically
+  const groupOrder=['Old Town Vistula Premium Apartments','Wawel','Wawel II','Plac Szczepański','Katowicka','Stawowa','Zamkowa','Bronowicka','Orzeszkowej'];
+  const sortedGroups=Object.keys(groups).sort((a,b)=>{
+    const ai=groupOrder.indexOf(a),bi=groupOrder.indexOf(b);
+    return (ai===-1?99:ai)-(bi===-1?99:bi);
+  });
+
+  const groupRows=sortedGroups.map((g,i)=>{
+    const d=groups[g];
+    return`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
+      <td style="font-weight:700;font-size:13px">${g}</td>
+      <td class="num" style="font-size:12px;color:var(--text-muted)">${d.count} rez.</td>
+      <td class="num" style="font-size:12px">${fmt(d.gross)} zł</td>
+      <td class="num" style="font-size:12px;color:var(--red)">${fmt(d.commAmt)} zł <span style="font-size:10px;color:var(--text-muted)">(${(d.commAmt/d.gross*100).toFixed(0)}%)</span></td>
+      <td class="num" style="font-size:12px;color:var(--red)">${fmt(d.feeAmt)} zł</td>
+      <td class="num" style="font-size:13px;font-weight:700;color:#059669">${fmt(d.net)} zł</td>
+    </tr>`;
+  }).join('');
 
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
-    <div class="card-title">Rezerwacje Booking.com — okres ${fmt2(selPeriod.from)} – ${fmt2(selPeriod.to)}</div>
+    <div class="card-title">Wypłaty per obiekt — ${fmt2(selPeriod.from)} – ${fmt2(selPeriod.to)}</div>
     <div class="hk-table-wrap"><table class="hk-table">
       <thead><tr>
-        <th>Apartament</th><th>Pobyt</th><th>Gość</th>
+        <th>Obiekt</th><th class="num">Rez.</th>
         <th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Opł. trans.</th><th class="num">Netto</th>
       </tr></thead>
-      <tbody>${tableRows}</tbody>
+      <tbody>${groupRows}</tbody>
       <tr class="hk-total">
-        <td colspan="3">ŁĄCZNIE</td>
+        <td>ŁĄCZNIE</td><td class="num">${rows.length}</td>
         <td class="num">${fmt(totalGross)} zł</td>
         <td class="num">${fmt(totalComm)} zł</td>
         <td class="num">${fmt(totalFee)} zł</td>
