@@ -1061,74 +1061,81 @@ function calcPrevioForecast(monthKey){
   const daysLeft=daysInMon-daysDone;
   const active=rows.filter(r=>!r.cancelled);
 
-  // Already earned = checkouts up to and including today
+  // Already earned = checkouts up to today
   const earned=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
     return d&&d<=today;
   }).reduce((s,r)=>s+r.cena,0);
 
-  // Confirmed future = checkouts after today still in this month
+  // Confirmed future = already booked, checkout after today
   const confirmedRows=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
     return d&&d>today;
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
 
-  // Last year same month — booking window analysis
-  const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
-  const lastYearRows=_state.data.previo[lastYearKey];
-  let estNewBookings=0;
-  let lastYearTotal=null;
-  let hasLastYear=false;
-  let lastYearSamePeriodEarned=null;
-
-  if(Array.isArray(lastYearRows)&&lastYearRows.length){
-    const lyActive=lastYearRows.filter(r=>!r.cancelled);
-    lastYearTotal=lyActive.reduce((s,r)=>s+r.cena,0);
-
-    // What was earned on days > daysDone in last year's month
-    // that was booked AFTER the equivalent of today last year
-    const lyFutureBooked=lyActive.filter(r=>{
-      const dDo=parseDateDMY(r.dataDo);
-      const dRez=parseDateDMY(r.dataRez);
-      if(!dDo||!dRez)return false;
-      // checkout was in the remaining days of that month
-      return dDo.getDate()>daysDone && dRez.getDate()>daysDone;
-    }).reduce((s,r)=>s+r.cena,0);
-
-    // Also what was already confirmed on same day last year (equivalent of our "confirmed")
-    lastYearSamePeriodEarned=lyActive.filter(r=>{
-      const dDo=parseDateDMY(r.dataDo);
-      return dDo&&dDo.getDate()>daysDone;
-    }).reduce((s,r)=>s+r.cena,0);
-
-    // Estimate new bookings = what came in last-minute last year
-    // scaled by current pace vs last year pace
-    const lyEarned=lyActive.filter(r=>{
-      const d=parseDateDMY(r.dataDo);
-      return d&&d.getDate()<=daysDone;
-    }).reduce((s,r)=>s+r.cena,0);
-
-    const pace=lyEarned>0?earned/lyEarned:1;
-    estNewBookings=Math.round(lyFutureBooked*pace);
-    hasLastYear=true;
+  // Last-minute estimate using historical booking window pattern:
+  // 76.5% of bookings come in <=7 days before checkout
+  // Last 7 days of month = avg 23.3% of monthly revenue
+  // But we already have confirmed bookings — estimate only the gap
+  
+  // Calculate historical last-7-days pattern from all available months
+  const allMonthKeys=Object.keys(_state.data.previo).filter(k=>{
+    const d=_state.data.previo[k];
+    return Array.isArray(d)&&d.length>0&&k<monthKey;
+  });
+  
+  let avgLast7Pct=0.233; // default from analysis: 23.3%
+  if(allMonthKeys.length>=3){
+    const pcts=allMonthKeys.map(mk=>{
+      const mRows=_state.data.previo[mk].filter(r=>!r.cancelled);
+      const total=mRows.reduce((s,r)=>s+r.cena,0);
+      if(total<5000)return null;
+      const [mYr,mMo]=mk.split('-').map(Number);
+      const mDays=new Date(mYr,mMo,0).getDate();
+      const last7=mRows.filter(r=>{
+        const d=parseDateDMY(r.dataDo);
+        return d&&d.getDate()>=mDays-6;
+      }).reduce((s,r)=>s+r.cena,0);
+      return last7/total;
+    }).filter(p=>p!==null);
+    if(pcts.length>0)avgLast7Pct=pcts.reduce((s,p)=>s+p,0)/pcts.length;
   }
 
-  // Occupied apartments check
-  // Count unique apts confirmed for future days
-  const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
-  const totalApts=29;
-  const freeApts=Math.max(0,totalApts-confirmedApts.size);
-  const avgPerApt=confirmedApts.size>0?confirmed/confirmedApts.size:0;
+  // Days remaining in last 7 days of month
+  const last7Start=daysInMon-6;
+  const daysInLast7Remaining=Math.max(0,daysInMon-Math.max(daysDone,last7Start-1));
+  const last7Weight=daysInLast7Remaining/7;
+
+  // Estimate total month from current pace (earned / days done)
+  const earnedPerDay=daysDone>0?earned/daysDone:0;
+  const estTotal=earned+earnedPerDay*daysLeft;
+
+  // Last-minute estimate = portion of last 7 days not yet confirmed
+  const estLast7Total=estTotal*avgLast7Pct;
+  const estNewBookings=Math.max(0,estLast7Total-confirmed)*last7Weight;
 
   const forecastTotal=earned+confirmed+estNewBookings;
 
+  // Last year comparison
+  const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
+  const lastYearRows=_state.data.previo[lastYearKey];
+  const lastYearTotal=Array.isArray(lastYearRows)?
+    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
+
+  // Occupied apts
+  const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
+  const totalApts=29;
+  const freeApts=Math.max(0,totalApts-confirmedApts.size);
+
   return{
     earned, confirmed, estNewBookings, forecastTotal,
-    lastYearTotal, lastYearKey, lastYearSamePeriodEarned,
-    hasLastYear, daysDone, daysLeft, daysInMon,
+    lastYearTotal, lastYearKey,
+    avgLast7Pct:Math.round(avgLast7Pct*100),
+    daysDone, daysLeft, daysInMon,
     pctDone:Math.round(daysDone/daysInMon*100),
     confirmedApts:confirmedApts.size, freeApts, totalApts,
+    earnedPerDay,
   };
 }
 
@@ -1403,14 +1410,14 @@ function buildMonthView(days,opts={}){
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
     <div class="forecast-top">
       <div class="fc-main">
-        <div class="fc-label">🏨 Prognoza Previo — potwierdzone + last-minute ${pf.hasLastYear?'(wzorzec '+pf.lastYearKey+')':''}</div>
+        <div class="fc-label">🏨 Prognoza Previo — booking window model (avg last-7-days: ${pf.avgLast7Pct}% miesięcznego)</div>
         <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
         <div class="fc-sub">
           Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
           Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
-          ${pf.estNewBookings>0?` · Last-minute: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
+          ${pf.estNewBookings>0?` · Last-minute est.: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
         </div>
-        ${pf.hasLastYear?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · ostatnie dni rok temu: <strong>zł ${fmt(pf.lastYearSamePeriodEarned)}</strong></div>`:''}
+        ${pf.lastYearTotal?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · śr. dziennie: <strong>zł ${fmt(pf.earnedPerDay)}</strong>/dzień</div>`:''}
       </div>
       <div class="fc-stats">
         <div class="fc-stat"><div class="fc-stat-label">Zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
