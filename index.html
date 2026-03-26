@@ -2503,6 +2503,9 @@ function buildBookingPayoutView(){
     rows.forEach(r=>{
       if(r.cancelled)return;
       if(!r.kanal||!r.kanal.toLowerCase().includes('booking'))return;
+      // Profitroom reservations are sometimes tagged as Booking in Previo
+      // Real Booking.com vouchers are numeric (10 digits), Profitroom are alpha (7 letters)
+      if(r.voucher&&!/^\d+$/.test(r.voucher))return;
       allBooking.push(r);
     });
   });
