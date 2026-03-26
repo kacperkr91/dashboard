@@ -1297,6 +1297,7 @@ let _state={
   hkAptSort:'default',
   otvMonth:'2026-03',
   previoMonth:'2026-03',
+  bookingPeriodKey:null,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:'mar2026',   // active month key
@@ -2408,6 +2409,176 @@ function initPrevioChart(){
     </div>`).join('');
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   BOOKING.COM PAYOUT
+═══════════════════════════════════════════════════════ */
+const BOOKING_COMMISSION = {
+  // 15% commission apartments
+  'Katowicka':               0.15,
+  'Stawowa':                 0.15,
+  'Zamkowa':                 0.15,
+  'Plac Szczepański B41':    0.15,
+  'Plac Szczepański C41':    0.15,
+  'Bronowicka':              0.15,
+};
+const BOOKING_DEFAULT_COMMISSION = 0.18;  // 18% for all Apt X
+const BOOKING_TRANSACTION_FEE   = 0.014; // 1.4% transaction fee on gross
+
+function getBookingCommission(apt){
+  for(const [key,val] of Object.entries(BOOKING_COMMISSION)){
+    if(apt.toLowerCase().includes(key.toLowerCase()))return val;
+  }
+  return BOOKING_DEFAULT_COMMISSION;
+}
+
+// Get Thursday-Wednesday period containing a date
+function getBookingPeriod(date){
+  const d=new Date(date);
+  d.setHours(0,0,0,0);
+  const dow=d.getDay(); // 0=Sun,1=Mon,...,4=Thu,5=Fri,6=Sat
+  // Find last Thursday
+  const daysToThursday=(dow>=4)?dow-4:dow+3;
+  const thu=new Date(d);thu.setDate(d.getDate()-daysToThursday);
+  const wed=new Date(thu);wed.setDate(thu.getDate()+6);
+  return{from:thu,to:wed};
+}
+
+function getPeriodKey(thu){
+  return thu.toISOString().slice(0,10);
+}
+
+function nextThursday(date){
+  const d=new Date(date);
+  const dow=d.getDay();
+  const daysUntil=dow<=4?(4-dow):(11-dow);
+  d.setDate(d.getDate()+daysUntil);
+  return d;
+}
+
+function buildBookingPayoutView(){
+  const state=_state;
+  // Collect all Booking.com reservations from all loaded Previo months
+  const allBooking=[];
+  Object.values(state.data.previo).forEach(rows=>{
+    if(!Array.isArray(rows))return;
+    rows.forEach(r=>{
+      if(r.cancelled)return;
+      if(!r.kanal||!r.kanal.toLowerCase().includes('booking'))return;
+      allBooking.push(r);
+    });
+  });
+
+  if(!allBooking.length){
+    return`<div class="empty-section"><div class="empty-icon">💰</div><p>Brak danych Booking.com — załaduj dane w zakładce Previo</p></div>`;
+  }
+
+  // Group by Thu-Wed period
+  const periods={};
+  allBooking.forEach(r=>{
+    const d=parseDateDMY(r.dataDo);
+    if(!d)return;
+    const{from,to}=getBookingPeriod(d);
+    const key=getPeriodKey(from);
+    if(!periods[key]){
+      periods[key]={from,to,payout:nextThursday(new Date(to.getTime()+86400000)),rows:[]};
+    }
+    periods[key].rows.push(r);
+  });
+
+  // Sort periods descending
+  const sortedKeys=Object.keys(periods).sort((a,b)=>b.localeCompare(a));
+
+  // Current and next period
+  const today=new Date();today.setHours(0,0,0,0);
+  const currentPeriod=getBookingPeriod(today);
+  const currentKey=getPeriodKey(currentPeriod.from);
+
+  const fmt2=d=>d.toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Build period selector
+  const periodBtns=sortedKeys.slice(0,12).map(k=>{
+    const p=periods[k];
+    const isActive=_state.bookingPeriodKey===k;
+    const isCurrent=k===currentKey;
+    const label=`${p.from.getDate().toString().padStart(2,'0')}.${(p.from.getMonth()+1).toString().padStart(2,'0')} – ${p.to.getDate().toString().padStart(2,'0')}.${(p.to.getMonth()+1).toString().padStart(2,'0')}`;
+    return`<button class="hk-month-btn ${isActive?'active':''}" onclick="setBookingPeriod('${k}')" style="${isCurrent?'border:2px solid var(--blue)':''}">${label}${isCurrent?' ●':''}</button>`;
+  }).join('');
+
+  const selKey=_state.bookingPeriodKey||currentKey||sortedKeys[0];
+  const selPeriod=periods[selKey];
+  if(!selPeriod)return`<div class="hk-month-nav">${periodBtns}</div><div class="empty-section"><p>Brak danych dla tego okresu</p></div>`;
+
+  // Calculate payouts for selected period
+  let totalGross=0,totalComm=0,totalFee=0,totalNet=0;
+  const rows=selPeriod.rows.map(r=>{
+    const comm=getBookingCommission(r.apt);
+    const gross=r.cena;
+    const commAmt=Math.round(gross*comm*100)/100;
+    const feeAmt=Math.round(gross*BOOKING_TRANSACTION_FEE*100)/100;
+    const net=Math.round((gross-commAmt-feeAmt)*100)/100;
+    totalGross+=gross;totalComm+=commAmt;totalFee+=feeAmt;totalNet+=net;
+    return{...r,gross,commAmt,feeAmt,net,comm};
+  }).sort((a,b)=>a.apt.localeCompare(b.apt,'pl'));
+
+  const isPast=selPeriod.payout<today;
+  const isThisWeek=selPeriod.payout>=today&&(selPeriod.payout-today)<7*86400000;
+
+  const header=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div class="card-title">Okres: ${fmt2(selPeriod.from)} – ${fmt2(selPeriod.to)}</div>
+        <div class="card-subtitle">
+          Przelew Booking.com: 
+          <strong style="color:${isPast?'var(--text-muted)':isThisWeek?'#059669':'var(--blue)'}">${fmt2(selPeriod.payout)}</strong>
+          ${isPast?'<span style="color:var(--text-muted)"> (już wypłacone)</span>':isThisWeek?'<span style="color:#059669"> ← ten tydzień!</span>':''}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Do wypłaty</div>
+        <div style="font-size:28px;font-weight:700;color:#059669">zł ${fmt(totalNet)}</div>
+      </div>
+    </div>
+  </div>`;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Kwota brutto</div><div class="value"><span class="sym">zł</span>${fmt(totalGross)}</div><div class="sub">${rows.length} rezerwacji</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.07s"><div class="label">Prowizja Booking</div><div class="value"><span class="sym">zł</span>${fmt(totalComm)}</div><div class="sub">${(totalComm/totalGross*100).toFixed(1)}% brutto</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Opłata transakcyjna</div><div class="value"><span class="sym">zł</span>${fmt(totalFee)}</div><div class="sub">1.4% brutto</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Do wypłaty netto</div><div class="value"><span class="sym">zł</span>${fmt(totalNet)}</div><div class="sub">${(totalNet/totalGross*100).toFixed(1)}% brutto</div></div>
+  </div>`;
+
+  const tableRows=rows.map((r,i)=>`<tr style="background:${i%2===0?'var(--white)':'#fafbfc'}">
+    <td style="font-weight:600;font-size:12px">${r.apt}</td>
+    <td style="font-size:12px">${r.dataOd||'—'} → ${r.dataDo}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${r.gosc||'—'}</td>
+    <td class="num" style="font-size:12px">${fmt(r.gross)} zł</td>
+    <td class="num" style="font-size:12px;color:var(--red)">${fmt(r.commAmt)} zł <span style="font-size:10px;color:var(--text-muted)">(${(r.comm*100).toFixed(0)}%)</span></td>
+    <td class="num" style="font-size:12px;color:var(--red)">${fmt(r.feeAmt)} zł</td>
+    <td class="num" style="font-size:12px;font-weight:700;color:#059669">${fmt(r.net)} zł</td>
+  </tr>`).join('');
+
+  const table=`<div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
+    <div class="card-title">Rezerwacje Booking.com — okres ${fmt2(selPeriod.from)} – ${fmt2(selPeriod.to)}</div>
+    <div class="hk-table-wrap"><table class="hk-table">
+      <thead><tr>
+        <th>Apartament</th><th>Pobyt</th><th>Gość</th>
+        <th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Opł. trans.</th><th class="num">Netto</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tr class="hk-total">
+        <td colspan="3">ŁĄCZNIE</td>
+        <td class="num">${fmt(totalGross)} zł</td>
+        <td class="num">${fmt(totalComm)} zł</td>
+        <td class="num">${fmt(totalFee)} zł</td>
+        <td class="num">${fmt(totalNet)} zł</td>
+      </tr>
+    </table></div>
+  </div>`;
+
+  return`<div class="hk-month-nav" style="flex-wrap:wrap">${periodBtns}</div>${header}${kpis}${table}`;
+}
+
 /* ═══════════════════════════════════════════════════════
    HK PDF EXPORT
 ═══════════════════════════════════════════════════════ */
@@ -2889,6 +3060,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='previo'?'active':''}" style="${section==='previo'?'background:#059669;border-color:#059669':''}" onclick="setSection('previo')">
       <span class="icon">🏨</span> Previo
     </button>
+    <button class="nav-l1-btn ${section==='booking-payout'?'active':''}" style="${section==='booking-payout'?'background:#003580;border-color:#003580':''}" onclick="setSection('booking-payout')">
+      <span class="icon">💰</span> Wypłaty Booking
+    </button>
   </div>`;
 
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
@@ -2934,9 +3108,11 @@ function renderApp(){
     content=buildHousekeepingView();
   } else if(section==='otv'){
     content=buildOtvView();
-  } else {
-    // ── Previo ──
+  } else if(section==='previo'){
     content=buildPrevioView();
+  } else {
+    // ── Booking Payout ──
+    content=buildBookingPayoutView();
   }
 
   mount(header+navL1+navL2+content);
@@ -3001,6 +3177,8 @@ function setRentalYear(y){
 function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
 function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
+function setBookingPeriod(key){_state.bookingPeriodKey=key;renderApp();}
+
 function setPrevioMonth(key){
   _state.previoMonth=key;
   if(!_state.data.previo[key]){
