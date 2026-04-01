@@ -3000,7 +3000,7 @@ function exportHkPdf(monthKey, monthLabel){
     <div class="summary-grid">
       <div class="sum-card"><div class="label">Suma łączna</div><div class="value">${fmt(totalSuma)} zł</div></div>
       <div class="sum-card"><div class="label">Pranie</div><div class="value">${fmt(totalPranie)} zł</div></div>
-      <div class="sum-card"><div class="label">Sprzątanie</div><div class="value">${fmt(totalGos)} zł</div></div>
+      <div class="sum-card"><div class="label">Sprzątanie</div><div class="value">${fmt(totalGos+activeRows.reduce((s,r)=>s+r.aptCena,0))} zł</div></div>
     </div>
 
     <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start;margin-bottom:28px">
