@@ -888,17 +888,15 @@ async function loadHousekeepingMonth(monthKey){
     if(!apt)continue;
     // Always include cancelled rows even if suma=0, skip only non-cancelled zero rows
     if(!cancelled&&suma===0)continue;
-    const aptCena=parseFloat(String(aptCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const gosCena=parseFloat(String(gosCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
     result.push({
       date:    String(dateVals[i]?.[0]||'').trim(),
       guests:  parseInt(guestVals[i]?.[0])||0,
       note,
       apt,
-      suma:    aptCena + gosCena,  // K (apt) + L (sprzątanie)
+      suma,
       pranie:  parseFloat(String(pranieVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
-      aptCena,
-      gosCena,
+      aptCena: parseFloat(String(aptCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
+      gosCena: parseFloat(String(gosCVals[i]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0,
       cancelled,
     });
   }
@@ -1891,7 +1889,7 @@ function buildHousekeepingView(){
     <div class="kpi-card c-green" style="animation-delay:0s"><div class="label">Koszt łączny</div><div class="value"><span class="sym">zł</span>${fmt(totalSuma)}</div><div class="sub">${activeRows.length} sprzątań (${rows.length-activeRows.length} anulowanych)</div></div>
     <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średni koszt</div><div class="value"><span class="sym">zł</span>${fmt(avgSuma)}</div><div class="sub">per sprzątanie</div></div>
     <div class="kpi-card" style="animation-delay:0.14s"><div class="label">Pranie</div><div class="value"><span class="sym">zł</span>${fmt(totalPranie)}</div><div class="sub">łącznie</div></div>
-    <div class="kpi-card" style="animation-delay:0.21s"><div class="label">Sprzątanie</div><div class="value"><span class="sym">zł</span>${fmt(totalGos)}</div><div class="sub">łącznie</div></div>
+    <div class="kpi-card" style="animation-delay:0.21s"><div class="label">Sprzątanie</div><div class="value"><span class="sym">zł</span>${fmt(totalGos+activeRows.reduce((s,r)=>s+r.aptCena,0))}</div><div class="sub">apt + sprzątanie</div></div>
   </div>`;
 
   // Per-apt summary
