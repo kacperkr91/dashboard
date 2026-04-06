@@ -334,9 +334,10 @@ const CONFIG={
   apiKey:             localStorage.getItem('gs_api_key')||'',
   spreadsheetId:      localStorage.getItem('gs_spreadsheet_id')||'',
   cellMarch:          'Q4',
-  febSheet:'02/2026', febDateCol:'C', febAmountCol:'M', febStartRow:3, febEndRow:800,
-  janSheet:'01/2026', janDateCol:'C', janAmountCol:'M', janStartRow:3, janEndRow:800,
-  decSheet:'12/2025', decDateCol:'C', decAmountCol:'M', decStartRow:3, decEndRow:800,
+  marSheet:'03/2026', marDateCol:'C', marAmountCol:'K', marStartRow:3, marEndRow:800,
+  febSheet:'02/2026', febDateCol:'C', febAmountCol:'K', febStartRow:3, febEndRow:800,
+  janSheet:'01/2026', janDateCol:'C', janAmountCol:'K', janStartRow:3, janEndRow:800,
+  decSheet:'12/2025', decDateCol:'C', decAmountCol:'K', decStartRow:3, decEndRow:800,
   dayTabRegex:        /^\d{2}\.\d{2}$/,
   mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
   mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
@@ -3528,7 +3529,7 @@ async function init(){
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
   const[mr,fr,jr,dr,apr,mdr,ar,hkr,otvr,previor,previoLYr]=await Promise.allSettled([
-    loadMarchData(),
+    loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'),
     loadAprilData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
