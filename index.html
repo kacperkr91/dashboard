@@ -511,7 +511,7 @@ async function loadMarchData(){
     chunk.forEach(n=>{
       params.append('ranges',`'${n}'!H3:H33`);  // channel
       params.append('ranges',`'${n}'!J3:J33`);  // apt name
-      params.append('ranges',`'${n}'!M3:M33`);  // amount
+      params.append('ranges',`'${n}'!K3:K33`);  // K = cena z systemu
     });
     const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
     chunk.forEach((name,i)=>{
@@ -555,7 +555,7 @@ async function loadAprilData(){
     chunk.forEach(n=>{
       params.append('ranges',`'${n}'!H3:H33`);
       params.append('ranges',`'${n}'!J3:J33`);
-      params.append('ranges',`'${n}'!M3:M33`);
+      params.append('ranges',`'${n}'!K3:K33`);  // K = cena z systemu (nie M = K+L)
     });
     const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
     chunk.forEach((name,i)=>{
