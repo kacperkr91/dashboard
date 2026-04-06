@@ -1340,7 +1340,7 @@ let _state={
   hkMonth:'2026-03',
   hkAptSort:'default',
   otvMonth:'2026-03',
-  previoMonth:'2026-03',
+  previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   bookingPeriodKey:null,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
@@ -1455,7 +1455,10 @@ function buildMonthView(days,opts={}){
   </div>`:'';
 
   // Previo forecast
-  const pfKey=opts.otvMonthKey||null;
+  // Previo forecast — only for current month
+  const now=new Date();
+  const currentPrevioKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const pfKey=showForecast?currentPrevioKey:null;
   const pf=pfKey?calcPrevioForecast(pfKey):null;
   const previoForecast=pf?`<div class="forecast-card" style="border-color:#059669;margin-top:0">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
