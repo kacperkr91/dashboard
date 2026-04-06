@@ -338,7 +338,7 @@ const CONFIG={
   febSheet:'02/2026', febDateCol:'C', febAmountCol:'K', febStartRow:3, febEndRow:800,
   janSheet:'01/2026', janDateCol:'C', janAmountCol:'K', janStartRow:3, janEndRow:800,
   decSheet:'12/2025', decDateCol:'C', decAmountCol:'K', decStartRow:3, decEndRow:800,
-  dayTabRegex:        /^\d{2}\.\d{2}$/,
+  dayTabRegex:        /^\d{1,2}\.\d{2}$/,
   mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
   mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
   mediaSheet:         'Zestawienie Miesięczne',
@@ -3528,7 +3528,7 @@ async function init(){
   // Also load last year same month for forecast comparison
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
-  const[mr,fr,jr,dr,apr,mdr,ar,hkr,otvr,previor,previoLYr]=await Promise.allSettled([
+  const[mr,apr,fr,jr,dr,mdr,ar,hkr,otvr,previor,previoLYr]=await Promise.allSettled([
     loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'),
     loadAprilData(),
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
