@@ -1118,17 +1118,18 @@ function calcPrevioForecast(monthKey){
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
 
-  // Last-minute estimate using historical booking window pattern:
-  // 76.5% of bookings come in <=7 days before checkout
-  // Last 7 days of month = avg 23.3% of monthly revenue
-  // But we already have confirmed bookings — estimate only the gap
-  
-  // Calculate historical last-7-days pattern from all available months
+  // Last year same month
+  const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
+  const lastYearRows=_state.data.previo[lastYearKey];
+  const lastYearTotal=Array.isArray(lastYearRows)?
+    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
+
+  // Calculate historical last-7-days pattern from all available past months
   const allMonthKeys=Object.keys(_state.data.previo).filter(k=>{
     const d=_state.data.previo[k];
     return Array.isArray(d)&&d.length>0&&k<monthKey;
   });
-  
+
   let avgLast7Pct=0.233; // default from analysis: 23.3%
   if(allMonthKeys.length>=3){
     const pcts=allMonthKeys.map(mk=>{
@@ -1146,26 +1147,38 @@ function calcPrevioForecast(monthKey){
     if(pcts.length>0)avgLast7Pct=pcts.reduce((s,p)=>s+p,0)/pcts.length;
   }
 
-  // Days remaining in last 7 days of month
-  const last7Start=daysInMon-6;
-  const daysInLast7Remaining=Math.max(0,daysInMon-Math.max(daysDone,last7Start-1));
-  const last7Weight=daysInLast7Remaining/7;
-
-  // Estimate total month from current pace (earned / days done)
+  // Estimate last-minute bookings using last year as base
+  let estNewBookings=0;
   const earnedPerDay=daysDone>0?earned/daysDone:0;
-  const estTotal=earned+earnedPerDay*daysLeft;
 
-  // Last-minute estimate = portion of last 7 days not yet confirmed
-  const estLast7Total=estTotal*avgLast7Pct;
-  const estNewBookings=Math.max(0,estLast7Total-confirmed)*last7Weight;
+  if(Array.isArray(lastYearRows)&&lastYearRows.length&&lastYearTotal>0){
+    const lyActive=lastYearRows.filter(r=>!r.cancelled);
+
+    // What was earned in last year up to same day of month
+    const lyEarnedToDate=lyActive.filter(r=>{
+      const d=parseDateDMY(r.dataDo);
+      return d&&d.getDate()<=daysDone;
+    }).reduce((s,r)=>s+r.cena,0);
+
+    // What was the full last year total
+    // Scale factor: how much faster/slower we're running vs last year
+    const pace=lyEarnedToDate>0?earned/lyEarnedToDate:1;
+
+    // What came in last-minute last year (booked after today's equivalent)
+    const lyFutureEarned=lastYearTotal-lyEarnedToDate;
+
+    // Estimate = last year's remaining * pace - what we already have confirmed
+    estNewBookings=Math.max(0, lyFutureEarned*pace - confirmed);
+  } else {
+    // Fallback: use avg last-7-days pattern
+    const last7Start=daysInMon-6;
+    const daysInLast7Remaining=Math.max(0,daysInMon-Math.max(daysDone,last7Start-1));
+    const last7Weight=daysInLast7Remaining/7;
+    const estTotal=earned+earnedPerDay*daysLeft;
+    estNewBookings=Math.max(0,estTotal*avgLast7Pct-confirmed)*last7Weight;
+  }
 
   const forecastTotal=earned+confirmed+estNewBookings;
-
-  // Last year comparison
-  const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
-  const lastYearRows=_state.data.previo[lastYearKey];
-  const lastYearTotal=Array.isArray(lastYearRows)?
-    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
 
   // Occupied apts
   const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
