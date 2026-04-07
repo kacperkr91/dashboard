@@ -2897,7 +2897,7 @@ function saveDyzuryState(state){
 function getDutyPerson(dateStr, overrides){
   if(overrides&&overrides[dateStr])return overrides[dateStr];
   // Reference: week starting 2026-04-07 (Monday) = Kacper
-  const ref=new Date('2026-04-07');
+  const ref=new Date('2026-04-06');
   const d=new Date(dateStr);
   ref.setHours(0,0,0,0);d.setHours(0,0,0,0);
   const diffDays=Math.round((d-ref)/86400000);
