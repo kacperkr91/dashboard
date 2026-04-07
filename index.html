@@ -1355,6 +1355,7 @@ let _state={
   otvMonth:'2026-03',
   previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   bookingPeriodKey:null,
+  dyzuryYear:new Date().getFullYear(),
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:(()=>{
@@ -2876,6 +2877,177 @@ function buildHotTermsView(){
   return`<div style="max-width:900px;margin:0 auto">${header}${kpis}${cards}</div>`;
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   DYŻURY
+═══════════════════════════════════════════════════════ */
+// Dyżury state — stored in localStorage
+function getDyzuryState(){
+  try{
+    const s=localStorage.getItem('dyzury_state');
+    return s?JSON.parse(s):{};
+  }catch(e){return{};}
+}
+function saveDyzuryState(state){
+  localStorage.setItem('dyzury_state',JSON.stringify(state));
+}
+
+// Calculate who is on duty for a given date
+// Kacper starts week of today (07.04.2026), changes every Monday
+function getDutyPerson(dateStr, overrides){
+  if(overrides&&overrides[dateStr])return overrides[dateStr];
+  // Reference: week starting 2026-04-07 (Monday) = Kacper
+  const ref=new Date('2026-04-07');
+  const d=new Date(dateStr);
+  ref.setHours(0,0,0,0);d.setHours(0,0,0,0);
+  const diffDays=Math.round((d-ref)/86400000);
+  const diffWeeks=Math.floor(diffDays/7);
+  // Adjust for dates before reference
+  const adjustedWeeks=((diffWeeks%2)+2)%2;
+  return adjustedWeeks===0?'Kacper':'Artur';
+}
+
+function buildDyzuryView(){
+  const overrides=getDyzuryState();
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayStr=today.toISOString().slice(0,10);
+
+  const KACPER_COLOR='#3b82f6';
+  const ARTUR_COLOR='#059669';
+  const KACPER_LIGHT='#dbeafe';
+  const ARTUR_LIGHT='#d1fae5';
+
+  // Year selector
+  const currentYear=today.getFullYear();
+  const selectedYear=_state.dyzuryYear||currentYear;
+
+  const yearBtns=[currentYear-1,currentYear,currentYear+1].map(y=>
+    `<button class="hk-month-btn ${selectedYear===y?'active':''}" onclick="setDyzuryYear(${y})">${y}</button>`
+  ).join('');
+
+  // Who is on duty this week
+  const thisWeekPerson=getDutyPerson(todayStr,overrides);
+  const nextMonday=new Date(today);
+  const dow=today.getDay();
+  const daysToNextMon=dow===1?7:(8-dow)%7;
+  nextMonday.setDate(today.getDate()+daysToNextMon);
+  const nextMondayStr=nextMonday.toISOString().slice(0,10);
+  const nextWeekPerson=getDutyPerson(nextMondayStr,overrides);
+
+  const header=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:20px">
+    <div>
+      <div style="font-size:20px;font-weight:700;color:var(--text)">📅 Dyżury ${selectedYear}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Zmiana co poniedziałek · kliknij dzień aby zmienić dyżurnego</div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="background:${KACPER_LIGHT};border:2px solid ${KACPER_COLOR};border-radius:10px;padding:10px 16px;text-align:center">
+        <div style="font-size:11px;color:${KACPER_COLOR};font-weight:600;text-transform:uppercase">Ten tydzień</div>
+        <div style="font-size:16px;font-weight:700;color:${thisWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR}">${thisWeekPerson}</div>
+      </div>
+      <div style="background:${nextWeekPerson==='Kacper'?KACPER_LIGHT:ARTUR_LIGHT};border:2px solid ${nextWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR};border-radius:10px;padding:10px 16px;text-align:center">
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Następny tydzień</div>
+        <div style="font-size:16px;font-weight:700;color:${nextWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR}">${nextWeekPerson}</div>
+      </div>
+    </div>
+  </div>
+  <div class="hk-month-nav">${yearBtns}</div>`;
+
+  const MONTHS=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+  const DOW=['Pn','Wt','Śr','Cz','Pt','Sb','Nd'];
+
+  const calendars=MONTHS.map((mName,mi)=>{
+    const firstDay=new Date(selectedYear,mi,1);
+    const lastDay=new Date(selectedYear,mi+1,0);
+    const startDow=(firstDay.getDay()+6)%7; // Monday=0
+
+    let cells='';
+    // Empty cells before first day
+    for(let i=0;i<startDow;i++) cells+=`<div></div>`;
+
+    for(let d=1;d<=lastDay.getDate();d++){
+      const dateStr=`${selectedYear}-${String(mi+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const person=getDutyPerson(dateStr,overrides);
+      const isToday=dateStr===todayStr;
+      const isOverride=overrides&&overrides[dateStr];
+      const isKacper=person==='Kacper';
+      const dow2=new Date(selectedYear,mi,d).getDay();
+      const isMonday=dow2===1;
+      const isSunday=dow2===0;
+
+      cells+=`<div onclick="toggleDyzur('${dateStr}')" style="
+        cursor:pointer;
+        border-radius:6px;
+        padding:4px 2px;
+        text-align:center;
+        background:${isKacper?KACPER_LIGHT:ARTUR_LIGHT};
+        border:${isToday?'2px solid #f59e0b':isMonday?'1px solid '+(isKacper?KACPER_COLOR:ARTUR_COLOR):'1px solid transparent'};
+        ${isOverride?'outline:2px dashed #f59e0b;outline-offset:-2px':''}
+        font-weight:${isMonday||isToday?'700':'400'};
+        font-size:11px;
+        color:${isKacper?KACPER_COLOR:ARTUR_COLOR};
+        transition:opacity 0.15s;
+        " title="${person}${isOverride?' (zmieniony)':''}">
+        <div style="font-size:10px;color:${isSunday?'#ef4444':'var(--text-muted)'}">${d}</div>
+        <div style="font-size:9px;font-weight:600">${person[0]}</div>
+      </div>`;
+    }
+
+    // Count per person
+    let kCount=0,aCount=0;
+    for(let d=1;d<=lastDay.getDate();d++){
+      const ds=`${selectedYear}-${String(mi+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if(getDutyPerson(ds,overrides)==='Kacper')kCount++;else aCount++;
+    }
+
+    return`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;animation:fadeUp 0.3s ease both">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${mName}</div>
+        <div style="font-size:10px;color:var(--text-muted)">
+          <span style="color:${KACPER_COLOR};font-weight:600">K:${kCount}</span> · 
+          <span style="color:${ARTUR_COLOR};font-weight:600">A:${aCount}</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+        ${DOW.map((d,i)=>`<div style="text-align:center;font-size:9px;font-weight:600;color:${i===6?'#ef4444':'var(--text-muted)'};padding:2px">${d}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
+    </div>`;
+  }).join('');
+
+  const grid=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">${calendars}</div>`;
+
+  const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;font-size:12px">
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:${KACPER_LIGHT};border:1px solid ${KACPER_COLOR}"></div><span style="color:${KACPER_COLOR};font-weight:600">Kacper</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:${ARTUR_LIGHT};border:1px solid ${ARTUR_COLOR}"></div><span style="color:${ARTUR_COLOR};font-weight:600">Artur</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;border:2px dashed #f59e0b;background:white"></div><span style="color:#92400e">Ręcznie zmieniony</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;border:2px solid #f59e0b"></div><span style="color:#92400e">Dziś</span></div>
+    <button onclick="resetDyzury()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-muted)">↺ Resetuj zmiany</button>
+  </div>`;
+
+  return`<div style="max-width:1200px;margin:0 auto">${header}${legend}${grid}</div>`;
+}
+
+function toggleDyzur(dateStr){
+  const overrides=getDyzuryState();
+  const current=getDutyPerson(dateStr,overrides);
+  // Toggle to the other person
+  overrides[dateStr]=current==='Kacper'?'Artur':'Kacper';
+  saveDyzuryState(overrides);
+  if(_state.section==='dyzury')renderApp();
+}
+
+function resetDyzury(){
+  if(confirm('Zresetować wszystkie ręczne zmiany dyżurów?')){
+    saveDyzuryState({});
+    if(_state.section==='dyzury')renderApp();
+  }
+}
+
+function setDyzuryYear(year){
+  _state.dyzuryYear=year;
+  renderApp();
+}
+
 /* ═══════════════════════════════════════════════════════
    HK PDF EXPORT
 ═══════════════════════════════════════════════════════ */
@@ -3363,6 +3535,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='hot-terms'?'active':''}" style="${section==='hot-terms'?'background:#dc2626;border-color:#dc2626':''}" onclick="setSection('hot-terms')">
       <span class="icon">🔥</span> Hot Terminy
     </button>
+    <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')">
+      <span class="icon">📅</span> Dyżury
+    </button>
   </div>`;
 
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
@@ -3415,9 +3590,11 @@ function renderApp(){
     content=buildPrevioView();
   } else if(section==='booking-payout'){
     content=buildBookingPayoutView();
-  } else {
-    // ── Hot Terms ──
+  } else if(section==='hot-terms'){
     content=buildHotTermsView();
+  } else {
+    // ── Dyżury ──
+    content=buildDyzuryView();
   }
 
   mount(header+navL1+navL2+content);
