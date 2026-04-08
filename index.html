@@ -2923,7 +2923,14 @@ function buildAirbnbPayoutView(){
   });
 
   if(!allAirbnb.length){
-    return`<div class="empty-section"><div class="empty-icon">💸</div><p>Brak danych Airbnb — załaduj dane w zakładce Previo</p></div>`;
+    const previoKeys=Object.keys(_state.data.previo).filter(k=>Array.isArray(_state.data.previo[k]));
+    const loadingKeys=Object.keys(_state.data.previo).filter(k=>_state.data.previo[k]===null);
+    if(loadingKeys.length>0){
+      return`<div class="empty-section"><div class="spinner"></div><p>Ładowanie danych Previo… (${previoKeys.length} miesięcy gotowych)</p></div>`;
+    }
+    // Debug: show what kanals we have
+    const allKanals=[...new Set(Object.values(_state.data.previo).filter(Array.isArray).flat().map(r=>r.kanal).filter(Boolean))];
+    return`<div class="empty-section"><div class="empty-icon">💸</div><p>Brak rezerwacji Airbnb w załadowanych danych</p><p style="font-size:11px;margin-top:6px;color:var(--text-muted)">Załadowane miesiące: ${previoKeys.join(', ')||'brak'}</p><p style="font-size:11px;color:var(--text-muted)">Kanały w danych: ${allKanals.join(', ')||'brak'}</p></div>`;
   }
 
   const today=new Date();today.setHours(0,0,0,0);
