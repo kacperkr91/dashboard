@@ -2916,8 +2916,7 @@ function buildAirbnbPayoutView(){
     rows.forEach(r=>{
       if(r.cancelled)return;
       if(!r.kanal||!r.kanal.toLowerCase().includes('airbnb'))return;
-      // Skip Profitroom (non-numeric vouchers tagged as Airbnb)
-      if(r.voucher&&!/^\d+$/.test(r.voucher)&&r.voucher.length>4)return;
+      // Skip Profitroom tylko dla Booking (Airbnb ma alfanumeryczne vouchery — to normalne)
       allAirbnb.push(r);
     });
   });
