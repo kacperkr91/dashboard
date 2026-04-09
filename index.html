@@ -3985,8 +3985,8 @@ function buildKalendarzView(){
     const evHtml=dayEvents.map(ev=>{
       const cat=katColor(ev.cat);
       const recurIcon=ev.recur==='monthly'?'↻ ':ev.recur==='yearly'?'↺ ':'';
-      const zusIcon=ev.isZus?'💰 ':'';
-      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${zusIcon}${recurIcon}${ev.title}</div>`;
+      const moneyIcon=ev.cat==='platnosc'?'💰 ':'';
+      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${moneyIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
     cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
@@ -4239,6 +4239,26 @@ function kalGoToday(){
 
 
 /* MAIN RENDER */
+function getTodayBanner(){
+  try{
+    const events=getKalEvents();
+    const today=new Date();
+    const dk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const todayEvs=events[dk]||[];
+    if(!todayEvs.length)return'';
+    const items=todayEvs.map(ev=>{
+      const cat=katColor(ev.cat);
+      const icon=ev.cat==='platnosc'?'💰':ev.cat==='umowa'?'📝':ev.cat==='remont'?'🔧':ev.cat==='spotkanie'?'🤝':'📌';
+      return`<span style="display:inline-flex;align-items:center;gap:5px;background:${cat.bg};color:${cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap">${icon} ${ev.title}</span>`;
+    }).join('');
+    return`<div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--text-muted);white-space:nowrap;flex-shrink:0">📅 Dziś:</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${items}</div>
+      <button onclick="setSection('kalendarz')" style="margin-left:auto;background:none;border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0">Zobacz kalendarz →</button>
+    </div>`;
+  }catch(e){return'';}
+}
+
 const mount=html=>{document.getElementById('app').innerHTML=html;};
 
 function renderApp(){
@@ -4363,7 +4383,8 @@ function renderApp(){
     content=buildDyzuryView();
   }
 
-  mount(header+navL1+navL2+content);
+  const todayBanner=getTodayBanner();
+  mount(header+navL1+(todayBanner?todayBanner:'')+navL2+content);
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
   if(section==='housekeeping')setTimeout(initHkChart,50);
