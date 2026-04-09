@@ -3140,51 +3140,62 @@ function buildParkingView(){
   const THRESHOLD=6;
   const selDate=_state.parkingDate||null;
 
-  function renderTable(cards){
+  function getPaidDates(){
+    try{return JSON.parse(localStorage.getItem('parking_paid_dates')||'[]');}
+    catch(e){return[];}
+  }
+  function togglePaidDate(dateKey){
+    const paid=getPaidDates();
+    const idx=paid.indexOf(dateKey);
+    if(idx!==-1)paid.splice(idx,1);
+    else paid.push(dateKey);
+    localStorage.setItem('parking_paid_dates',JSON.stringify(paid));
+    renderApp();
+  }
+
+  function renderTable(cards, dateKey){
     if(!cards||!cards.length)return'';
+    const paidDates=getPaidDates();
+    const isPaidDate=paidDates.includes(dateKey);
     const alerts=cards.filter(c=>c.alert);
-    const normal=cards.filter(c=>!c.alert&&c.typ==='normalny');
-    const zapas=cards.filter(c=>c.typ==='zapas');
-    const miesieczny=cards.filter(c=>c.typ==='miesięczny');
+    const effectiveAlerts=isPaidDate?0:alerts.length;
 
-    const alertBanner=alerts.length?`<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
-      <span style="font-size:28px">🚨</span>
-      <div>
-        <div style="font-size:15px;font-weight:700;color:#dc2626">Wymaga doładowania: ${alerts.length} kart poniżej ${THRESHOLD} dni!</div>
-        <div style="font-size:12px;color:#7f1d1d;margin-top:4px">${alerts.map(c=>`<strong>#${c.bilet.slice(-6)}</strong> (${c.dni}d ${c.h}h)`).join(' · ')}</div>
-      </div>
-    </div>`:'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px"><span style="font-size:22px">✅</span><span style="font-weight:600;color:#15803d">Wszystkie karty OK — żadna poniżej ${THRESHOLD} dni</span></div>';
-
-    const ok=cards.filter(c=>!c.alert&&c.typ!=='miesięczny');
     const kpis=`<div class="kpi-row" style="margin-bottom:20px">
-      <div class="kpi-card c-red"><div class="label">Wymaga doładowania</div><div class="value" style="color:#dc2626">${alerts.length}</div><div class="sub">poniżej ${THRESHOLD} dni</div></div>
-      <div class="kpi-card c-green"><div class="label">OK</div><div class="value">${ok.length}</div><div class="sub">kart w normie</div></div>
+      <div class="kpi-card c-red"><div class="label">Wymaga doładowania</div><div class="value" style="color:${effectiveAlerts>0?'#dc2626':'#16a34a'}">${effectiveAlerts}</div><div class="sub">poniżej ${THRESHOLD} dni</div></div>
       <div class="kpi-card"><div class="label">Łącznie</div><div class="value">${cards.length}</div><div class="sub">wszystkich kart</div></div>
     </div>`;
 
     const rows=cards.map((c,i)=>{
-      const isAlert=c.alert;
-      const isZapas=c.typ==='zapas';
+      const isAlert=c.alert&&!isPaidDate;
       const isMies=c.typ==='miesięczny';
-      const bg=isAlert?'#fef2f2':i%2===0?'var(--white)':'#fafbfc';
-      // Czytelny format: "6 dni 17h" zamiast "6x24h+17h"
-      const pozostalo=isMies?'miesięczny':`${c.dni} dni ${c.h}h`;
-      const pozostaloColor=isAlert?'#dc2626':c.dni<14?'#f59e0b':'#16a34a';
+      const bg=isPaidDate&&c.alert?'#f0fdf4':isAlert?'#fef2f2':i%2===0?'var(--white)':'#fafbfc';
+      const pozostalo=isMies?'miesięczny':(c.pozostalo||`${c.dni} dni ${c.h}h`);
+      const pozostaloColor=isPaidDate&&c.alert?'#16a34a':isAlert?'#dc2626':c.dni<14?'#f59e0b':'#16a34a';
+      const statusCell=isPaidDate&&c.alert
+        ?`<span style="background:#dcfce7;color:#16a34a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">✓ Opłacono</span>`
+        :isAlert
+          ?`<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>`
+          :`<span style="color:#16a34a;font-size:13px">✓</span>`;
       return`<tr style="background:${bg}">
-        <td style="font-weight:700;color:var(--text-muted);font-size:11px">${c.lp}</td>
-        <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
-        <td style="font-size:12px">${c.dataWaznosci}</td>
-        <td style="font-weight:700;color:${pozostaloColor};font-size:13px">${pozostalo}</td>
-        <td>${isAlert?'<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>':'<span style="color:#16a34a;font-size:13px">✓</span>'}</td>
+        <td style="font-weight:700;color:var(--text-muted);font-size:11px;width:32px;text-align:center">${c.lp}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
+        <td style="font-size:12px;white-space:nowrap">${c.dataWaznosci||''}</td>
+        <td style="font-weight:700;color:${pozostaloColor};font-size:13px;white-space:nowrap">${pozostalo}</td>
+        <td style="white-space:nowrap">${statusCell}</td>
       </tr>`;
     }).join('');
 
+    const paidBtn=alerts.length>0?`<button onclick="togglePaidDate('${dateKey}')" style="background:${isPaidDate?'#f0fdf4':'#059669'};border:1px solid ${isPaidDate?'#16a34a':'#059669'};color:${isPaidDate?'#16a34a':'#fff'};font-size:12px;font-weight:600;padding:8px 18px;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif">${isPaidDate?'↩ Cofnij opłatę':'✓ Opłacono wszystkie'}</button>`:'';
+
     const table=`<div class="grid-card">
-      <div class="card-title">Stan kart parkingowych</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:10px">
+        <div class="card-title">Stan kart parkingowych</div>
+        ${paidBtn}
+      </div>
       <div class="card-subtitle">Karty poniżej ${THRESHOLD} dni wymagają doładowania</div>
       <div class="hk-table-wrap"><table class="hk-table">
         <thead><tr>
-          <th>L.P.</th>
+          <th style="width:32px;text-align:center">L.P.</th>
           <th>Nr biletu</th>
           <th>Ważny do</th>
           <th>Pozostało</th>
@@ -3194,25 +3205,8 @@ function buildParkingView(){
       </table></div>
     </div>`;
 
-    return alertBanner+kpis+table;
+    return kpis+table;
   }
-
-  // Brak danych z arkusza
-  if(!sheetsData||!sheetsData.dateOrder?.length){
-    return`<div class="empty-section"><div class="spinner"></div><p>Ładowanie danych parkingu…</p></div>`;
-  }
-
-  const{byDate,dateOrder}=sheetsData;
-
-  // Wybierz datę — domyślnie najnowsza
-  const activeDateKey=selDate&&byDate[selDate]?selDate:dateOrder[0];
-  const cards=byDate[activeDateKey]||[];
-
-  // Selector dat
-  const dateBtns=dateOrder.map(d=>`<button class="hk-month-btn ${d===activeDateKey?'active':''}" onclick="setParkingDate('${d}')">${d}</button>`).join('');
-  const dateNav=`<div class="hk-month-nav" style="margin-bottom:20px">${dateBtns}</div>`;
-
-  return`<div style="max-width:1100px;margin:0 auto">${dateNav}${renderTable(cards)}</div>`;
 }
 
 function setParkingDate(d){_state.parkingDate=d;renderApp();}
