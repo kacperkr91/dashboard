@@ -1378,6 +1378,7 @@ let _state={
   bookingPeriodKey:null,
   payoutTab:'booking',
   airbnbPayoutKey:null,
+  parkingDate:null,
   dyzuryYear:new Date().getFullYear(),
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
@@ -3103,39 +3104,41 @@ async function loadParkingData(){
   const apiKey=CONFIG.previoApiKey||CONFIG.apiKey;
   const spreadsheetId=CONFIG.previoSpreadsheetId;
   if(!apiKey||!spreadsheetId)throw new Error('MISSING_CONFIG');
-  const enc=encodeURIComponent("'Parking'!A1:J500");
+  const enc=encodeURIComponent("'Parking'!A1:J2000");
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=UNFORMATTED_VALUE&key=${apiKey}`;
   const data=await apiFetch(url);
   const rows=data.values||[];
   if(rows.length<2)throw new Error('NO_PARKING_DATA');
-  // Skip header row
-  const cards=rows.slice(1).map(r=>({
-    mailDate:  String(r[0]||'').trim(),
-    lp:        parseInt(r[1])||0,
-    bilet:     String(r[2]||'').trim(),
-    dataWaznosci: String(r[3]||'').trim(),
-    godziny:   String(r[4]||'').trim(),
-    dni:       parseInt(r[5])||0,
-    h:         parseInt(r[6])||0,
-    typ:       String(r[7]||'normalny').trim(),
-    alert:     String(r[8]||'').trim()==='TAK',
-    updatedAt: String(r[9]||'').trim(),
-  })).filter(c=>c.bilet);
-  const mailDate=cards[0]?.mailDate||'';
-  const updatedAt=cards[0]?.updatedAt||'';
-  return{cards,mailDate,updatedAt};
+
+  // Grupuj wiersze po dacie maila (kolumna A)
+  const byDate={};
+  const dateOrder=[];
+  rows.slice(1).forEach(r=>{
+    const mailDate=String(r[0]||'').trim();
+    const bilet=String(r[2]||'').trim();
+    if(!mailDate||!bilet)return;
+    if(!byDate[mailDate]){byDate[mailDate]=[];dateOrder.push(mailDate);}
+    byDate[mailDate].push({
+      mailDate,
+      lp:       parseInt(r[1])||0,
+      bilet,
+      dataWaznosci: String(r[3]||'').trim(),
+      godziny:  String(r[4]||'').trim(),
+      dni:      parseInt(r[5])||0,
+      h:        parseInt(r[6])||0,
+      typ:      String(r[7]||'normalny').trim(),
+      alert:    String(r[8]||'').trim()==='TAK',
+    });
+  });
+
+  // Sortuj daty malejąco (najnowszy pierwszy)
+  dateOrder.sort((a,b)=>b.localeCompare(a));
+  return{byDate,dateOrder};
 }
 function buildParkingView(){
   const sheetsData=_state.data.parking;
-  const saved=(() => {
-    try{const s=localStorage.getItem('parking_data');return s?JSON.parse(s):null;}
-    catch(e){return null;}
-  })();
-
-  // Preferuj dane z arkusza (auto-sync) nad ręcznie wklejonymi
-  const activeData=sheetsData||saved;
-
-  const THRESHOLD=6; // poniżej 6 dni = alert (dotyczy wszystkich typów kart)
+  const THRESHOLD=6;
+  const selDate=_state.parkingDate||null;
 
   function renderTable(cards){
     if(!cards||!cards.length)return'';
@@ -3194,27 +3197,25 @@ function buildParkingView(){
     return alertBanner+kpis+table;
   }
 
-  // Info o źródle danych
-  const sheetsDateInfo=sheetsData?.updatedAt?`<div style="font-size:11px;color:#059669;margin-top:4px">✅ Auto-sync z arkusza: <strong>${sheetsData.updatedAt}</strong></div>`:'';
-  const manualDateInfo=!sheetsData&&saved?.date?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Ręczna aktualizacja: <strong>${saved.date}</strong></div>`:'';
-  const dateInfo=sheetsDateInfo||manualDateInfo;
+  // Brak danych z arkusza
+  if(!sheetsData||!sheetsData.dateOrder?.length){
+    return`<div class="empty-section"><div class="spinner"></div><p>Ładowanie danych parkingu…</p></div>`;
+  }
 
-  const inputSection=`<div class="grid-card" style="margin-bottom:20px">
-    <div class="card-title">📧 Wklej treść maila "Stan kart"</div>
-    <div class="card-subtitle">Skopiuj całą treść maila od koordynatora parkingu i wklej poniżej</div>
-    <textarea id="parkingInput" style="width:100%;height:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Inter',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none;margin-top:8px" placeholder="Wklej tutaj treść maila ze stanami kart parkingowych...">${saved?.rawText||''}</textarea>
-    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
-      <button onclick="fetchParkingFromGmail()" style="background:#059669;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">📧 Pobierz z Gmaila</button>
-      <button onclick="parseParkingInput()" style="background:#b45309;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">🅿️ Analizuj ręcznie</button>
-      ${saved?.date?`<button onclick="clearParking()" style="background:none;border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:12px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">✕ Wyczyść</button>`:''}
-      ${dateInfo}
-    </div>
-  </div>`;
+  const{byDate,dateOrder}=sheetsData;
 
-  const resultsSection=activeData?.cards?renderTable(activeData.cards):'';
+  // Wybierz datę — domyślnie najnowsza
+  const activeDateKey=selDate&&byDate[selDate]?selDate:dateOrder[0];
+  const cards=byDate[activeDateKey]||[];
 
-  return`<div style="max-width:1100px;margin:0 auto">${inputSection}${resultsSection}</div>`;
+  // Selector dat
+  const dateBtns=dateOrder.map(d=>`<button class="hk-month-btn ${d===activeDateKey?'active':''}" onclick="setParkingDate('${d}')">${d}</button>`).join('');
+  const dateNav=`<div class="hk-month-nav" style="margin-bottom:20px">${dateBtns}</div>`;
+
+  return`<div style="max-width:1100px;margin:0 auto">${dateNav}${renderTable(cards)}</div>`;
 }
+
+function setParkingDate(d){_state.parkingDate=d;renderApp();}
 
 async function fetchParkingFromGmail(){
   const btn=document.querySelector('button[onclick="fetchParkingFromGmail()"]');
