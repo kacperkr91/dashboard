@@ -3798,8 +3798,16 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')">
       <span class="icon">📅</span> Dyżury
     </button>
-    <button class="nav-l1-btn ${section==='parking'?'active':''}" style="${section==='parking'?'background:#b45309;border-color:#b45309':''}" onclick="setSection('parking')">
+    <button class="nav-l1-btn ${section==='parking'?'active':''}" style="${section==='parking'?'background:#b45309;border-color:#b45309':''}position:relative" onclick="setSection('parking')">
       <span class="icon">🅿️</span> Parking
+      ${(()=>{
+        if(!_state.data.parking?.dateOrder?.length)return'';
+        const paidDates=getPaidDates();
+        const latestDate=_state.data.parking.dateOrder[0];
+        const latestCards=_state.data.parking.byDate[latestDate]||[];
+        const hasUnpaidAlerts=latestCards.some(c=>c.alert)&&!paidDates.includes(latestDate);
+        return hasUnpaidAlerts?'<span style="position:absolute;top:6px;right:6px;width:9px;height:9px;background:#dc2626;border-radius:50%;border:2px solid #fff;animation:pulse 1.5s infinite"></span>':'';
+      })()}
     </button>
   </div>`;
 
