@@ -3135,23 +3135,23 @@ async function loadParkingData(){
   dateOrder.sort((a,b)=>b.localeCompare(a));
   return{byDate,dateOrder};
 }
+function getPaidDates(){
+  try{return JSON.parse(localStorage.getItem('parking_paid_dates')||'[]');}
+  catch(e){return[];}
+}
+function togglePaidDate(dateKey){
+  const paid=getPaidDates();
+  const idx=paid.indexOf(dateKey);
+  if(idx!==-1)paid.splice(idx,1);
+  else paid.push(dateKey);
+  localStorage.setItem('parking_paid_dates',JSON.stringify(paid));
+  renderApp();
+}
+
 function buildParkingView(){
   const sheetsData=_state.data.parking;
   const THRESHOLD=6;
   const selDate=_state.parkingDate||null;
-
-  function getPaidDates(){
-    try{return JSON.parse(localStorage.getItem('parking_paid_dates')||'[]');}
-    catch(e){return[];}
-  }
-  function togglePaidDate(dateKey){
-    const paid=getPaidDates();
-    const idx=paid.indexOf(dateKey);
-    if(idx!==-1)paid.splice(idx,1);
-    else paid.push(dateKey);
-    localStorage.setItem('parking_paid_dates',JSON.stringify(paid));
-    renderApp();
-  }
 
   // ── Główne ciało buildParkingView ──
   if(!sheetsData||!sheetsData.dateOrder?.length){
@@ -3198,11 +3198,11 @@ function buildParkingView(){
           ?`<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>`
           :`<span style="color:#16a34a;font-size:13px">✓</span>`;
       return`<tr style="background:${bg}">
-        <td style="font-weight:700;color:var(--text-muted);font-size:11px;width:32px;text-align:center">${c.lp}</td>
-        <td style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
-        <td style="font-size:12px;white-space:nowrap">${c.dataWaznosci||''}</td>
-        <td style="font-weight:700;color:${pozostaloColor};font-size:13px;white-space:nowrap">${pozostalo}</td>
-        <td style="white-space:nowrap">${statusCell}</td>
+        <td style="text-align:center;font-weight:700;color:var(--text-muted);font-size:11px">${c.lp}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
+        <td style="text-align:center;font-size:12px">${c.dataWaznosci||''}</td>
+        <td style="text-align:center;font-weight:700;color:${pozostaloColor};font-size:13px">${pozostalo}</td>
+        <td style="text-align:center">${statusCell}</td>
       </tr>`;
     }).join('');
 
@@ -3214,13 +3214,20 @@ function buildParkingView(){
         ${paidBtn}
       </div>
       <div class="card-subtitle">Karty poniżej ${THRESHOLD} dni wymagają doładowania</div>
-      <div class="hk-table-wrap"><table class="hk-table">
+      <div class="hk-table-wrap"><table class="hk-table" style="table-layout:fixed;width:100%">
+        <colgroup>
+          <col style="width:48px">
+          <col style="width:160px">
+          <col style="width:110px">
+          <col style="width:130px">
+          <col style="width:140px">
+        </colgroup>
         <thead><tr>
-          <th style="width:32px;text-align:center">L.P.</th>
-          <th>Nr biletu</th>
-          <th>Ważny do</th>
-          <th>Pozostało</th>
-          <th>Status</th>
+          <th style="text-align:center">L.P.</th>
+          <th style="text-align:left">Nr biletu</th>
+          <th style="text-align:center">Ważny do</th>
+          <th style="text-align:center">Pozostało</th>
+          <th style="text-align:center">Status</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
