@@ -4249,18 +4249,33 @@ function getTodayBanner(){
     const MONTHS_PL_GEN=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
     const dateLabel=`${DOW_PL_FULL[today.getDay()]}, ${today.getDate()} ${MONTHS_PL_GEN[today.getMonth()]} ${today.getFullYear()}`;
 
-    const items=todayEvs.length
-      ?todayEvs.map(ev=>{
-          const cat=katColor(ev.cat);
-          const icon=ev.cat==='platnosc'?'💰':ev.cat==='umowa'?'📝':ev.cat==='remont'?'🔧':ev.cat==='spotkanie'?'🤝':'📌';
-          return`<span style="display:inline-flex;align-items:center;gap:5px;background:${cat.bg};color:${cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap">${icon} ${ev.title}</span>`;
-        }).join('')
-      :`<span style="font-size:12px;color:var(--text-muted);font-style:italic">Brak wydarzeń — spokojny dzień ✌️</span>`;
+    // ── Parking alert ──
+    let parkingChip='';
+    try{
+      if(_state.data.parking?.dateOrder?.length){
+        const paidDates=getPaidDates();
+        const latestDate=_state.data.parking.dateOrder[0];
+        const latestCards=_state.data.parking.byDate[latestDate]||[];
+        const alertCount=latestCards.filter(c=>c.alert).length;
+        const isPaid=paidDates.includes(latestDate);
+        if(alertCount>0&&!isPaid){
+          parkingChip=`<span onclick="setSection('parking')" style="display:inline-flex;align-items:center;gap:5px;background:#fef2f2;color:#dc2626;font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px;white-space:nowrap;cursor:pointer;border:1px solid #fca5a5;animation:pulse 1.5s infinite">🅿️ Parking — ${alertCount} kart do doładowania!</span>`;
+        }
+      }
+    }catch(e){}
+
+    const kalItems=todayEvs.map(ev=>{
+      const cat=katColor(ev.cat);
+      const icon=ev.cat==='platnosc'?'💰':ev.cat==='umowa'?'📝':ev.cat==='remont'?'🔧':ev.cat==='spotkanie'?'🤝':'📌';
+      return`<span style="display:inline-flex;align-items:center;gap:5px;background:${cat.bg};color:${cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap">${icon} ${ev.title}</span>`;
+    }).join('');
+
+    const allItems=(parkingChip||'')+kalItems||`<span style="font-size:12px;color:#92400e;opacity:0.6;font-style:italic">Brak wydarzeń — spokojny dzień ✌️</span>`;
 
     return`<div style="display:flex;align-items:center;gap:10px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:11px 18px;margin-bottom:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(251,191,36,0.15)">
       <span style="font-size:12px;font-weight:700;color:#92400e;white-space:nowrap;flex-shrink:0">📅 ${dateLabel}</span>
       <div style="width:1px;height:18px;background:#fcd34d;flex-shrink:0"></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">${items}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">${allItems}</div>
       <button onclick="setSection('kalendarz')" style="margin-left:auto;background:#fef3c7;border:1px solid #fcd34d;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:#92400e;font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0">Kalendarz →</button>
     </div>`;
   }catch(e){return'';}
