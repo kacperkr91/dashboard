@@ -823,19 +823,75 @@ const PREVIO_MONTHS=[
   {key:'2026-12',label:'Grudzień 2026',   short:'Gru 26'},
 ];
 
-const OTV_MONTHS=[
+// HK_MONTHS i OTV_MONTHS są generowane dynamicznie z arkuszy
+// Statyczne fallbacki używane tylko przed załadowaniem
+let OTV_MONTHS=[
   {key:'2025-12',label:'Grudzień 2025', short:'Gru 25'},
   {key:'2026-01',label:'Styczeń 2026',  short:'Sty 26'},
   {key:'2026-02',label:'Luty 2026',     short:'Lut 26'},
   {key:'2026-03',label:'Marzec 2026',   short:'Mar 26'},
+  {key:'2026-04',label:'Kwiecień 2026', short:'Kwi 26'},
 ];
 
-const HK_MONTHS=[
+let HK_MONTHS=[
   {key:'2025-12',label:'Grudzień 2025',short:'Gru 25'},
   {key:'2026-01',label:'Styczeń 2026', short:'Sty 26'},
   {key:'2026-02',label:'Luty 2026',    short:'Lut 26'},
   {key:'2026-03',label:'Marzec 2026',  short:'Mar 26'},
+  {key:'2026-04',label:'Kwiecień 2026',short:'Kwi 26'},
 ];
+
+const MONTH_NAMES_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+const MONTH_SHORT_PL=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+
+function buildMonthList(sheetNames){
+  // Szuka zakładek w formacie YYYY-MM
+  const regex=/^(\d{4})-(\d{2})$/;
+  return sheetNames
+    .filter(n=>regex.test(n))
+    .map(n=>{
+      const[,yr,mo]=n.match(regex);
+      const moIdx=parseInt(mo)-1;
+      const yr2=yr.slice(2);
+      return{
+        key:n,
+        label:`${MONTH_NAMES_PL[moIdx]} ${yr}`,
+        short:`${MONTH_SHORT_PL[moIdx]} ${yr2}`,
+        sortKey:n
+      };
+    })
+    .sort((a,b)=>a.sortKey.localeCompare(b.sortKey));
+}
+
+async function detectHkMonths(){
+  const{hkApiKey,hkSpreadsheetId}=CONFIG;
+  if(!hkApiKey||!hkSpreadsheetId)return;
+  try{
+    const names=await fetchSheetNames(hkSpreadsheetId,hkApiKey);
+    const months=buildMonthList(names);
+    if(months.length>0){
+      HK_MONTHS=months;
+      // Ustaw domyślny miesiąc na ostatni dostępny
+      const lastKey=months[months.length-1].key;
+      if(!months.find(m=>m.key===_state.hkMonth))_state.hkMonth=lastKey;
+    }
+  }catch(e){console.warn('detectHkMonths failed:',e);}
+}
+
+async function detectOtvMonths(){
+  const{otvApiKey,otvSpreadsheetId}=CONFIG;
+  if(!otvApiKey||!otvSpreadsheetId)return;
+  try{
+    const names=await fetchSheetNames(otvSpreadsheetId,otvApiKey);
+    const months=buildMonthList(names);
+    if(months.length>0){
+      OTV_MONTHS=months;
+      const lastKey=months[months.length-1].key;
+      if(!months.find(m=>m.key===_state.otvMonth))_state.otvMonth=lastKey;
+    }
+  }catch(e){console.warn('detectOtvMonths failed:',e);}
+}
+
 
 async function loadHousekeepingMonth(monthKey){
   const{hkApiKey,hkSpreadsheetId,hkStartRow,hkEndRow}=CONFIG;
@@ -1350,9 +1406,9 @@ const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFrac
 ═══════════════════════════════════════════════════════ */
 let _state={
   section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
-  hkMonth:'2026-03',
+  hkMonth:'2026-04',
   hkAptSort:'default',
-  otvMonth:'2026-03',
+  otvMonth:'2026-04',
   previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   bookingPeriodKey:null,
   payoutTab:'booking',
@@ -3707,6 +3763,9 @@ async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{}};
   renderApp();
+
+  // ── Wykryj dostępne miesiące z arkuszy ──
+  await Promise.allSettled([detectHkMonths(),detectOtvMonths()]);
 
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
