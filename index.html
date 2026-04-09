@@ -3153,6 +3153,27 @@ function buildParkingView(){
     renderApp();
   }
 
+  // ── Główne ciało buildParkingView ──
+  if(!sheetsData||!sheetsData.dateOrder?.length){
+    return`<div class="empty-section"><div class="spinner"></div><p>Ładowanie danych parkingu…</p></div>`;
+  }
+
+  const{byDate,dateOrder}=sheetsData;
+  const activeDateKey=selDate&&byDate[selDate]?selDate:dateOrder[0];
+  const cards=byDate[activeDateKey]||[];
+
+  const dateBtns=dateOrder.map(d=>{
+    const paidDates=getPaidDates();
+    const isPaid=paidDates.includes(d);
+    const hasAlerts=(byDate[d]||[]).some(c=>c.alert);
+    const dotColor=isPaid?'#16a34a':hasAlerts?'#dc2626':'#16a34a';
+    const dot=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};margin-left:5px;vertical-align:middle"></span>`;
+    return`<button class="hk-month-btn ${d===activeDateKey?'active':''}" onclick="setParkingDate('${d}')" style="${d===activeDateKey?'':''}">📅 ${d}${dot}</button>`;
+  }).join('');
+  const dateNav=`<div class="hk-month-nav" style="margin-bottom:20px">${dateBtns}</div>`;
+
+  return`<div style="max-width:1100px;margin:0 auto">${dateNav}${renderTable(cards,activeDateKey)}</div>`;
+
   function renderTable(cards, dateKey){
     if(!cards||!cards.length)return'';
     const paidDates=getPaidDates();
