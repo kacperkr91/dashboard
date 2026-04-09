@@ -1379,6 +1379,8 @@ let _state={
   payoutTab:'booking',
   airbnbPayoutKey:null,
   parkingDate:null,
+  kalendarzYear:new Date().getFullYear(),
+  kalendarzMonth:new Date().getMonth(),
   dyzuryYear:new Date().getFullYear(),
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
@@ -3754,6 +3756,269 @@ function initHkChart(){
   });
 }
 
+
+/* KALENDARZ */
+function getKalEvents(){
+  try{return JSON.parse(localStorage.getItem('kal_events')||'{}');}
+  catch(e){return{};}
+}
+function saveKalEvents(ev){
+  localStorage.setItem('kal_events',JSON.stringify(ev));
+}
+
+const KAL_CATEGORIES=[
+  {id:'umowa',    label:'Umowa',       color:'#7c3aed',bg:'#f5f3ff'},
+  {id:'platnosc', label:'Płatność',    color:'#dc2626',bg:'#fef2f2'},
+  {id:'remont',   label:'Remont',      color:'#d97706',bg:'#fffbeb'},
+  {id:'spotkanie',label:'Spotkanie',   color:'#0369a1',bg:'#eff6ff'},
+  {id:'inne',     label:'Inne',        color:'#16a34a',bg:'#f0fdf4'},
+];
+
+function katColor(id){return KAL_CATEGORIES.find(c=>c.id===id)||KAL_CATEGORIES[4];}
+
+function buildKalendarzView(){
+  const year=_state.kalendarzYear;
+  const month=_state.kalendarzMonth;
+  const events=getKalEvents();
+  const today=new Date();
+  const todayKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  const MONTHS_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+  const DOW_PL=['Pn','Wt','Śr','Cz','Pt','Sb','Nd'];
+
+  const firstDay=new Date(year,month,1);
+  const lastDay=new Date(year,month+1,0);
+  const startDow=(firstDay.getDay()+6)%7; // Pn=0
+
+  // Collect upcoming events (next 30 days)
+  const upcoming=[];
+  for(let i=0;i<60;i++){
+    const d=new Date(today);d.setDate(today.getDate()+i);
+    const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(events[dk]){
+      events[dk].forEach(ev=>{
+        upcoming.push({...ev,date:dk,dateObj:d});
+      });
+    }
+  }
+
+  // Header
+  const header=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button onclick="kalPrevMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">‹</button>
+      <div style="font-size:20px;font-weight:700;color:var(--text);min-width:200px;text-align:center">${MONTHS_PL[month]} ${year}</div>
+      <button onclick="kalNextMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">›</button>
+      <button onclick="kalGoToday()" style="background:var(--white);border:1px solid var(--border);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-mid);font-family:'Inter',sans-serif">Dziś</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${KAL_CATEGORIES.map(c=>`<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:${c.bg};color:${c.color}">${c.label}</span>`).join('')}
+    </div>
+  </div>`;
+
+  // Calendar grid
+  let cells='';
+  for(let i=0;i<startDow;i++) cells+=`<div style="min-height:90px"></div>`;
+
+  for(let d=1;d<=lastDay.getDate();d++){
+    const dk=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=dk===todayKey;
+    const dow=(new Date(year,month,d).getDay()+6)%7;
+    const isWE=dow>=5;
+    const dayEvents=events[dk]||[];
+
+    const evHtml=dayEvents.map(ev=>{
+      const cat=katColor(ev.cat);
+      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${ev.title}</div>`;
+    }).join('');
+
+    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafbfc':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s;position:relative" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
+      <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--blue)':isWE?'var(--purple)':'var(--text-muted)'};margin-bottom:3px">${d}</div>
+      ${evHtml}
+      ${dayEvents.length===0?`<div style="position:absolute;bottom:5px;right:6px;font-size:16px;opacity:0;transition:opacity 0.15s" class="kal-add-icon">+</div>`:''}
+    </div>`;
+  }
+
+  const grid=`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+      ${DOW_PL.map((d,i)=>`<div style="text-align:center;font-size:11px;font-weight:700;color:${i>=5?'var(--purple)':'var(--text-muted)'};padding:4px">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cells}</div>
+  </div>`;
+
+  // Upcoming events panel
+  const upcomingHtml=upcoming.length?upcoming.slice(0,10).map(ev=>{
+    const cat=katColor(ev.cat);
+    const d=ev.dateObj;
+    const diff=Math.round((d-today)/86400000);
+    const diffLabel=diff===0?'Dziś':diff===1?'Jutro':`Za ${diff} dni`;
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="text-align:center;min-width:44px;background:${cat.bg};border-radius:8px;padding:4px">
+        <div style="font-size:16px;font-weight:700;color:${cat.color}">${d.getDate()}</div>
+        <div style="font-size:9px;color:${cat.color};font-weight:600">${['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'][d.getMonth()]}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</div>
+        ${ev.desc?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.desc}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${cat.bg};color:${cat.color}">${cat.label}</span>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${diffLabel}</div>
+      </div>
+    </div>`;
+  }).join(''):`<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Brak nadchodzących wydarzeń</div>`;
+
+  const sidebar=`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px">
+    <div class="card-title" style="margin-bottom:16px">📋 Nadchodzące</div>
+    ${upcomingHtml}
+  </div>`;
+
+  // Modal
+  const modal=`
+  <div id="kalModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.4);z-index:300;align-items:center;justify-content:center">
+    <div style="background:var(--white);border-radius:16px;padding:28px;width:420px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div style="font-size:16px;font-weight:700;color:var(--text)" id="kalModalTitle">Dodaj wydarzenie</div>
+        <button onclick="kalCloseModal()" style="background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;color:var(--text-muted)">✕</button>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Data</label>
+        <input id="kalDate" type="date" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Tytuł</label>
+        <input id="kalTitle" type="text" placeholder="Np. Podpisanie umowy najmu..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Notatka (opcjonalnie)</label>
+        <textarea id="kalDesc" rows="2" placeholder="Szczegóły..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none;resize:vertical"></textarea>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:8px">Kategoria</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="kalCatPicker">
+          ${KAL_CATEGORIES.map(c=>`<button onclick="kalSelectCat('${c.id}')" id="kalCat-${c.id}" style="padding:5px 12px;border-radius:8px;border:2px solid ${c.color};background:var(--white);color:${c.color};font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s">${c.label}</button>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="kalSaveEvent()" style="flex:1;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Zapisz</button>
+        <button id="kalDeleteBtn" onclick="kalDeleteEvent()" style="display:none;background:var(--red-light);color:var(--red);border:1px solid #fca5a5;padding:11px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Usuń</button>
+      </div>
+    </div>
+  </div>`;
+
+  return`<div style="max-width:1200px;margin:0 auto">
+    ${modal}
+    ${header}
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start">
+      <div>${grid}</div>
+      <div>${sidebar}</div>
+    </div>
+  </div>`;
+}
+
+let _kalEditDate=null;
+let _kalEditId=null;
+let _kalSelectedCat='inne';
+
+function kalOpenDay(dateStr){
+  _kalEditDate=dateStr;
+  _kalEditId=null;
+  _kalSelectedCat='inne';
+  document.getElementById('kalModalTitle').textContent='Dodaj wydarzenie';
+  document.getElementById('kalDate').value=dateStr;
+  document.getElementById('kalTitle').value='';
+  document.getElementById('kalDesc').value='';
+  document.getElementById('kalDeleteBtn').style.display='none';
+  kalSelectCat('inne');
+  document.getElementById('kalModal').style.display='flex';
+  setTimeout(()=>document.getElementById('kalTitle').focus(),50);
+}
+
+function kalEditEvent(dateStr,evId){
+  event.stopPropagation();
+  const events=getKalEvents();
+  const ev=(events[dateStr]||[]).find(e=>e.id===evId);
+  if(!ev)return;
+  _kalEditDate=dateStr;
+  _kalEditId=evId;
+  _kalSelectedCat=ev.cat||'inne';
+  document.getElementById('kalModalTitle').textContent='Edytuj wydarzenie';
+  document.getElementById('kalDate').value=dateStr;
+  document.getElementById('kalTitle').value=ev.title;
+  document.getElementById('kalDesc').value=ev.desc||'';
+  document.getElementById('kalDeleteBtn').style.display='block';
+  kalSelectCat(ev.cat||'inne');
+  document.getElementById('kalModal').style.display='flex';
+}
+
+function kalSelectCat(id){
+  _kalSelectedCat=id;
+  KAL_CATEGORIES.forEach(c=>{
+    const btn=document.getElementById('kalCat-'+c.id);
+    if(!btn)return;
+    btn.style.background=c.id===id?c.color:'var(--white)';
+    btn.style.color=c.id===id?'#fff':c.color;
+  });
+}
+
+function kalSaveEvent(){
+  const dateStr=document.getElementById('kalDate').value;
+  const title=document.getElementById('kalTitle').value.trim();
+  const desc=document.getElementById('kalDesc').value.trim();
+  if(!dateStr||!title){alert('Wpisz tytuł i wybierz datę.');return;}
+  const events=getKalEvents();
+  if(!events[dateStr])events[dateStr]=[];
+  if(_kalEditId){
+    const idx=events[dateStr].findIndex(e=>e.id===_kalEditId);
+    if(idx!==-1)events[dateStr][idx]={id:_kalEditId,title,desc,cat:_kalSelectedCat};
+  } else {
+    events[dateStr].push({id:Date.now().toString(),title,desc,cat:_kalSelectedCat});
+  }
+  saveKalEvents(events);
+  kalCloseModal();
+  // Nawiguj do miesiąca zapisanego wydarzenia
+  const d=new Date(dateStr);
+  _state.kalendarzYear=d.getFullYear();
+  _state.kalendarzMonth=d.getMonth();
+  renderApp();
+}
+
+function kalDeleteEvent(){
+  if(!_kalEditDate||!_kalEditId)return;
+  if(!confirm('Usunąć to wydarzenie?'))return;
+  const events=getKalEvents();
+  if(events[_kalEditDate]){
+    events[_kalEditDate]=events[_kalEditDate].filter(e=>e.id!==_kalEditId);
+    if(!events[_kalEditDate].length)delete events[_kalEditDate];
+  }
+  saveKalEvents(events);
+  kalCloseModal();
+  renderApp();
+}
+
+function kalCloseModal(){
+  document.getElementById('kalModal').style.display='none';
+  _kalEditDate=null;_kalEditId=null;
+}
+
+function kalPrevMonth(){
+  if(_state.kalendarzMonth===0){_state.kalendarzMonth=11;_state.kalendarzYear--;}
+  else _state.kalendarzMonth--;
+  renderApp();
+}
+
+function kalNextMonth(){
+  if(_state.kalendarzMonth===11){_state.kalendarzMonth=0;_state.kalendarzYear++;}
+  else _state.kalendarzMonth++;
+  renderApp();
+}
+
+function kalGoToday(){
+  const n=new Date();
+  _state.kalendarzYear=n.getFullYear();
+  _state.kalendarzMonth=n.getMonth();
+  renderApp();
+}
+
 /* MAIN RENDER */
 const mount=html=>{document.getElementById('app').innerHTML=html;};
 
@@ -3797,6 +4062,9 @@ function renderApp(){
     </button>
     <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')">
       <span class="icon">📅</span> Dyżury
+    </button>
+    <button class="nav-l1-btn ${section==='kalendarz'?'active':''}" style="${section==='kalendarz'?'background:#0369a1;border-color:#0369a1':''}" onclick="setSection('kalendarz')">
+      <span class="icon">📆</span> Kalendarz
     </button>
     ${(()=>{
       let parkingAlert=false;
@@ -3869,6 +4137,8 @@ function renderApp(){
     content=buildPayoutView();
   } else if(section==='parking'){
     content=buildParkingView();
+  } else if(section==='kalendarz'){
+    content=buildKalendarzView();
   } else {
     // ── Dyżury ──
     content=buildDyzuryView();
