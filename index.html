@@ -3063,7 +3063,7 @@ function parseParkingText(text){
 
     // Sprawdź miesięczny
     if(raw.includes('miesięczny')){
-      results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni:0,h:0,totalH:0,godziny:'miesięczny',typ:'miesięczny',alert:false});
+      results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni:999,h:0,totalH:999*24,godziny:'miesięczny',typ:'miesięczny',alert:false});
       continue;
     }
 
@@ -3093,18 +3093,49 @@ function parseParkingText(text){
     const godziny=`${dni}x24h+${h}h`;
     const typ=raw.includes('zapas')?'zapas':'normalny';
 
-    results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni,h,totalH,godziny,typ,alert:dni<6&&typ==='normalny'});
+    results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni,h,totalH,godziny,typ,alert:dni<6});
   }
   return results;
 }
 
+
+async function loadParkingData(){
+  const apiKey=CONFIG.previoApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.previoSpreadsheetId;
+  if(!apiKey||!spreadsheetId)throw new Error('MISSING_CONFIG');
+  const enc=encodeURIComponent("'Parking'!A1:J500");
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=UNFORMATTED_VALUE&key=${apiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(rows.length<2)throw new Error('NO_PARKING_DATA');
+  // Skip header row
+  const cards=rows.slice(1).map(r=>({
+    mailDate:  String(r[0]||'').trim(),
+    lp:        parseInt(r[1])||0,
+    bilet:     String(r[2]||'').trim(),
+    dataWaznosci: String(r[3]||'').trim(),
+    godziny:   String(r[4]||'').trim(),
+    dni:       parseInt(r[5])||0,
+    h:         parseInt(r[6])||0,
+    typ:       String(r[7]||'normalny').trim(),
+    alert:     String(r[8]||'').trim()==='TAK',
+    updatedAt: String(r[9]||'').trim(),
+  })).filter(c=>c.bilet);
+  const mailDate=cards[0]?.mailDate||'';
+  const updatedAt=cards[0]?.updatedAt||'';
+  return{cards,mailDate,updatedAt};
+}
 function buildParkingView(){
+  const sheetsData=_state.data.parking;
   const saved=(() => {
     try{const s=localStorage.getItem('parking_data');return s?JSON.parse(s):null;}
     catch(e){return null;}
   })();
 
-  const THRESHOLD=6; // poniżej 6 dni = alert
+  // Preferuj dane z arkusza (auto-sync) nad ręcznie wklejonymi
+  const activeData=sheetsData||saved;
+
+  const THRESHOLD=6; // poniżej 6 dni = alert (dotyczy wszystkich typów kart)
 
   function renderTable(cards){
     if(!cards||!cards.length)return'';
@@ -3172,7 +3203,10 @@ function buildParkingView(){
     return alertBanner+kpis+table;
   }
 
-  const dateInfo=saved?.date?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Ostatnia aktualizacja: <strong>${saved.date}</strong></div>`:'';
+  // Info o źródle danych
+  const sheetsDateInfo=sheetsData?.updatedAt?`<div style="font-size:11px;color:#059669;margin-top:4px">✅ Auto-sync z arkusza: <strong>${sheetsData.updatedAt}</strong></div>`:'';
+  const manualDateInfo=!sheetsData&&saved?.date?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Ręczna aktualizacja: <strong>${saved.date}</strong></div>`:'';
+  const dateInfo=sheetsDateInfo||manualDateInfo;
 
   const inputSection=`<div class="grid-card" style="margin-bottom:20px">
     <div class="card-title">📧 Wklej treść maila "Stan kart"</div>
@@ -3186,7 +3220,7 @@ function buildParkingView(){
     </div>
   </div>`;
 
-  const resultsSection=saved?.cards?renderTable(saved.cards):'';
+  const resultsSection=activeData?.cards?renderTable(activeData.cards):'';
 
   return`<div style="max-width:1100px;margin:0 auto">${inputSection}${resultsSection}</div>`;
 }
@@ -3930,13 +3964,15 @@ async function init(){
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
 
-  // ── Batch 1: bieżący miesiąc + Previo (najważniejsze) ──
-  const [apr,previor]=await Promise.allSettled([
+  // ── Batch 1: bieżący miesiąc + Previo + Parking (najważniejsze) ──
+  const [apr,previor,parkingr]=await Promise.allSettled([
     loadAprilData(),
     loadPrevioMonth(initPrevioKey),
+    loadParkingData(),
   ]);
   _state.data.apr2026=apr.status==='fulfilled'?apr.value:{error:apr.reason?.message||'Błąd'};
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
+  _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
   renderApp();
 
   await delay(1500);
