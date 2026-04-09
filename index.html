@@ -327,9 +327,7 @@
 <body>
 <div class="app" id="app"></div>
 <script>
-/* ═══════════════════════════════════════════════════════
-   CONFIG
-═══════════════════════════════════════════════════════ */
+/* CONFIG */
 const CONFIG={
   apiKey:             localStorage.getItem('gs_api_key')||'',
   spreadsheetId:      localStorage.getItem('gs_spreadsheet_id')||'',
@@ -367,7 +365,6 @@ const CONFIG={
 /* ═══════════════════════════════════════════════════════
    NAVIGATION STRUCTURE
    Easily extendable — add months here as data arrives
-═══════════════════════════════════════════════════════ */
 const NAV={
   rental:{
     label:'Przychody',
@@ -412,9 +409,7 @@ const NAV={
   media:{label:'Media — Prąd',icon:'⚡'}
 };
 
-/* ═══════════════════════════════════════════════════════
-   DATE HELPERS
-═══════════════════════════════════════════════════════ */
+/* DATE HELPERS */
 const DOW_PL=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
 
 /* ── POLISH HOLIDAYS ── */
@@ -477,9 +472,7 @@ function tabToDate(name){const[dd,mm]=name.split('.').map(Number);return new Dat
 function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
-/* ═══════════════════════════════════════════════════════
-   API
-═══════════════════════════════════════════════════════ */
+/* API */
 async function apiFetch(url){
   const res=await fetch(url);
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
@@ -490,9 +483,7 @@ async function fetchSheetNames(id,key){
   return d.sheets.map(s=>s.properties.title);
 }
 
-/* ═══════════════════════════════════════════════════════
-   DATA LOADERS
-═══════════════════════════════════════════════════════ */
+/* DATA LOADERS */
 async function loadMarchData(){
   const{apiKey,spreadsheetId,dayTabRegex}=CONFIG;
   const all=await fetchSheetNames(spreadsheetId,apiKey);
@@ -675,9 +666,7 @@ async function loadApartmentsData(){
 
 
 
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS
-═══════════════════════════════════════════════════════ */
+/* POLISH HOLIDAYS */
 function easterDate(year){
   // Anonymous Gregorian algorithm
   const a=year%19,b=Math.floor(year/100),c=year%100;
@@ -728,9 +717,7 @@ function parseDatePL(str){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS & DAY HELPERS
-═══════════════════════════════════════════════════════ */
+/* POLISH HOLIDAYS & DAY HELPERS */
 const PL_DOW = ['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
 
 // Fixed Polish public holidays MM-DD
@@ -792,9 +779,7 @@ function getDowPl(dateStr){
   return PL_DOW[d.getDay()];
 }
 
-/* ═══════════════════════════════════════════════════════
-   HOUSEKEEPING LOADER
-═══════════════════════════════════════════════════════ */
+/* HOUSEKEEPING LOADER */
 // Available months — add as data arrives
 const PREVIO_MONTHS=[
   {key:'2025-01',label:'Styczeń 2025',    short:'Sty 25'},
@@ -993,9 +978,7 @@ async function loadHousekeepingMonth(monthKey){
 
 
 
-/* ═══════════════════════════════════════════════════════
-   PREVIO LOADER
-═══════════════════════════════════════════════════════ */
+/* PREVIO LOADER */
 async function loadPrevioMonth(monthKey){
   const{previoApiKey,previoSpreadsheetId,previoSheet,previoStartRow,previoEndRow}=CONFIG;
   const apiKey=previoApiKey||CONFIG.apiKey; // fallback to main API key
@@ -1072,9 +1055,7 @@ async function loadPrevioMonth(monthKey){
   return result;
 }
 
-/* ═══════════════════════════════════════════════════════
-   OTV RESERVATIONS LOADER
-═══════════════════════════════════════════════════════ */
+/* OTV RESERVATIONS LOADER */
 async function loadOtvMonth(monthKey){
   const{otvApiKey,otvSpreadsheetId,otvStartRow,otvEndRow,otvExclude}=CONFIG;
   if(!otvApiKey||!otvSpreadsheetId)throw new Error('MISSING_OTV_CONFIG');
@@ -1115,9 +1096,7 @@ async function loadOtvMonth(monthKey){
   return result;
 }
 
-/* ═══════════════════════════════════════════════════════
-   FORECAST
-═══════════════════════════════════════════════════════ */
+/* FORECAST */
 function calcForecast(days){
   const year=new Date().getFullYear();
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
@@ -1147,9 +1126,7 @@ function calcForecast(days){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   PREVIO FORECAST
-═══════════════════════════════════════════════════════ */
+/* PREVIO FORECAST */
 function calcPrevioForecast(monthKey){
   const rows=_state.data.previo[monthKey];
   if(!rows||rows.error||!Array.isArray(rows))return null;
@@ -1252,13 +1229,9 @@ function calcPrevioForecast(monthKey){
   };
 }
 
-/* ═══════════════════════════════════════════════════════
-   FORMATTERS
-═══════════════════════════════════════════════════════ */
+/* FORMATTERS */
 
-/* ═══════════════════════════════════════════════════════
-   DEFAULT APARTMENT ORDER
-═══════════════════════════════════════════════════════ */
+/* DEFAULT APARTMENT ORDER */
 const APT_ORDER=[
   'Apt 1','Apt 7','Apt 8','Apt 9','Apt 10','Apt 11',
   'Apt 30c','Apt 32c','Apt 31c',
@@ -1285,9 +1258,7 @@ function sortByDefaultOrder(apts){
 
 
 
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS & DAY HELPERS
-═══════════════════════════════════════════════════════ */
+/* POLISH HOLIDAYS & DAY HELPERS */
 
 function getEaster(year){
   // Anonymous Gregorian algorithm
@@ -1339,9 +1310,7 @@ function parseDateDMY(str){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   POLISH HOLIDAYS + DAY HELPERS
-═══════════════════════════════════════════════════════ */
+/* POLISH HOLIDAYS + DAY HELPERS */
 const DOW_PL_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
 const DOW_PL_SHORT=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
 
@@ -1401,9 +1370,7 @@ function dateKey(d){
 const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
 
-/* ═══════════════════════════════════════════════════════
-   STATE
-═══════════════════════════════════════════════════════ */
+/* STATE */
 let _state={
   section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
   hkMonth:'2026-04',
@@ -1431,9 +1398,7 @@ let _state={
 };
 let _charts={};
 
-/* ═══════════════════════════════════════════════════════
-   RENDER HELPERS
-═══════════════════════════════════════════════════════ */
+/* RENDER HELPERS */
 function renderLoading(msg='Pobieranie danych…'){
   return`<div class="state-screen"><div class="spinner"></div><p>${msg}</p></div>`;
 }
@@ -1477,9 +1442,7 @@ function renderConfig(){
   </div></div>`;
 }
 
-/* ═══════════════════════════════════════════════════════
-   RENTAL MONTH VIEW
-═══════════════════════════════════════════════════════ */
+/* RENTAL MONTH VIEW */
 function buildMonthView(days,opts={}){
   const{showForecast=false,monthLabel='',otvMonthKey=null}=opts;
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
@@ -1663,9 +1626,7 @@ function buildMonthView(days,opts={}){
   return{html:kpis+forecast+(previoForecast||'')+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
 }
 
-/* ═══════════════════════════════════════════════════════
-   MEDIA VIEW
-═══════════════════════════════════════════════════════ */
+/* MEDIA VIEW */
 const MONTHS_2025=['sty 2025','lut 2025','mar 2025','kwi 2025','maj 2025','cze 2025','lip 2025','sie 2025','wrz 2025','paź 2025','lis 2025','gru 2025'];
 const MONTHS_2026=['sty 2026','lut 2026','mar 2026','kwi 2026','maj 2026','cze 2026','lip 2026','sie 2026','wrz 2026','paź 2026','lis 2026','gru 2026'];
 
@@ -1755,9 +1716,7 @@ function buildMediaView(data){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   APARTMENTS VIEW
-═══════════════════════════════════════════════════════ */
+/* APARTMENTS VIEW */
 function daysUntil(dateStr){
   if(!dateStr)return null;
   const d=new Date(dateStr);if(isNaN(d))return null;
@@ -1928,9 +1887,7 @@ function toggleWifi(id,pass){
 
 
 
-/* ═══════════════════════════════════════════════════════
-   HOUSEKEEPING VIEW
-═══════════════════════════════════════════════════════ */
+/* HOUSEKEEPING VIEW */
 function buildHousekeepingView(){
   const monthKey=_state.hkMonth;
   const hkData=_state.data.housekeeping[monthKey];
@@ -2133,9 +2090,7 @@ function buildHousekeepingView(){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   OTV RESERVATIONS VIEW
-═══════════════════════════════════════════════════════ */
+/* OTV RESERVATIONS VIEW */
 function buildOtvView(){
   const monthKey=_state.otvMonth;
   const rows=_state.data.otv[monthKey];
@@ -2344,9 +2299,7 @@ function initOtvChart(){
 
 
 
-/* ═══════════════════════════════════════════════════════
-   PREVIO VIEW
-═══════════════════════════════════════════════════════ */
+/* PREVIO VIEW */
 function buildPrevioView(){
   const monthKey=_state.previoMonth;
   const rows=_state.data.previo[monthKey];
@@ -2535,9 +2488,7 @@ function initPrevioChart(){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   BOOKING.COM PAYOUT
-═══════════════════════════════════════════════════════ */
+/* BOOKING.COM PAYOUT */
 // Property groups for Booking payout
 const BOOKING_GROUPS=[
   {
@@ -2790,9 +2741,7 @@ function buildBookingPayoutView(){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   DYŻURY
-═══════════════════════════════════════════════════════ */
+/* DYŻURY */
 // Dyżury state — stored in localStorage
 function getDyzuryState(){
   try{
@@ -2961,9 +2910,7 @@ function setDyzuryYear(year){
 }
 
 
-/* ═══════════════════════════════════════════════════════
-   AIRBNB PAYOUT
-═══════════════════════════════════════════════════════ */
+/* AIRBNB PAYOUT */
 function buildAirbnbPayoutView(){
   // Collect all Airbnb reservations from loaded Previo months
   const allAirbnb=[];
@@ -3095,9 +3042,7 @@ function buildAirbnbPayoutView(){
 function setAirbnbPayout(key){_state.airbnbPayoutKey=key;renderApp();}
 
 
-/* ═══════════════════════════════════════════════════════
-   PARKING
-═══════════════════════════════════════════════════════ */
+/* PARKING */
 function parseParkingText(text){
   // Format z maila (tabulatory): LP \t Bilet \t Data \t 23:59 \t Dni \t x24h \t + \t H \t h \t [zapas|miesięczny]
   const results=[];
@@ -3314,7 +3259,6 @@ function clearParking(){
 }
 
 
-═══════════════════════════════════════════════════════ */
 function exportHkPdf(monthKey, monthLabel){
   const hkData=_state.data.housekeeping[monthKey];
   const rows=hkData?.rows||hkData||[];
@@ -3487,9 +3431,7 @@ function exportHkPdf(monthKey, monthLabel){
   w.document.close();
 }
 
-/* ═══════════════════════════════════════════════════════
-   DRAWER
-═══════════════════════════════════════════════════════ */
+/* DRAWER */
 let _drawerSort='default';
 let _drawerDay=null;
 
@@ -3651,9 +3593,7 @@ function initChannelChart(){
     </div>`).join('');
 }
 
-/* ═══════════════════════════════════════════════════════
-   CHARTS
-═══════════════════════════════════════════════════════ */
+/* CHARTS */
 function destroyCharts(){Object.values(_charts).forEach(c=>{try{c.destroy();}catch(e){}});_charts={};}
 
 function initRentalChart(enriched,fc){
@@ -3753,9 +3693,7 @@ function initHkChart(){
   });
 }
 
-/* ═══════════════════════════════════════════════════════
-   MAIN RENDER
-═══════════════════════════════════════════════════════ */
+/* MAIN RENDER */
 const mount=html=>{document.getElementById('app').innerHTML=html;};
 
 function renderApp(){
@@ -3869,9 +3807,7 @@ function renderApp(){
   if(section==='previo')setTimeout(initPrevioChart,50);
 }
 
-/* ═══════════════════════════════════════════════════════
-   CONTROLLER
-═══════════════════════════════════════════════════════ */
+/* CONTROLLER */
 function showConfig(){mount(renderConfig());}
 
 function saveConfig(){
