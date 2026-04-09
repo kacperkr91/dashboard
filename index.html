@@ -3798,17 +3798,23 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')">
       <span class="icon">📅</span> Dyżury
     </button>
-    <button class="nav-l1-btn ${section==='parking'?'active':''}" style="${section==='parking'?'background:#b45309;border-color:#b45309':''}position:relative" onclick="setSection('parking')">
-      <span class="icon">🅿️</span> Parking
-      ${(()=>{
-        if(!_state.data.parking?.dateOrder?.length)return'';
+    ${(()=>{
+      let parkingAlert=false;
+      let alertCount=0;
+      if(_state.data.parking?.dateOrder?.length){
         const paidDates=getPaidDates();
         const latestDate=_state.data.parking.dateOrder[0];
         const latestCards=_state.data.parking.byDate[latestDate]||[];
-        const hasUnpaidAlerts=latestCards.some(c=>c.alert)&&!paidDates.includes(latestDate);
-        return hasUnpaidAlerts?'<span style="position:absolute;top:6px;right:6px;width:9px;height:9px;background:#dc2626;border-radius:50%;border:2px solid #fff;animation:pulse 1.5s infinite"></span>':'';
-      })()}
-    </button>
+        alertCount=latestCards.filter(c=>c.alert).length;
+        parkingAlert=alertCount>0&&!paidDates.includes(latestDate);
+      }
+      const isActive=section==='parking';
+      const bg=parkingAlert&&!isActive?'background:#dc2626;border-color:#dc2626;color:#fff':isActive?'background:#b45309;border-color:#b45309;color:#fff':'';
+      const badge=parkingAlert?`<span style="background:#fff;color:#dc2626;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">${alertCount}</span>`:'';
+      return`<button class="nav-l1-btn" style="${bg}" onclick="setSection('parking')">
+        <span class="icon">🅿️</span> Parking${badge}
+      </button>`;
+    })()}
   </div>`;
 
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
