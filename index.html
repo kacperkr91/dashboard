@@ -3860,19 +3860,55 @@ function generateZusDates(horizonMonths=13){
   return dates;
 }
 
-// ── Wstaw ZUS do wydarzeń (jeśli jeszcze nie ma) ──
-function ensureZusEvents(){
+// ── Generuj daty płatności dla danego dnia miesiąca ──
+function generatePaymentDates(dayOfMonth, horizonMonths=13){
+  const dates=[];
+  const today=new Date();
+  for(let i=-1;i<horizonMonths;i++){
+    const d=new Date(today.getFullYear(),today.getMonth()+i,dayOfMonth);
+    const workday=nextWorkday(d);
+    const dk=`${workday.getFullYear()}-${String(workday.getMonth()+1).padStart(2,'0')}-${String(workday.getDate()).padStart(2,'0')}`;
+    dates.push(dk);
+  }
+  return dates;
+}
+
+// ── Automatyczne płatności cykliczne ──
+const AUTO_PAYMENTS=[
+  {
+    prefix:'zus',
+    day:15,
+    title:'Płatność ZUS',
+    desc:'Termin płatności składek ZUS (15-ty lub następny dzień roboczy)',
+  },
+  {
+    prefix:'pit5',
+    day:20,
+    title:'Płatność PIT-5',
+    desc:'Termin wpłaty zaliczki na podatek dochodowy PIT-5 (20-ty lub następny dzień roboczy)',
+  },
+];
+
+function ensureAutoPayments(){
   const events=getKalEvents();
-  const zusDates=generateZusDates();
   let changed=false;
-  zusDates.forEach(dk=>{
-    const dayEvs=events[dk]||[];
-    const hasZus=dayEvs.some(e=>e.id&&e.id.startsWith('zus-'));
-    if(!hasZus){
-      if(!events[dk])events[dk]=[];
-      events[dk].push({id:`zus-${dk}`,title:'Płatność ZUS',desc:'Termin płatności składek ZUS (15-ty lub następny dzień roboczy)',cat:'platnosc',recur:'monthly',isZus:true});
-      changed=true;
-    }
+  AUTO_PAYMENTS.forEach(({prefix,day,title,desc})=>{
+    const dates=generatePaymentDates(day);
+    dates.forEach(dk=>{
+      const dayEvs=events[dk]||[];
+      const hasIt=dayEvs.some(e=>e.id&&e.id.startsWith(prefix+'-'));
+      if(!hasIt){
+        if(!events[dk])events[dk]=[];
+        events[dk].push({
+          id:`${prefix}-${dk}`,
+          title,desc,
+          cat:'platnosc',
+          recur:'monthly',
+          isAuto:true,
+        });
+        changed=true;
+      }
+    });
   });
   if(changed)saveKalEvents(events);
 }
@@ -3892,7 +3928,7 @@ function getEventsForMonth(year, month){
 }
 
 function buildKalendarzView(){
-  ensureZusEvents();
+  ensureAutoPayments();
   const year=_state.kalendarzYear;
   const month=_state.kalendarzMonth;
   const events=getKalEvents();
@@ -3980,7 +4016,7 @@ function buildKalendarzView(){
           <div style="font-size:9px;color:${cat.color};font-weight:600">${MONTHS_SHORT[d.getMonth()]}</div>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.isZus?'💰 ':''}${ev.title}${recurBadge}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.isAuto||ev.cat==='platnosc'?'💰 ':''}${ev.title}${recurBadge}</div>
           ${ev.desc?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.desc}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -4073,7 +4109,7 @@ function kalEditEvent(dateStr,evId){
   const events=getKalEvents();
   const ev=(events[dateStr]||[]).find(e=>e.id===evId);
   if(!ev)return;
-  if(ev.isZus){alert('Terminy ZUS są generowane automatycznie i nie można ich edytować.');return;}
+  if(ev.isAuto){alert('Ten termin jest generowany automatycznie i nie można go edytować.');return;}
   _kalEditDate=dateStr;
   _kalEditId=evId;
   _kalSelectedCat=ev.cat||'inne';
