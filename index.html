@@ -2973,7 +2973,19 @@ function buildAirbnbPayoutView(){
     return diff<=30&&diff>=-7;
   }).slice(0,20);
 
-  const selKey=_state.airbnbPayoutKey||(recentKeys[0]||sortedKeys[0]);
+  // Domyślnie: znajdź klucz gdzie wypłata jest dziś lub najbliższy wcześniejszy
+  function findDefaultKey(){
+    // 1. Wypłata dziś = zameldowania wczoraj
+    const yesterday=new Date(today);yesterday.setDate(today.getDate()-1);
+    const yk=yesterday.toISOString().slice(0,10);
+    if(byCheckin[yk])return yk;
+    // 2. Najbliższy przeszły (ostatnie zameldowania przed dziś)
+    const past=recentKeys.filter(k=>byCheckin[k].date<=today);
+    if(past.length)return past[0]; // recentKeys jest posortowane malejąco
+    // 3. Fallback — pierwszy dostępny
+    return recentKeys[0]||sortedKeys[0];
+  }
+  const selKey=_state.airbnbPayoutKey||findDefaultKey();
 
   const periodBtns=recentKeys.map(k=>{
     const p=byCheckin[k];
