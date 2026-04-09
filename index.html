@@ -32,13 +32,21 @@
     .btn-icon:hover{background:var(--bg);}
 
     /* ── NAV LEVEL 1 — main sections ── */
-    .nav-l1{display:flex;gap:8px;margin-bottom:12px;}
-    .nav-l1-btn{display:flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:var(--white);color:var(--text-muted);font-family:'Inter',sans-serif;transition:all 0.15s;}
+    .nav-l1{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+    .nav-l1-btn{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:var(--white);color:var(--text-muted);font-family:'Inter',sans-serif;transition:all 0.15s;white-space:nowrap;}
     .nav-l1-btn:hover{border-color:#cbd5e1;color:var(--text);background:var(--bg);}
     .nav-l1-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
     .nav-l1-btn.active.media{background:var(--orange);border-color:var(--orange);}
-    .nav-l1-btn .icon{font-size:18px;}
+    .nav-l1-btn .icon{font-size:16px;}
     .nav-l1-btn .badge-count{font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:rgba(255,255,255,0.25);}
+    @media(max-width:1100px){
+      .nav-l1-btn{padding:8px 10px;font-size:12px;gap:4px;}
+      .nav-l1-btn .icon{font-size:14px;}
+    }
+    @media(max-width:800px){
+      .nav-l1-btn span:not(.icon){display:none;}
+      .nav-l1-btn{padding:8px 10px;}
+    }
 
     /* ── NAV LEVEL 2 — year/month ── */
     .nav-l2{display:flex;align-items:center;gap:6px;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:5px;margin-bottom:20px;flex-wrap:wrap;}
