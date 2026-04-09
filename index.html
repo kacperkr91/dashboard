@@ -3784,11 +3784,120 @@ const KAL_CATEGORIES=[
 
 function katColor(id){return KAL_CATEGORIES.find(c=>c.id===id)||KAL_CATEGORIES[4];}
 
+// ── Polskie święta (ruchome + stałe) ──
+function getPolishHolidaySet(year){
+  const fixed=[
+    `${year}-01-01`,`${year}-01-06`,`${year}-05-01`,`${year}-05-03`,
+    `${year}-08-15`,`${year}-11-01`,`${year}-11-11`,`${year}-12-25`,`${year}-12-26`,
+  ];
+  // Wielkanoc (algorytm Meeusa)
+  const a=year%19,b=Math.floor(year/100),c=year%100;
+  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const ii=Math.floor(c/4),k=c%4,l=(32+2*e+2*ii-h-k)%7;
+  const m=Math.floor((a+11*h+22*l)/451);
+  const mo=Math.floor((h+l-7*m+114)/31);
+  const dy=((h+l-7*m+114)%31)+1;
+  const easter=new Date(year,mo-1,dy);
+  const addD=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const moveable=[easter,addD(easter,1),addD(easter,49),addD(easter,60)].map(fmt);
+  return new Set([...fixed,...moveable]);
+}
+
+// ── Następny dzień roboczy od daty (włącznie) ──
+function nextWorkday(date){
+  const d=new Date(date);
+  d.setHours(0,0,0,0);
+  const holidays=getPolishHolidaySet(d.getFullYear());
+  while(true){
+    const dow=d.getDay();
+    const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(dow!==0&&dow!==6&&!holidays.has(dk))return d;
+    d.setDate(d.getDate()+1);
+    // Sprawdź też następny rok jeśli przekraczamy granicę
+    if(!holidays.has(dk)){}// recheck with new year holidays if needed
+  }
+}
+
+// ── Generuj daty dla wydarzeń cyklicznych ──
+function getRecurringDates(baseDate, recur, horizonMonths=13){
+  const dates=[];
+  const base=new Date(baseDate);
+  const horizon=new Date();
+  horizon.setMonth(horizon.getMonth()+horizonMonths);
+
+  if(recur==='none'){
+    dates.push(baseDate);
+  } else if(recur==='monthly'){
+    let d=new Date(base);
+    while(d<=horizon){
+      const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      dates.push(dk);
+      d.setMonth(d.getMonth()+1);
+    }
+  } else if(recur==='yearly'){
+    let d=new Date(base);
+    while(d<=horizon){
+      const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      dates.push(dk);
+      d.setFullYear(d.getFullYear()+1);
+    }
+  }
+  return dates;
+}
+
+// ── ZUS: 15-ty każdego miesiąca → następny dzień roboczy ──
+function generateZusDates(horizonMonths=13){
+  const dates=[];
+  const today=new Date();
+  for(let i=-1;i<horizonMonths;i++){
+    const d=new Date(today.getFullYear(),today.getMonth()+i,15);
+    const workday=nextWorkday(d);
+    const dk=`${workday.getFullYear()}-${String(workday.getMonth()+1).padStart(2,'0')}-${String(workday.getDate()).padStart(2,'0')}`;
+    dates.push(dk);
+  }
+  return dates;
+}
+
+// ── Wstaw ZUS do wydarzeń (jeśli jeszcze nie ma) ──
+function ensureZusEvents(){
+  const events=getKalEvents();
+  const zusDates=generateZusDates();
+  let changed=false;
+  zusDates.forEach(dk=>{
+    const dayEvs=events[dk]||[];
+    const hasZus=dayEvs.some(e=>e.id&&e.id.startsWith('zus-'));
+    if(!hasZus){
+      if(!events[dk])events[dk]=[];
+      events[dk].push({id:`zus-${dk}`,title:'Płatność ZUS',desc:'Termin płatności składek ZUS (15-ty lub następny dzień roboczy)',cat:'platnosc',recur:'monthly',isZus:true});
+      changed=true;
+    }
+  });
+  if(changed)saveKalEvents(events);
+}
+
+// ── Pobierz wszystkie widoczne wydarzenia dla danego miesiąca ──
+function getEventsForMonth(year, month){
+  const events=getKalEvents();
+  const result={};
+  // Przeglądaj wszystkie zapisane daty
+  Object.keys(events).forEach(dk=>{
+    const [y,m]=dk.split('-').map(Number);
+    if(y===year&&m===month+1){
+      result[dk]=events[dk];
+    }
+  });
+  return result;
+}
+
 function buildKalendarzView(){
+  ensureZusEvents();
   const year=_state.kalendarzYear;
   const month=_state.kalendarzMonth;
   const events=getKalEvents();
   const today=new Date();
+  today.setHours(0,0,0,0);
   const todayKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
   const MONTHS_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
@@ -3796,26 +3905,29 @@ function buildKalendarzView(){
 
   const firstDay=new Date(year,month,1);
   const lastDay=new Date(year,month+1,0);
-  const startDow=(firstDay.getDay()+6)%7; // Pn=0
+  const startDow=(firstDay.getDay()+6)%7;
 
-  // Collect upcoming events (next 30 days)
+  // Nadchodzące (60 dni)
   const upcoming=[];
   for(let i=0;i<60;i++){
-    const d=new Date(today);d.setDate(today.getDate()+i);
+    const d=new Date(today);
+    d.setDate(today.getDate()+i);
     const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     if(events[dk]){
       events[dk].forEach(ev=>{
-        upcoming.push({...ev,date:dk,dateObj:d});
+        upcoming.push({...ev,date:dk,dateObj:new Date(d)});
       });
     }
   }
 
+  const MONTHS_SHORT=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+
   // Header
   const header=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-    <div style="display:flex;align-items:center;gap:12px">
-      <button onclick="kalPrevMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">‹</button>
-      <div style="font-size:20px;font-weight:700;color:var(--text);min-width:200px;text-align:center">${MONTHS_PL[month]} ${year}</div>
-      <button onclick="kalNextMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">›</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button onclick="kalPrevMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text)">‹</button>
+      <div style="font-size:20px;font-weight:700;color:var(--text);min-width:190px;text-align:center">${MONTHS_PL[month]} ${year}</div>
+      <button onclick="kalNextMonth()" style="background:var(--white);border:1px solid var(--border);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--text)">›</button>
       <button onclick="kalGoToday()" style="background:var(--white);border:1px solid var(--border);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-mid);font-family:'Inter',sans-serif">Dziś</button>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -3823,7 +3935,7 @@ function buildKalendarzView(){
     </div>
   </div>`;
 
-  // Calendar grid
+  // Siatka
   let cells='';
   for(let i=0;i<startDow;i++) cells+=`<div style="min-height:90px"></div>`;
 
@@ -3836,13 +3948,14 @@ function buildKalendarzView(){
 
     const evHtml=dayEvents.map(ev=>{
       const cat=katColor(ev.cat);
-      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${ev.title}</div>`;
+      const recurIcon=ev.recur==='monthly'?'↻ ':ev.recur==='yearly'?'↺ ':'';
+      const zusIcon=ev.isZus?'💰 ':'';
+      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${zusIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
-    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafbfc':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s;position:relative" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
+    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
       <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--blue)':isWE?'var(--purple)':'var(--text-muted)'};margin-bottom:3px">${d}</div>
       ${evHtml}
-      ${dayEvents.length===0?`<div style="position:absolute;bottom:5px;right:6px;font-size:16px;opacity:0;transition:opacity 0.15s" class="kal-add-icon">+</div>`:''}
     </div>`;
   }
 
@@ -3853,29 +3966,32 @@ function buildKalendarzView(){
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cells}</div>
   </div>`;
 
-  // Upcoming events panel
-  const upcomingHtml=upcoming.length?upcoming.slice(0,10).map(ev=>{
-    const cat=katColor(ev.cat);
-    const d=ev.dateObj;
-    const diff=Math.round((d-today)/86400000);
-    const diffLabel=diff===0?'Dziś':diff===1?'Jutro':`Za ${diff} dni`;
-    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="text-align:center;min-width:44px;background:${cat.bg};border-radius:8px;padding:4px">
-        <div style="font-size:16px;font-weight:700;color:${cat.color}">${d.getDate()}</div>
-        <div style="font-size:9px;color:${cat.color};font-weight:600">${['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'][d.getMonth()]}</div>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.title}</div>
-        ${ev.desc?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.desc}</div>`:''}
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${cat.bg};color:${cat.color}">${cat.label}</span>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${diffLabel}</div>
-      </div>
-    </div>`;
-  }).join(''):`<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Brak nadchodzących wydarzeń</div>`;
+  // Nadchodzące
+  const upcomingHtml=upcoming.length
+    ?upcoming.slice(0,12).map(ev=>{
+      const cat=katColor(ev.cat);
+      const d=ev.dateObj;
+      const diff=Math.round((d-today)/86400000);
+      const diffLabel=diff===0?'Dziś':diff===1?'Jutro':`Za ${diff} dni`;
+      const recurBadge=ev.recur==='monthly'?'<span style="font-size:9px;color:var(--text-muted);margin-left:4px">↻ mies.</span>':ev.recur==='yearly'?'<span style="font-size:9px;color:var(--text-muted);margin-left:4px">↺ rok</span>':'';
+      return`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="text-align:center;min-width:44px;background:${cat.bg};border-radius:8px;padding:4px;flex-shrink:0">
+          <div style="font-size:16px;font-weight:700;color:${cat.color}">${d.getDate()}</div>
+          <div style="font-size:9px;color:${cat.color};font-weight:600">${MONTHS_SHORT[d.getMonth()]}</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.isZus?'💰 ':''}${ev.title}${recurBadge}</div>
+          ${ev.desc?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.desc}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${cat.bg};color:${cat.color}">${cat.label}</span>
+          <div style="font-size:10px;color:${diff<=3?'#dc2626':'var(--text-muted)'};margin-top:3px;font-weight:${diff<=3?700:400}">${diffLabel}</div>
+        </div>
+      </div>`;
+    }).join('')
+    :`<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Brak nadchodzących wydarzeń</div>`;
 
-  const sidebar=`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px">
+  const sidebar=`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px;position:sticky;top:20px">
     <div class="card-title" style="margin-bottom:16px">📋 Nadchodzące</div>
     ${upcomingHtml}
   </div>`;
@@ -3883,7 +3999,7 @@ function buildKalendarzView(){
   // Modal
   const modal=`
   <div id="kalModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.4);z-index:300;align-items:center;justify-content:center">
-    <div style="background:var(--white);border-radius:16px;padding:28px;width:420px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="background:var(--white);border-radius:16px;padding:28px;width:440px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div style="font-size:16px;font-weight:700;color:var(--text)" id="kalModalTitle">Dodaj wydarzenie</div>
         <button onclick="kalCloseModal()" style="background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;color:var(--text-muted)">✕</button>
@@ -3900,10 +4016,18 @@ function buildKalendarzView(){
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px">Notatka (opcjonalnie)</label>
         <textarea id="kalDesc" rows="2" placeholder="Szczegóły..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none;resize:vertical"></textarea>
       </div>
-      <div style="margin-bottom:20px">
+      <div style="margin-bottom:14px">
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:8px">Kategoria</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap" id="kalCatPicker">
           ${KAL_CATEGORIES.map(c=>`<button onclick="kalSelectCat('${c.id}')" id="kalCat-${c.id}" style="padding:5px 12px;border-radius:8px;border:2px solid ${c.color};background:var(--white);color:${c.color};font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s">${c.label}</button>`).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:8px">Powtarzanie</label>
+        <div style="display:flex;gap:6px">
+          <button onclick="kalSelectRecur('none')" id="kalRecur-none" style="padding:5px 14px;border-radius:8px;border:2px solid var(--border);background:var(--white);color:var(--text-mid);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Jednorazowo</button>
+          <button onclick="kalSelectRecur('monthly')" id="kalRecur-monthly" style="padding:5px 14px;border-radius:8px;border:2px solid var(--border);background:var(--white);color:var(--text-mid);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↻ Co miesiąc</button>
+          <button onclick="kalSelectRecur('yearly')" id="kalRecur-yearly" style="padding:5px 14px;border-radius:8px;border:2px solid var(--border);background:var(--white);color:var(--text-mid);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↺ Co rok</button>
         </div>
       </div>
       <div style="display:flex;gap:8px">
@@ -3926,17 +4050,20 @@ function buildKalendarzView(){
 let _kalEditDate=null;
 let _kalEditId=null;
 let _kalSelectedCat='inne';
+let _kalSelectedRecur='none';
 
 function kalOpenDay(dateStr){
   _kalEditDate=dateStr;
   _kalEditId=null;
   _kalSelectedCat='inne';
+  _kalSelectedRecur='none';
   document.getElementById('kalModalTitle').textContent='Dodaj wydarzenie';
   document.getElementById('kalDate').value=dateStr;
   document.getElementById('kalTitle').value='';
   document.getElementById('kalDesc').value='';
   document.getElementById('kalDeleteBtn').style.display='none';
   kalSelectCat('inne');
+  kalSelectRecur('none');
   document.getElementById('kalModal').style.display='flex';
   setTimeout(()=>document.getElementById('kalTitle').focus(),50);
 }
@@ -3946,15 +4073,18 @@ function kalEditEvent(dateStr,evId){
   const events=getKalEvents();
   const ev=(events[dateStr]||[]).find(e=>e.id===evId);
   if(!ev)return;
+  if(ev.isZus){alert('Terminy ZUS są generowane automatycznie i nie można ich edytować.');return;}
   _kalEditDate=dateStr;
   _kalEditId=evId;
   _kalSelectedCat=ev.cat||'inne';
+  _kalSelectedRecur=ev.recur||'none';
   document.getElementById('kalModalTitle').textContent='Edytuj wydarzenie';
-  document.getElementById('kalDate').value=dateStr;
+  document.getElementById('kalDate').value=ev.recur&&ev.recur!=='none'?dateStr:dateStr;
   document.getElementById('kalTitle').value=ev.title;
   document.getElementById('kalDesc').value=ev.desc||'';
   document.getElementById('kalDeleteBtn').style.display='block';
   kalSelectCat(ev.cat||'inne');
+  kalSelectRecur(ev.recur||'none');
   document.getElementById('kalModal').style.display='flex';
 }
 
@@ -3965,6 +4095,18 @@ function kalSelectCat(id){
     if(!btn)return;
     btn.style.background=c.id===id?c.color:'var(--white)';
     btn.style.color=c.id===id?'#fff':c.color;
+    btn.style.borderColor=c.color;
+  });
+}
+
+function kalSelectRecur(id){
+  _kalSelectedRecur=id;
+  ['none','monthly','yearly'].forEach(r=>{
+    const btn=document.getElementById('kalRecur-'+r);
+    if(!btn)return;
+    btn.style.background=r===id?'var(--blue)':'var(--white)';
+    btn.style.color=r===id?'#fff':'var(--text-mid)';
+    btn.style.borderColor=r===id?'var(--blue)':'var(--border)';
   });
 }
 
@@ -3973,17 +4115,28 @@ function kalSaveEvent(){
   const title=document.getElementById('kalTitle').value.trim();
   const desc=document.getElementById('kalDesc').value.trim();
   if(!dateStr||!title){alert('Wpisz tytuł i wybierz datę.');return;}
+
   const events=getKalEvents();
-  if(!events[dateStr])events[dateStr]=[];
+  const evId=_kalEditId||Date.now().toString();
+  const evObj={id:evId,title,desc,cat:_kalSelectedCat,recur:_kalSelectedRecur};
+
   if(_kalEditId){
-    const idx=events[dateStr].findIndex(e=>e.id===_kalEditId);
-    if(idx!==-1)events[dateStr][idx]={id:_kalEditId,title,desc,cat:_kalSelectedCat};
-  } else {
-    events[dateStr].push({id:Date.now().toString(),title,desc,cat:_kalSelectedCat});
+    // Edycja — usuń stary wpis z wszystkich dat (mogło być cykliczne)
+    Object.keys(events).forEach(dk=>{
+      events[dk]=events[dk].filter(e=>e.id!==_kalEditId);
+      if(!events[dk].length)delete events[dk];
+    });
   }
+
+  // Generuj daty dla tego wydarzenia
+  const dates=getRecurringDates(dateStr,_kalSelectedRecur);
+  dates.forEach(dk=>{
+    if(!events[dk])events[dk]=[];
+    events[dk].push({...evObj});
+  });
+
   saveKalEvents(events);
   kalCloseModal();
-  // Nawiguj do miesiąca zapisanego wydarzenia
   const d=new Date(dateStr);
   _state.kalendarzYear=d.getFullYear();
   _state.kalendarzMonth=d.getMonth();
@@ -3992,12 +4145,33 @@ function kalSaveEvent(){
 
 function kalDeleteEvent(){
   if(!_kalEditDate||!_kalEditId)return;
-  if(!confirm('Usunąć to wydarzenie?'))return;
   const events=getKalEvents();
-  if(events[_kalEditDate]){
-    events[_kalEditDate]=events[_kalEditDate].filter(e=>e.id!==_kalEditId);
-    if(!events[_kalEditDate].length)delete events[_kalEditDate];
+  const ev=(events[_kalEditDate]||[]).find(e=>e.id===_kalEditId);
+  const isRecur=ev&&ev.recur&&ev.recur!=='none';
+
+  if(isRecur){
+    const choice=confirm('Usunąć wszystkie wystąpienia tego cyklicznego wydarzenia?\n\nOK = usuń wszystkie\nAnuluj = tylko to jedno');
+    if(choice){
+      // Usuń wszystkie
+      Object.keys(events).forEach(dk=>{
+        events[dk]=events[dk].filter(e=>e.id!==_kalEditId);
+        if(!events[dk].length)delete events[dk];
+      });
+    } else {
+      // Usuń tylko to jedno
+      if(events[_kalEditDate]){
+        events[_kalEditDate]=events[_kalEditDate].filter(e=>e.id!==_kalEditId);
+        if(!events[_kalEditDate].length)delete events[_kalEditDate];
+      }
+    }
+  } else {
+    if(!confirm('Usunąć to wydarzenie?'))return;
+    if(events[_kalEditDate]){
+      events[_kalEditDate]=events[_kalEditDate].filter(e=>e.id!==_kalEditId);
+      if(!events[_kalEditDate].length)delete events[_kalEditDate];
+    }
   }
+
   saveKalEvents(events);
   kalCloseModal();
   renderApp();
@@ -4026,6 +4200,7 @@ function kalGoToday(){
   _state.kalendarzMonth=n.getMonth();
   renderApp();
 }
+
 
 /* MAIN RENDER */
 const mount=html=>{document.getElementById('app').innerHTML=html;};
