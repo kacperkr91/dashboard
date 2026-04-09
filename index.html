@@ -3197,12 +3197,27 @@ function buildParkingView(){
         :isAlert
           ?`<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>`
           :`<span style="color:#16a34a;font-size:13px">✓</span>`;
-      return`<tr style="background:${bg}">
+      // Sprawdź czy data ważności karty wygasa za mniej niż 8 dni
+      const expiryAlert=(()=>{
+        if(!c.dataWaznosci||c.typ==='miesięczny')return false;
+        const parts=c.dataWaznosci.split('.');
+        if(parts.length!==3)return false;
+        const exp=new Date(parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));
+        const today=new Date();today.setHours(0,0,0,0);
+        const daysLeft=Math.ceil((exp-today)/(1000*60*60*24));
+        return daysLeft<8;
+      })();
+      const expiryStyle=expiryAlert?'background:#fef2f2;color:#dc2626;font-weight:700;border-radius:4px;padding:1px 6px':'';
+      const expiryStatusCell=expiryAlert&&!isAlert
+        ?`<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>`
+        :statusCell;
+      const effectiveBg=expiryAlert&&!isAlert?'#fef2f2':bg;
+      return`<tr style="background:${effectiveBg}">
         <td style="text-align:center;font-weight:700;color:var(--text-muted);font-size:11px">${c.lp}</td>
         <td style="font-family:monospace;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
-        <td style="text-align:center;font-size:12px">${c.dataWaznosci||''}</td>
+        <td style="text-align:center;font-size:12px"><span style="${expiryStyle}">${c.dataWaznosci||''}</span></td>
         <td style="text-align:center;font-weight:700;color:${pozostaloColor};font-size:13px">${pozostalo}</td>
-        <td style="text-align:center">${statusCell}</td>
+        <td style="text-align:center">${expiryStatusCell}</td>
       </tr>`;
     }).join('');
 
