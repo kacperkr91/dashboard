@@ -3094,8 +3094,226 @@ function buildAirbnbPayoutView(){
 
 function setAirbnbPayout(key){_state.airbnbPayoutKey=key;renderApp();}
 
+
 /* ═══════════════════════════════════════════════════════
-   HK PDF EXPORT
+   PARKING
+═══════════════════════════════════════════════════════ */
+function parseParkingText(text){
+  // Format z maila (tabulatory): LP \t Bilet \t Data \t 23:59 \t Dni \t x24h \t + \t H \t h \t [zapas|miesięczny]
+  const results=[];
+  const lines=text.split('\n');
+  let lp=1;
+
+  for(const line of lines){
+    const raw=line.replace(/>/g,'').trim();
+    if(!raw)continue;
+
+    // Szukaj numeru biletu (10-15 cyfr)
+    const biletM=raw.match(/\b(\d{10,15})\b/);
+    if(!biletM)continue;
+    const bilet=biletM[1];
+
+    // Szukaj daty DD.MM.YYYY
+    const dataM=raw.match(/(\d{1,2})\.(\d{2})\.(\d{4})/);
+    if(!dataM)continue;
+    const dataStr=`${dataM[1].padStart(2,'0')}.${dataM[2]}.${dataM[3]}`;
+
+    // Sprawdź miesięczny
+    if(raw.includes('miesięczny')){
+      results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni:0,h:0,totalH:0,godziny:'miesięczny',typ:'miesięczny',alert:false});
+      continue;
+    }
+
+    // Parsuj dni i godziny — szukaj wzorca: liczba x24h + liczba h
+    // Format w maila: "8 \t x24h \t + \t 0 \t h" lub "8x24h+0h"
+    const parts=raw.split(/[\t\s]+/).filter(Boolean);
+    let dni=0,h=0,found=false;
+
+    // Szukaj wzorca z tabulatorami: LICZBA x24h + LICZBA h
+    const dniIdx=parts.findIndex(p=>p==='x24h'||p.match(/^\d+x24h/));
+    if(dniIdx!==-1){
+      if(parts[dniIdx]==='x24h'){
+        // Format: "8 x24h + 0 h"
+        dni=parseInt(parts[dniIdx-1])||0;
+        const plusIdx=parts.indexOf('+',dniIdx);
+        if(plusIdx!==-1)h=parseInt(parts[plusIdx+1])||0;
+      } else {
+        // Format: "8x24h+0h"
+        const gM=parts[dniIdx].match(/(\d+)x24h\+(\d+)h/);
+        if(gM){dni=parseInt(gM[1]);h=parseInt(gM[2]);}
+      }
+      found=true;
+    }
+    if(!found)continue;
+
+    const totalH=dni*24+h;
+    const godziny=`${dni}x24h+${h}h`;
+    const typ=raw.includes('zapas')?'zapas':'normalny';
+
+    results.push({lp:lp++,bilet,dataWaznosci:dataStr,dni,h,totalH,godziny,typ,alert:dni<6&&typ==='normalny'});
+  }
+  return results;
+}
+
+function buildParkingView(){
+  const saved=(() => {
+    try{const s=localStorage.getItem('parking_data');return s?JSON.parse(s):null;}
+    catch(e){return null;}
+  })();
+
+  const THRESHOLD=6; // poniżej 6 dni = alert
+
+  function renderTable(cards){
+    if(!cards||!cards.length)return'';
+    const alerts=cards.filter(c=>c.alert);
+    const normal=cards.filter(c=>!c.alert&&c.typ==='normalny');
+    const zapas=cards.filter(c=>c.typ==='zapas');
+    const miesieczny=cards.filter(c=>c.typ==='miesięczny');
+
+    const alertBanner=alerts.length?`<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:28px">🚨</span>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#dc2626">Wymaga doładowania: ${alerts.length} kart poniżej ${THRESHOLD} dni!</div>
+        <div style="font-size:12px;color:#7f1d1d;margin-top:4px">${alerts.map(c=>`<strong>#${c.bilet.slice(-6)}</strong> (${c.dni}d ${c.h}h)`).join(' · ')}</div>
+      </div>
+    </div>`:'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px"><span style="font-size:22px">✅</span><span style="font-weight:600;color:#15803d">Wszystkie karty OK — żadna poniżej ${THRESHOLD} dni</span></div>';
+
+    const kpis=`<div class="kpi-row" style="margin-bottom:20px">
+      <div class="kpi-card c-red"><div class="label">Wymaga doładowania</div><div class="value" style="color:#dc2626">${alerts.length}</div><div class="sub">poniżej ${THRESHOLD} dni</div></div>
+      <div class="kpi-card c-green"><div class="label">OK</div><div class="value">${normal.length}</div><div class="sub">kart normalnych</div></div>
+      <div class="kpi-card c-blue"><div class="label">Zapas</div><div class="value">${zapas.length}</div><div class="sub">kart zapasowych</div></div>
+      <div class="kpi-card"><div class="label">Miesięczne</div><div class="value">${miesieczny.length}</div><div class="sub">kart miesięcznych</div></div>
+      <div class="kpi-card"><div class="label">Łącznie</div><div class="value">${cards.length}</div><div class="sub">wszystkich kart</div></div>
+    </div>`;
+
+    const rows=cards.map((c,i)=>{
+      const isAlert=c.alert;
+      const isZapas=c.typ==='zapas';
+      const isMies=c.typ==='miesięczny';
+      const bg=isAlert?'#fef2f2':isZapas?'#eff6ff':isMies?'#f5f3ff':i%2===0?'var(--white)':'#fafbfc';
+      const barPct=Math.min(100,Math.round(c.dni/30*100));
+      const barColor=isAlert?'#dc2626':c.dni<14?'#f59e0b':'#16a34a';
+      return`<tr style="background:${bg}">
+        <td style="font-weight:700;color:var(--text-muted);font-size:11px">${c.lp}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
+        <td style="font-size:12px">${c.dataWaznosci}</td>
+        <td style="font-weight:700;color:${isAlert?'#dc2626':'var(--text)'};font-size:13px">${c.godziny}</td>
+        <td style="min-width:120px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${barPct}%;background:${barColor};border-radius:4px"></div>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:${barColor};white-space:nowrap">${c.dni}d ${c.h}h</span>
+          </div>
+        </td>
+        <td>${isAlert?'<span style="background:#fecaca;color:#dc2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">⚠️ DOŁADUJ</span>':isZapas?'<span style="background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px">zapas</span>':isMies?'<span style="background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px">miesięczny</span>':''}</td>
+      </tr>`;
+    }).join('');
+
+    const table=`<div class="grid-card">
+      <div class="card-title">Stan kart parkingowych</div>
+      <div class="card-subtitle">Karty poniżej ${THRESHOLD} dni wymagają doładowania</div>
+      <div class="hk-table-wrap"><table class="hk-table">
+        <thead><tr>
+          <th>L.P.</th>
+          <th>Nr biletu</th>
+          <th>Ważny do</th>
+          <th>Godziny</th>
+          <th>Pozostało</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
+
+    return alertBanner+kpis+table;
+  }
+
+  const dateInfo=saved?.date?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Ostatnia aktualizacja: <strong>${saved.date}</strong></div>`:'';
+
+  const inputSection=`<div class="grid-card" style="margin-bottom:20px">
+    <div class="card-title">📧 Wklej treść maila "Stan kart"</div>
+    <div class="card-subtitle">Skopiuj całą treść maila od koordynatora parkingu i wklej poniżej</div>
+    <textarea id="parkingInput" style="width:100%;height:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Inter',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none;margin-top:8px" placeholder="Wklej tutaj treść maila ze stanami kart parkingowych...">${saved?.rawText||''}</textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap">
+      <button onclick="fetchParkingFromGmail()" style="background:#059669;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">📧 Pobierz z Gmaila</button>
+      <button onclick="parseParkingInput()" style="background:#b45309;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">🅿️ Analizuj ręcznie</button>
+      ${saved?.date?`<button onclick="clearParking()" style="background:none;border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:12px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">✕ Wyczyść</button>`:''}
+      ${dateInfo}
+    </div>
+  </div>`;
+
+  const resultsSection=saved?.cards?renderTable(saved.cards):'';
+
+  return`<div style="max-width:1100px;margin:0 auto">${inputSection}${resultsSection}</div>`;
+}
+
+async function fetchParkingFromGmail(){
+  const btn=document.querySelector('button[onclick="fetchParkingFromGmail()"]');
+  if(btn){btn.textContent='⏳ Pobieranie...';btn.disabled=true;}
+
+  try{
+    const response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        mcp_servers:[{type:'url',url:'https://gmail.mcp.claude.com/mcp',name:'gmail'}],
+        messages:[{role:'user',content:'Użyj narzędzia gmail_search_messages aby znaleźć maile z subject:stany kart (maxResults: 1). Następnie użyj gmail_read_message aby pobrać treść najnowszego. Zwróć TYLKO surową treść body maila bez żadnych komentarzy, formatowania ani wstępów.'}]
+      })
+    });
+
+    const data=await response.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('\n')||'';
+
+    if(!text.trim()){
+      alert('Nie znaleziono maila "stany kart" na Gmailu.');
+      return;
+    }
+
+    // Wstaw do textarea i parsuj
+    const ta=document.getElementById('parkingInput');
+    if(ta)ta.value=text;
+    const cards=parseParkingText(text);
+    if(!cards.length){
+      alert('Pobrano mail ale nie udało się sparsować danych. Sprawdź ręcznie.');
+      return;
+    }
+    const saved={
+      rawText:text,
+      cards,
+      date:new Date().toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    };
+    localStorage.setItem('parking_data',JSON.stringify(saved));
+    renderApp();
+  }catch(e){
+    alert('Błąd pobierania z Gmaila: '+e.message);
+  }finally{
+    if(btn){btn.textContent='📧 Pobierz z Gmaila';btn.disabled=false;}
+  }
+}
+
+function parseParkingInput(){
+  const text=document.getElementById('parkingInput')?.value||'';
+  if(!text.trim()){alert('Wklej treść maila.');return;}
+  const cards=parseParkingText(text);
+  if(!cards.length){alert('Nie udało się sparsować danych. Sprawdź czy tekst jest poprawny.');return;}
+  const saved={
+    rawText:text,
+    cards,
+    date:new Date().toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+  };
+  localStorage.setItem('parking_data',JSON.stringify(saved));
+  renderApp();
+}
+
+function clearParking(){
+  localStorage.removeItem('parking_data');
+  renderApp();
+}
+
+
 ═══════════════════════════════════════════════════════ */
 function exportHkPdf(monthKey, monthLabel){
   const hkData=_state.data.housekeeping[monthKey];
@@ -3581,6 +3799,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')">
       <span class="icon">📅</span> Dyżury
     </button>
+    <button class="nav-l1-btn ${section==='parking'?'active':''}" style="${section==='parking'?'background:#b45309;border-color:#b45309':''}" onclick="setSection('parking')">
+      <span class="icon">🅿️</span> Parking
+    </button>
   </div>`;
 
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
@@ -3633,6 +3854,8 @@ function renderApp(){
     content=buildPrevioView();
   } else if(section==='booking-payout'){
     content=buildPayoutView();
+  } else if(section==='parking'){
+    content=buildParkingView();
   } else {
     // ── Dyżury ──
     content=buildDyzuryView();
