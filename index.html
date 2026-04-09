@@ -3152,11 +3152,10 @@ function buildParkingView(){
       </div>
     </div>`:'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px"><span style="font-size:22px">✅</span><span style="font-weight:600;color:#15803d">Wszystkie karty OK — żadna poniżej ${THRESHOLD} dni</span></div>';
 
+    const ok=cards.filter(c=>!c.alert&&c.typ!=='miesięczny');
     const kpis=`<div class="kpi-row" style="margin-bottom:20px">
       <div class="kpi-card c-red"><div class="label">Wymaga doładowania</div><div class="value" style="color:#dc2626">${alerts.length}</div><div class="sub">poniżej ${THRESHOLD} dni</div></div>
-      <div class="kpi-card c-green"><div class="label">OK</div><div class="value">${normal.length}</div><div class="sub">kart normalnych</div></div>
-      <div class="kpi-card c-blue"><div class="label">Zapas</div><div class="value">${zapas.length}</div><div class="sub">kart zapasowych</div></div>
-      <div class="kpi-card"><div class="label">Miesięczne</div><div class="value">${miesieczny.length}</div><div class="sub">kart miesięcznych</div></div>
+      <div class="kpi-card c-green"><div class="label">OK</div><div class="value">${ok.length}</div><div class="sub">kart w normie</div></div>
       <div class="kpi-card"><div class="label">Łącznie</div><div class="value">${cards.length}</div><div class="sub">wszystkich kart</div></div>
     </div>`;
 
@@ -3164,23 +3163,16 @@ function buildParkingView(){
       const isAlert=c.alert;
       const isZapas=c.typ==='zapas';
       const isMies=c.typ==='miesięczny';
-      const bg=isAlert?'#fef2f2':isZapas?'#eff6ff':isMies?'#f5f3ff':i%2===0?'var(--white)':'#fafbfc';
-      const barPct=Math.min(100,Math.round(c.dni/30*100));
-      const barColor=isAlert?'#dc2626':c.dni<14?'#f59e0b':'#16a34a';
+      const bg=isAlert?'#fef2f2':i%2===0?'var(--white)':'#fafbfc';
+      // Czytelny format: "6 dni 17h" zamiast "6x24h+17h"
+      const pozostalo=isMies?'miesięczny':`${c.dni} dni ${c.h}h`;
+      const pozostaloColor=isAlert?'#dc2626':c.dni<14?'#f59e0b':'#16a34a';
       return`<tr style="background:${bg}">
         <td style="font-weight:700;color:var(--text-muted);font-size:11px">${c.lp}</td>
         <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${c.bilet.slice(0,-4)}<strong>${c.bilet.slice(-4)}</strong></td>
         <td style="font-size:12px">${c.dataWaznosci}</td>
-        <td style="font-weight:700;color:${isAlert?'#dc2626':'var(--text)'};font-size:13px">${c.godziny}</td>
-        <td style="min-width:120px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-              <div style="height:100%;width:${barPct}%;background:${barColor};border-radius:4px"></div>
-            </div>
-            <span style="font-size:11px;font-weight:700;color:${barColor};white-space:nowrap">${c.dni}d ${c.h}h</span>
-          </div>
-        </td>
-        <td>${isAlert?'<span style="background:#fecaca;color:#dc2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">⚠️ DOŁADUJ</span>':isZapas?'<span style="background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px">zapas</span>':isMies?'<span style="background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px">miesięczny</span>':''}</td>
+        <td style="font-weight:700;color:${pozostaloColor};font-size:13px">${pozostalo}</td>
+        <td>${isAlert?'<span style="background:#fecaca;color:#dc2626;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px">⚠️ DOŁADUJ</span>':'<span style="color:#16a34a;font-size:13px">✓</span>'}</td>
       </tr>`;
     }).join('');
 
@@ -3192,7 +3184,6 @@ function buildParkingView(){
           <th>L.P.</th>
           <th>Nr biletu</th>
           <th>Ważny do</th>
-          <th>Godziny</th>
           <th>Pozostało</th>
           <th>Status</th>
         </tr></thead>
