@@ -4174,7 +4174,7 @@ function buildKalendarzView(){
           ${KAL_CATEGORIES.map(c=>`<button onclick="kalSelectCat('${c.id}')" id="kalCat-${c.id}" style="padding:5px 12px;border-radius:8px;border:2px solid ${c.color};background:var(--white);color:${c.color};font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s">${c.label}</button>`).join('')}
         </div>
       </div>
-      <div style="margin-bottom:20px">
+      <div id="kalRecurRow" style="margin-bottom:20px">
         <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:8px">Powtarzanie</label>
         <div style="display:flex;gap:6px">
           <button onclick="kalSelectRecur('none')" id="kalRecur-none" style="padding:5px 14px;border-radius:8px;border:2px solid var(--border);background:var(--white);color:var(--text-mid);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Jednorazowo</button>
@@ -4187,7 +4187,7 @@ function buildKalendarzView(){
         <button id="kalDoneBtn" onclick="kalToggleDoneFromModal()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid #86efac;background:#dcfce7;color:#16a34a">Oznacz jako wykonane</button>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="kalSaveEvent()" style="flex:1;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Zapisz</button>
+        <button id="kalSaveBtn" onclick="kalSaveEvent()" style="flex:1;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Zapisz</button>
         <button id="kalDeleteBtn" onclick="kalDeleteEvent()" style="display:none;background:var(--red-light);color:var(--red);border:1px solid #fca5a5;padding:11px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Usuń</button>
       </div>
     </div>
@@ -4218,6 +4218,13 @@ function kalOpenDay(dateStr){
   document.getElementById('kalTitle').value='';
   document.getElementById('kalDesc').value='';
   document.getElementById('kalDeleteBtn').style.display='none';
+  document.getElementById('kalCatPicker').style.display='flex';
+  document.getElementById('kalRecurRow').style.display='block';
+  document.getElementById('kalSaveBtn').style.display='block';
+  document.getElementById('kalDate').disabled=false;
+  document.getElementById('kalTitle').disabled=false;
+  document.getElementById('kalDesc').disabled=false;
+  document.getElementById('kalDoneRow').style.display='none';
   kalSelectCat('inne');
   kalSelectRecur('none');
   document.getElementById('kalModal').style.display='flex';
@@ -4229,7 +4236,38 @@ function kalEditEvent(dateStr,evId){
   const events=getKalEvents();
   const ev=(events[dateStr]||[]).find(e=>e.id===evId);
   if(!ev)return;
-  if(ev.isAuto){alert('Ten termin jest generowany automatycznie i nie można go edytować.');return;}
+  if(ev.isAuto){
+    // Dla automatycznych płatności — pokaż uproszczony modal tylko z opcją wykonania
+    _kalEditDate=dateStr;
+    _kalEditId=evId;
+    const isDone=isEventDone(dateStr,evId);
+    const cat=katColor(ev.cat);
+    document.getElementById('kalModalTitle').textContent=ev.title;
+    document.getElementById('kalDate').value=dateStr;
+    document.getElementById('kalDate').disabled=true;
+    document.getElementById('kalTitle').value=ev.desc||'';
+    document.getElementById('kalTitle').disabled=true;
+    document.getElementById('kalDesc').value='';
+    document.getElementById('kalDesc').disabled=true;
+    document.getElementById('kalDeleteBtn').style.display='none';
+    document.getElementById('kalCatPicker').style.display='none';
+    document.getElementById('kalRecurRow').style.display='none';
+    document.getElementById('kalSaveBtn').style.display='none';
+    const doneRow=document.getElementById('kalDoneRow');
+    const doneBtn=document.getElementById('kalDoneBtn');
+    const doneLabel=document.getElementById('kalDoneLabel');
+    if(doneRow&&doneBtn&&doneLabel){
+      doneRow.style.display='flex';
+      doneLabel.textContent=isDone?'✓ Wykonano':'○ Niewykonane';
+      doneLabel.style.color=isDone?'#16a34a':'var(--text-muted)';
+      doneBtn.textContent=isDone?'↩ Cofnij':'✓ Oznacz jako wykonane';
+      doneBtn.style.background=isDone?'#fef2f2':'#dcfce7';
+      doneBtn.style.borderColor=isDone?'#fca5a5':'#86efac';
+      doneBtn.style.color=isDone?'#dc2626':'#16a34a';
+    }
+    document.getElementById('kalModal').style.display='flex';
+    return;
+  }
   _kalEditDate=dateStr;
   _kalEditId=evId;
   _kalSelectedCat=ev.cat||'inne';
@@ -4239,6 +4277,12 @@ function kalEditEvent(dateStr,evId){
   document.getElementById('kalTitle').value=ev.title;
   document.getElementById('kalDesc').value=ev.desc||'';
   document.getElementById('kalDeleteBtn').style.display='block';
+  document.getElementById('kalCatPicker').style.display='flex';
+  document.getElementById('kalRecurRow').style.display='block';
+  document.getElementById('kalSaveBtn').style.display='block';
+  document.getElementById('kalDate').disabled=false;
+  document.getElementById('kalTitle').disabled=false;
+  document.getElementById('kalDesc').disabled=false;
   kalSelectCat(ev.cat||'inne');
   kalSelectRecur(ev.recur||'none');
   // Done state
