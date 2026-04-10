@@ -855,7 +855,11 @@ function buildMonthList(sheetNames){
     .sort((a,b)=>a.sortKey.localeCompare(b.sortKey));
 }
 
+let _hkMonthsDetected=false;
+let _otvMonthsDetected=false;
+
 async function detectHkMonths(){
+  if(_hkMonthsDetected)return; // tylko raz na sesję
   const{hkApiKey,hkSpreadsheetId}=CONFIG;
   if(!hkApiKey||!hkSpreadsheetId)return;
   try{
@@ -863,7 +867,7 @@ async function detectHkMonths(){
     const months=buildMonthList(names);
     if(months.length>0){
       HK_MONTHS=months;
-      // Ustaw domyślny miesiąc na ostatni dostępny
+      _hkMonthsDetected=true;
       const lastKey=months[months.length-1].key;
       if(!months.find(m=>m.key===_state.hkMonth))_state.hkMonth=lastKey;
     }
@@ -871,6 +875,7 @@ async function detectHkMonths(){
 }
 
 async function detectOtvMonths(){
+  if(_otvMonthsDetected)return; // tylko raz na sesję
   const{otvApiKey,otvSpreadsheetId}=CONFIG;
   if(!otvApiKey||!otvSpreadsheetId)return;
   try{
@@ -878,6 +883,7 @@ async function detectOtvMonths(){
     const months=buildMonthList(names);
     if(months.length>0){
       OTV_MONTHS=months;
+      _otvMonthsDetected=true;
       const lastKey=months[months.length-1].key;
       if(!months.find(m=>m.key===_state.otvMonth))_state.otvMonth=lastKey;
     }
@@ -4800,7 +4806,7 @@ async function init(){
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
   _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
-  await delay(1500);
+  await delay(2000);
 
   // ── Batch 2 ──
   setProgress(35,'Ładowanie marca i mediów…');
@@ -4811,7 +4817,7 @@ async function init(){
   _state.data.mar2026=mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.media=mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
 
-  await delay(1500);
+  await delay(2000);
 
   // ── Batch 3 ──
   setProgress(52,'Ładowanie lutego i stycznia…');
@@ -4822,7 +4828,7 @@ async function init(){
   _state.data.feb2026=fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
   _state.data.jan2026=jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
 
-  await delay(1500);
+  await delay(2000);
 
   // ── Batch 4 ──
   setProgress(67,'Ładowanie grudnia i apartamentów…');
@@ -4833,7 +4839,7 @@ async function init(){
   _state.data.dec2025=dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
   _state.data.apartments=ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
 
-  await delay(1500);
+  await delay(2000);
 
   // ── Batch 5 ──
   setProgress(82,'Ładowanie housekeeping i OTV…');
@@ -4844,7 +4850,7 @@ async function init(){
   _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
   _state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
 
-  await delay(1500);
+  await delay(2000);
 
   // ── Batch 6 ──
   setProgress(93,'Finalizowanie prognozy…');
