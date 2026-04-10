@@ -4744,9 +4744,31 @@ async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null};
   _kalCache=null;_paidCache=null;_doneCache=null;
-  renderApp();
 
-  // ── Wykryj dostępne miesiące z arkuszy ──
+  // Pokaż spinner ładowania
+  mount(`<div class="app"><header>
+    <div class="brand"><div class="brand-icon">🏛️</div>
+    <div><div class="brand-name">Old Town Vistula Premium Apartments</div>
+    <div class="brand-sub">Ładowanie danych…</div></div></div>
+  </header>
+  <div class="state-screen">
+    <div class="spinner"></div>
+    <p id="loadMsg">Pobieranie danych…</p>
+    <div id="loadBar" style="width:320px;height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden">
+      <div id="loadFill" style="height:100%;width:0%;background:var(--blue);border-radius:3px;transition:width 0.4s ease"></div>
+    </div>
+  </div></div>`);
+
+  const setProgress=(pct,msg)=>{
+    const el=document.getElementById('loadFill');
+    const ml=document.getElementById('loadMsg');
+    if(el)el.style.width=pct+'%';
+    if(ml)ml.textContent=msg;
+  };
+
+  // ── Wykryj dostępne miesiące + sync równolegle ──
+  setProgress(5,'Wykrywanie zakładek…');
+  const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
   await Promise.allSettled([detectHkMonths(),detectOtvMonths()]);
 
   const initHkKey=_state.hkMonth;
@@ -4755,10 +4777,8 @@ async function init(){
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
 
-  // ── Sync kalendarza/parkingu równolegle z batch 1 ──
-  const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
-
-  // ── Batch 1: bieżący miesiąc + Previo + Parking (najważniejsze) ──
+  // ── Batch 1 ──
+  setProgress(15,'Ładowanie bieżącego miesiąca…');
   const [apr,previor,parkingr]=await Promise.allSettled([
     loadAprilData(),
     loadPrevioMonth(initPrevioKey),
@@ -4767,61 +4787,64 @@ async function init(){
   _state.data.apr2026=apr.status==='fulfilled'?apr.value:{error:apr.reason?.message||'Błąd'};
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
   _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
-  renderApp();
 
   await delay(1500);
 
-  // ── Batch 2: marzec + media ──
+  // ── Batch 2 ──
+  setProgress(35,'Ładowanie marca i mediów…');
   const [mr,mdr]=await Promise.allSettled([
     loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'),
     loadMediaData(),
   ]);
   _state.data.mar2026=mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   _state.data.media=mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
-  renderApp();
 
   await delay(1500);
 
-  // ── Batch 3: luty + styczeń ──
+  // ── Batch 3 ──
+  setProgress(52,'Ładowanie lutego i stycznia…');
   const [fr,jr]=await Promise.allSettled([
     loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
     loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
   ]);
   _state.data.feb2026=fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
   _state.data.jan2026=jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
-  renderApp();
 
   await delay(1500);
 
-  // ── Batch 4: grudzień + apartamenty ──
+  // ── Batch 4 ──
+  setProgress(67,'Ładowanie grudnia i apartamentów…');
   const [dr,ar]=await Promise.allSettled([
     loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'),
     loadApartmentsData(),
   ]);
   _state.data.dec2025=dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
   _state.data.apartments=ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
-  renderApp();
 
   await delay(1500);
 
-  // ── Batch 5: housekeeping + OTV ──
+  // ── Batch 5 ──
+  setProgress(82,'Ładowanie housekeeping i OTV…');
   const [hkr,otvr]=await Promise.allSettled([
     loadHousekeepingMonth(initHkKey),
     loadOtvMonth(initOtvKey),
   ]);
   _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
   _state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
-  renderApp();
 
   await delay(1500);
 
-  // ── Batch 6: Previo poprzedni rok (dla prognozy) ──
+  // ── Batch 6 ──
+  setProgress(93,'Finalizowanie prognozy…');
   const previoLYr=await safeLoad(()=>loadPrevioMonth(lastYearPrevioKey));
   if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
-  renderApp();
 
   // ── Poczekaj na sync jeśli jeszcze trwa ──
   await syncPromise;
+
+  // ── Jeden render na końcu ──
+  setProgress(100,'Gotowe!');
+  await delay(200);
   renderApp();
 }
 
