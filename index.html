@@ -4698,7 +4698,9 @@ async function init(){
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null};
   _kalCache=null;_paidCache=null;_doneCache=null;
   renderApp();
-  if(CONFIG.syncUrl)syncPull().then(()=>renderApp());
+  // Pobierz dane z arkusza (kalendarz, parking paid, done) przed dalszym ładowaniem
+  if(CONFIG.syncUrl)await syncPull();
+  renderApp();
 
   // ── Wykryj dostępne miesiące z arkuszy ──
   await Promise.allSettled([detectHkMonths(),detectOtvMonths()]);
