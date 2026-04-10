@@ -4711,6 +4711,9 @@ async function init(){
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
 
+  // ── Sync kalendarza/parkingu równolegle z batch 1 ──
+  const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
+
   // ── Batch 1: bieżący miesiąc + Previo + Parking (najważniejsze) ──
   const [apr,previor,parkingr]=await Promise.allSettled([
     loadAprilData(),
@@ -4773,11 +4776,9 @@ async function init(){
   if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
   renderApp();
 
-  // ── Sync kalendarza i parkingu (po załadowaniu wszystkich danych Sheets) ──
-  if(CONFIG.syncUrl){
-    await syncPull();
-    renderApp();
-  }
+  // ── Poczekaj na sync jeśli jeszcze trwa ──
+  await syncPromise;
+  renderApp();
 }
 
 if(!CONFIG.apiKey||!CONFIG.spreadsheetId)showConfig();else init();
