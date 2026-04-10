@@ -364,6 +364,7 @@ const CONFIG={
   // Apartments to EXCLUDE from OTV view
   otvExclude:['Wawel','Wawel II no. 14','Wawel II no.15','Wawel II no. 15','Zamkowa','Plac Szczepański B41','Plac Szczepański C41','Bronowicka'],
   previoApiKey:        localStorage.getItem('gs_previo_api_key')||'',
+  syncUrl:             localStorage.getItem('sync_url')||'',
   previoSpreadsheetId: '1R1QNqx7LWaeTLuy2QXe2q1nAfUcMUSwqBmRa2Fhje68',
   previoSheet:         'Previo',
   previoStartRow:      2,
@@ -1447,6 +1448,9 @@ function renderConfig(){
     <p class="section-label">📋 Arkusz rezerwacji OTV</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-otvkey" type="text" placeholder="AIzaSy…" value="${CONFIG.otvApiKey}"/></div>
     <div class="field"><label>Spreadsheet ID arkusza rezerwacji OTV</label><input id="inp-otvsheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.otvSpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🔄 Sync URL (Apps Script)</p>
+    <div class="field"><label>URL wdrożenia Apps Script (kalendarz + parking)</label><input id="inp-syncurl" type="text" placeholder="https://script.google.com/macros/s/..." value="${CONFIG.syncUrl}"/></div>
     <button class="btn-primary" onclick="saveConfig()">Zapisz i załaduj dane</button>
   </div></div>`;
 }
@@ -3159,15 +3163,19 @@ async function loadParkingData(){
   return{byDate,dateOrder};
 }
 function getPaidDates(){
-  try{return JSON.parse(localStorage.getItem('parking_paid_dates')||'[]');}
-  catch(e){return[];}
+  if(_paidCache!==null)return _paidCache;
+  try{_paidCache=JSON.parse(localStorage.getItem('parking_paid_dates')||'[]');return _paidCache;}
+  catch(e){_paidCache=[];return[];}
 }
+
 function togglePaidDate(dateKey){
   const paid=getPaidDates();
   const idx=paid.indexOf(dateKey);
   if(idx!==-1)paid.splice(idx,1);
   else paid.push(dateKey);
+  _paidCache=paid;
   localStorage.setItem('parking_paid_dates',JSON.stringify(paid));
+  syncPushPaid(paid); // async — nie blokuje UI
   renderApp();
 }
 
@@ -3779,12 +3787,62 @@ function initHkChart(){
 
 
 /* KALENDARZ */
-function getKalEvents(){
-  try{return JSON.parse(localStorage.getItem('kal_events')||'{}');}
-  catch(e){return{};}
+// ── Lokalny cache (natychmiast) + sync do Sheets (async) ──
+let _kalCache=null;
+let _paidCache=null;
+
+async function syncPull(){
+  if(!CONFIG.syncUrl)return;
+  try{
+    const [kalRes,paidRes]=await Promise.all([
+      fetch(`${CONFIG.syncUrl}?action=getKalendar`),
+      fetch(`${CONFIG.syncUrl}?action=getParkingPaid`),
+    ]);
+    const kalData=await kalRes.json();
+    const paidData=await paidRes.json();
+    if(kalData.events){
+      _kalCache=kalData.events;
+      localStorage.setItem('kal_events',JSON.stringify(_kalCache));
+    }
+    if(paidData.paidDates){
+      _paidCache=paidData.paidDates;
+      localStorage.setItem('parking_paid_dates',JSON.stringify(_paidCache));
+    }
+  }catch(e){console.warn('syncPull failed:',e);}
 }
+
+async function syncPushKal(events){
+  if(!CONFIG.syncUrl)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveKalendar',events}),
+    });
+  }catch(e){console.warn('syncPushKal failed:',e);}
+}
+
+async function syncPushPaid(paidDates){
+  if(!CONFIG.syncUrl)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveParkingPaid',paidDates}),
+    });
+  }catch(e){console.warn('syncPushPaid failed:',e);}
+}
+
+function getKalEvents(){
+  if(_kalCache!==null)return _kalCache;
+  try{_kalCache=JSON.parse(localStorage.getItem('kal_events')||'{}');return _kalCache;}
+  catch(e){_kalCache={};return{};}
+}
+
 function saveKalEvents(ev){
+  _kalCache=ev;
   localStorage.setItem('kal_events',JSON.stringify(ev));
+  syncPushKal(ev); // async — nie blokuje UI
 }
 
 const KAL_CATEGORIES=[
@@ -4450,6 +4508,8 @@ function saveConfig(){
   localStorage.setItem('gs_hk_api_key',hk);localStorage.setItem('gs_hk_spreadsheet_id',hs);
   const pk=document.getElementById('inp-previokey')?.value.trim()||'';
   CONFIG.previoApiKey=pk;localStorage.setItem('gs_previo_api_key',pk);
+  const su=document.getElementById('inp-syncurl')?.value.trim()||'';
+  CONFIG.syncUrl=su;localStorage.setItem('sync_url',su);
   const ok=document.getElementById('inp-otvkey')?.value.trim()||'';
   const os=document.getElementById('inp-otvsheetid')?.value.trim()||'';
   CONFIG.otvApiKey=ok;CONFIG.otvSpreadsheetId=os;
@@ -4540,8 +4600,10 @@ async function safeLoad(fn){
 
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{}};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null};
+  _kalCache=null;_paidCache=null;
   renderApp();
+  if(CONFIG.syncUrl)syncPull().then(()=>renderApp());
 
   // ── Wykryj dostępne miesiące z arkuszy ──
   await Promise.allSettled([detectHkMonths(),detectOtvMonths()]);
