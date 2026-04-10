@@ -3822,7 +3822,8 @@ async function syncPushKal(events){
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveKalendar',events}),
     });
   }catch(e){console.warn('syncPushKal failed:',e);}
@@ -3833,7 +3834,8 @@ async function syncPushDone(done){
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveDone',done}),
     });
   }catch(e){console.warn('syncPushDone failed:',e);}
@@ -3868,7 +3870,8 @@ async function syncPushPaid(paidDates){
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveParkingPaid',paidDates}),
     });
   }catch(e){console.warn('syncPushPaid failed:',e);}
