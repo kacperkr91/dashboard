@@ -3794,12 +3794,14 @@ let _paidCache=null;
 async function syncPull(){
   if(!CONFIG.syncUrl)return;
   try{
-    const [kalRes,paidRes]=await Promise.all([
+    const [kalRes,paidRes,doneRes]=await Promise.all([
       fetch(`${CONFIG.syncUrl}?action=getKalendar`),
       fetch(`${CONFIG.syncUrl}?action=getParkingPaid`),
+      fetch(`${CONFIG.syncUrl}?action=getDone`),
     ]);
     const kalData=await kalRes.json();
     const paidData=await paidRes.json();
+    const doneData=await doneRes.json();
     if(kalData.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
@@ -3807,6 +3809,10 @@ async function syncPull(){
     if(paidData.paidDates){
       _paidCache=paidData.paidDates;
       localStorage.setItem('parking_paid_dates',JSON.stringify(_paidCache));
+    }
+    if(doneData.done){
+      _doneCache=doneData.done;
+      localStorage.setItem('kal_done',JSON.stringify(_doneCache));
     }
   }catch(e){console.warn('syncPull failed:',e);}
 }
@@ -3820,6 +3826,41 @@ async function syncPushKal(events){
       body:JSON.stringify({action:'saveKalendar',events}),
     });
   }catch(e){console.warn('syncPushKal failed:',e);}
+}
+
+async function syncPushDone(done){
+  if(!CONFIG.syncUrl)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveDone',done}),
+    });
+  }catch(e){console.warn('syncPushDone failed:',e);}
+}
+
+let _doneCache=null;
+
+function getDoneEvents(){
+  if(_doneCache!==null)return _doneCache;
+  try{_doneCache=JSON.parse(localStorage.getItem('kal_done')||'{}');return _doneCache;}
+  catch(e){_doneCache={};return{};}
+}
+
+function toggleDone(dateKey,evId){
+  const done=getDoneEvents();
+  const k=`${dateKey}__${evId}`;
+  if(done[k])delete done[k];
+  else done[k]=new Date().toISOString();
+  _doneCache=done;
+  localStorage.setItem('kal_done',JSON.stringify(done));
+  syncPushDone(done);
+  renderApp();
+}
+
+function isEventDone(dateKey,evId){
+  const done=getDoneEvents();
+  return !!done[`${dateKey}__${evId}`];
 }
 
 async function syncPushPaid(paidDates){
@@ -4057,7 +4098,8 @@ function buildKalendarzView(){
       const cat=katColor(ev.cat);
       const recurIcon=ev.recur==='monthly'?'↻ ':ev.recur==='yearly'?'↺ ':'';
       const moneyIcon=ev.cat==='platnosc'?'💰 ':'';
-      return`<div style="background:${cat.bg};color:${cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${moneyIcon}${recurIcon}${ev.title}</div>`;
+      const done=isEventDone(dk,ev.id);
+      return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
     cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
@@ -4137,6 +4179,10 @@ function buildKalendarzView(){
           <button onclick="kalSelectRecur('yearly')" id="kalRecur-yearly" style="padding:5px 14px;border-radius:8px;border:2px solid var(--border);background:var(--white);color:var(--text-mid);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">↺ Co rok</button>
         </div>
       </div>
+      <div id="kalDoneRow" style="display:none;margin-bottom:14px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;display:none;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;font-weight:600;color:#16a34a" id="kalDoneLabel">✓ Wykonano</span>
+        <button id="kalDoneBtn" onclick="kalToggleDoneFromModal()" style="font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid #86efac;background:#dcfce7;color:#16a34a">Oznacz jako wykonane</button>
+      </div>
       <div style="display:flex;gap:8px">
         <button onclick="kalSaveEvent()" style="flex:1;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Zapisz</button>
         <button id="kalDeleteBtn" onclick="kalDeleteEvent()" style="display:none;background:var(--red-light);color:var(--red);border:1px solid #fca5a5;padding:11px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Usuń</button>
@@ -4192,6 +4238,22 @@ function kalEditEvent(dateStr,evId){
   document.getElementById('kalDeleteBtn').style.display='block';
   kalSelectCat(ev.cat||'inne');
   kalSelectRecur(ev.recur||'none');
+  // Done state
+  const doneRow=document.getElementById('kalDoneRow');
+  const doneBtn=document.getElementById('kalDoneBtn');
+  const doneLabel=document.getElementById('kalDoneLabel');
+  if(doneRow&&doneBtn&&doneLabel){
+    doneRow.style.display='flex';
+    const isDone=isEventDone(dateStr,evId);
+    doneRow.style.background=isDone?'#f0fdf4':'#fafbfc';
+    doneRow.style.borderColor=isDone?'#86efac':'var(--border)';
+    doneLabel.textContent=isDone?'✓ Wykonano':'○ Niewykonane';
+    doneLabel.style.color=isDone?'#16a34a':'var(--text-muted)';
+    doneBtn.textContent=isDone?'↩ Cofnij':'✓ Oznacz jako wykonane';
+    doneBtn.style.background=isDone?'#fef2f2':'#dcfce7';
+    doneBtn.style.borderColor=isDone?'#fca5a5':'#86efac';
+    doneBtn.style.color=isDone?'#dc2626':'#16a34a';
+  }
   document.getElementById('kalModal').style.display='flex';
 }
 
@@ -4284,6 +4346,26 @@ function kalDeleteEvent(){
   renderApp();
 }
 
+function kalToggleDoneFromModal(){
+  if(!_kalEditDate||!_kalEditId)return;
+  toggleDone(_kalEditDate,_kalEditId);
+  // Odśwież stan przycisku w modalu
+  const isDone=isEventDone(_kalEditDate,_kalEditId);
+  const doneRow=document.getElementById('kalDoneRow');
+  const doneBtn=document.getElementById('kalDoneBtn');
+  const doneLabel=document.getElementById('kalDoneLabel');
+  if(doneRow&&doneBtn&&doneLabel){
+    doneRow.style.background=isDone?'#f0fdf4':'#fafbfc';
+    doneRow.style.borderColor=isDone?'#86efac':'var(--border)';
+    doneLabel.textContent=isDone?'✓ Wykonano':'○ Niewykonane';
+    doneLabel.style.color=isDone?'#16a34a':'var(--text-muted)';
+    doneBtn.textContent=isDone?'↩ Cofnij':'✓ Oznacz jako wykonane';
+    doneBtn.style.background=isDone?'#fef2f2':'#dcfce7';
+    doneBtn.style.borderColor=isDone?'#fca5a5':'#86efac';
+    doneBtn.style.color=isDone?'#dc2626':'#16a34a';
+  }
+}
+
 function kalCloseModal(){
   document.getElementById('kalModal').style.display='none';
   _kalEditDate=null;_kalEditId=null;
@@ -4335,10 +4417,23 @@ function getTodayBanner(){
       }
     }catch(e){}
 
-    const kalItems=todayEvs.map(ev=>{
+    // Pokaż niewykonane z dziś + niewykonane z poprzednich dni (max 3 dni wstecz)
+    const pendingEvs=[];
+    for(let i=0;i<=3;i++){
+      const d=new Date(today);d.setDate(today.getDate()-i);
+      const pdk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      (events[pdk]||[]).forEach(ev=>{
+        if(!isEventDone(pdk,ev.id)){
+          pendingEvs.push({...ev,_dateKey:pdk,_daysAgo:i});
+        }
+      });
+    }
+
+    const kalItems=pendingEvs.map(ev=>{
       const cat=katColor(ev.cat);
       const icon=ev.cat==='platnosc'?'💰':ev.cat==='umowa'?'📝':ev.cat==='remont'?'🔧':ev.cat==='spotkanie'?'🤝':'📌';
-      return`<span style="display:inline-flex;align-items:center;gap:5px;background:${cat.bg};color:${cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap">${icon} ${ev.title}</span>`;
+      const overdue=ev._daysAgo>0?`<span style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px">${ev._daysAgo}d temu</span>`:'';
+      return`<span onclick="kalEditEvent('${ev._dateKey}','${ev.id}')" style="display:inline-flex;align-items:center;gap:5px;background:${ev._daysAgo>0?'#fef2f2':cat.bg};color:${ev._daysAgo>0?'#dc2626':cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap;cursor:pointer;border:1px solid ${ev._daysAgo>0?'#fca5a5':'transparent'}">${icon} ${ev.title}${overdue}</span>`;
     }).join('');
 
     const allItems=(parkingChip||'')+kalItems||`<span style="font-size:12px;color:#92400e;opacity:0.6;font-style:italic">Brak wydarzeń — spokojny dzień ✌️</span>`;
@@ -4601,7 +4696,7 @@ async function safeLoad(fn){
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null};
-  _kalCache=null;_paidCache=null;
+  _kalCache=null;_paidCache=null;_doneCache=null;
   renderApp();
   if(CONFIG.syncUrl)syncPull().then(()=>renderApp());
 
