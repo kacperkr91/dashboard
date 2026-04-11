@@ -1059,8 +1059,8 @@ async function loadPrevioMonth(monthKey){
       })(),
       cenaNetto: v(7,i).toLowerCase().includes('airbnb')?n(8,i):null,
       status:  statusId,
-      gosc:    v(9,i),    // L=gosc (index 9 in our selected cols)
-      kraj:    v(10,i),   // M=kraj (index 10)  
+      gosc:    v(10,i),   // L=gosc (index 10 in our selected cols: A,B,C,D,E,F,G,H,I,K,L,M)
+      kraj:    v(11,i),   // M=kraj (index 11)
       cancelled,
     });
   }
@@ -4694,7 +4694,7 @@ function openNotaPreview(n){
   +'</style></head><body>'
 
   +'<div class="header">'
-  +'<div class="wystawca"><strong>Old Town Vistula Premium Apartments Sp. z o.o.</strong><br>ul. Rynek Podgórski 11<br>30-545 Kraków<br>NIP: 6793276286</div>'
+  +'<div class="wystawca"><strong>Old Town Vistula Premium Apartments Sp. z o.o.</strong><br>ul. Bolesława Limanowskiego 4/4a<br>30-534 Kraków<br>NIP: 6793276286</div>'
   +'<div class="title-box"><h1>NOTA KSIĘGOWA</h1><div class="nr">Nr <strong>'+n.numer+'</strong></div><div class="nr">Data wystawienia: '+n.data+'</div></div>'
   +'</div>'
   +'<hr class="thick">'
@@ -4720,7 +4720,7 @@ function openNotaPreview(n){
   +'<div class="podpis"><br><div class="linia">Odbiorca</div></div>'
   +'</div>'
 
-  +'<div class="footer">Old Town Vistula Premium Apartments Sp. z o.o. | ul. Rynek Podgórski 11, 30-545 Kraków | NIP: 6793276286</div>'
+  +'<div class="footer">Old Town Vistula Premium Apartments Sp. z o.o. | ul. Bolesława Limanowskiego 4/4a, 30-534 Kraków | NIP: 6793276286</div>'
   +'<button class="print-btn" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>'
   +'</body></html>';
 
@@ -4770,13 +4770,7 @@ function notaFromPrevioId(voucherId){
     setVal('nota-podstawa', podstawa);
 
     // Rodzaj zapłaty
-    const zaplata=document.getElementById('nota-zaplata');
-    if(zaplata&&r.kanal){
-      const k=r.kanal.toLowerCase();
-      if(k.includes('airbnb'))zaplata.value='Płatność online (Airbnb)';
-      else if(k.includes('booking'))zaplata.value='Płatność online (Booking.com)';
-      else zaplata.value='Przelew bankowy';
-    }
+    // Zostaw domyślny "Przelew bankowy" - nie nadpisuj
     document.getElementById('nota-nabywca')?.focus();
   },150);
 }
