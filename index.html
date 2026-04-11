@@ -2448,6 +2448,7 @@ function openPrevioDrawer(date){
 
   document.getElementById('previoDrawerTitle').textContent=`${date} ${dowLabel}${holName?' · '+holName:''}`;
   document.getElementById('previoDrawerSubtitle').textContent=`${active.length} aktywnych · ${dayRows.filter(r=>r.cancelled).length} anulowanych · łącznie: ${fmt(dayTotal)} zł`;
+  window._previoDrawerRows=dayRows; // cache for nota generation
 
   const rowsHtml=dayRows.map((r,i)=>{
     const cc=COLORS[r.kanal]||'#94a3b8';
@@ -2466,7 +2467,7 @@ function openPrevioDrawer(date){
       ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
-        ${!r.cancelled?`<button onclick="notaFromPrevio(${JSON.stringify({gosc:r.gosc,cena:r.cena,voucher:r.voucher,kanal:r.kanal,dataOd:r.dataOd,dataDo:r.dataDo,apt:r.apt}).replace(/"/g,'&quot;')})" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
+        ${!r.cancelled?`<button onclick="notaFromPrevioId('${r.voucher||r.resId}')" data-gosc="${(r.gosc||'').replace(/"/g,'')}" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -4544,7 +4545,7 @@ function buildNotyView(){
           <input id="nota-numer" type="text" value="${defaultNumer}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
         </div>
         <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Data wystawienia</label>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Data wystawienia (= data wymeldowania)</label>
           <input id="nota-data" type="text" value="${defaultData}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
         </div>
       </div>
@@ -4561,21 +4562,26 @@ function buildNotyView(){
           <div id="nota-slownie" style="font-size:10px;color:var(--text-muted);margin-top:4px;font-style:italic"></div>
         </div>
         <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Rodzaj zapłaty</label>
-          <select id="nota-zaplata" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none">
-            <option>Płatność online (Booking.com)</option>
-            <option>Płatność online (Airbnb)</option>
-            <option>Karta płatnicza</option>
-            <option>Przelew bankowy</option>
-            <option>Gotówka</option>
-            <option>Płatność wirtualną kartą (VCC)</option>
-          </select>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Data przelewu</label>
+          <input id="nota-data-przelewu" type="text" value="${defaultData}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
         </div>
       </div>
 
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Rodzaj zapłaty</label>
+        <select id="nota-zaplata" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none">
+          <option selected>Przelew bankowy</option>
+          <option>Płatność online (Booking.com)</option>
+          <option>Płatność online (Airbnb)</option>
+          <option>Karta płatnicza</option>
+          <option>Gotówka</option>
+          <option>Płatność wirtualną kartą (VCC)</option>
+        </select>
+      </div>
+
       <div style="margin-bottom:20px">
-        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Podstawa noty / opis</label>
-        <input id="nota-podstawa" type="text" value="Brak realizacji usługi noclegowej — anulowanie rezerwacji" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Opis usługi</label>
+        <input id="nota-podstawa" type="text" value="Usługa noclegowa" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
       </div>
 
       <div style="display:flex;gap:10px">
@@ -4616,7 +4622,8 @@ function saveAndGenerateNota(){
     alert('Wpisz literę na końcu numeru noty (np. 1/04/2026/A).');return;
   }
 
-  const nota={id:Date.now().toString(),numer,data,nabywca,kwota,podstawa,zaplata};
+  const dataPrzelewu=document.getElementById('nota-data-przelewu')?.value.trim()||data;
+  const nota={id:Date.now().toString(),numer,data,nabywca,kwota,podstawa,zaplata,dataPrzelewu};
   const list=getNotyList();
   list.push(nota);
   saveNotyList(list);
@@ -4648,116 +4655,85 @@ function generateNotaPDF(id){
 
 function openNotaPreview(n){
   const kwotaNum=parseFloat(n.kwota||0);
-  const kwotaCyfra=kwotaNum.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+  const kwotaCyfra=kwotaNum.toFixed(2).replace('.',',').replace(/(?=(?:\d{3})+(?!\d))/g,' ').trim();
   const kwotaSl=kwotaSlownie(kwotaNum);
+  const dataPrzelewu=n.dataPrzelewu||n.data||'';
 
-  const html=`<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8">
-<title>Nota ${n.numer}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;max-width:780px;margin:30px auto;padding:0 24px;color:#111;font-size:13px}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
-  .wystawca{line-height:1.7;font-size:12px;color:#333}
-  .wystawca strong{font-size:14px;color:#111}
-  .title-box{text-align:right}
-  .title-box h1{margin:0;font-size:20px;font-weight:900;color:#1a1a2e;letter-spacing:.02em}
-  .title-box .nr{font-size:11px;color:#555;margin-top:3px}
-  hr.thick{border:none;border-top:2.5px solid #1a1a2e;margin:12px 0 16px}
-  hr.thin{border:none;border-top:1px solid #ddd;margin:14px 0}
-  .section-label{font-size:9px;font-weight:bold;color:#999;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
-  .nabywca-box{border:1px solid #ddd;padding:10px 14px;border-radius:3px;background:#fafafa;line-height:1.7}
-  .nabywca-box strong{font-size:14px}
-  table{width:100%;border-collapse:collapse;margin:14px 0 0}
-  th{background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.03em}
-  th:last-child{text-align:right}
-  td{padding:10px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
-  td:last-child{text-align:right;font-weight:700;white-space:nowrap}
-  td:first-child{text-align:center;width:36px;color:#999}
-  .kwota-row{background:#f8f9fa}
-  .kwota-row td{padding:10px;border-bottom:2px solid #1a1a2e}
-  .suma-row td{padding:10px;font-size:14px;font-weight:900;color:#dc2626}
-  .suma-row td:first-child{color:#111;font-size:12px;font-weight:400;text-transform:uppercase;letter-spacing:.05em}
-  .slownie{font-size:11px;color:#555;font-style:italic;padding:6px 10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:3px;margin:8px 0 16px}
-  .podpisy{display:flex;justify-content:space-around;margin-top:60px}
-  .podpis{width:42%;text-align:center}
-  .linia{border-top:1px solid #999;padding-top:5px;font-size:10px;color:#888;margin-top:2px}
-  .footer{margin-top:36px;font-size:9px;color:#bbb;text-align:center;border-top:1px solid #eee;padding-top:8px;line-height:1.6}
-  .print-btn{display:block;margin:20px auto 0;background:#1a1a2e;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}
-  @media print{.print-btn{display:none}body{margin:0;padding:15mm}}
-  @page{margin:15mm;size:A4}
-</style>
-</head><body>
+  const html='<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8"><title>Nota '+n.numer+'</title><style>'
+  +'*{box-sizing:border-box;margin:0;padding:0}'
+  +'body{font-family:Arial,sans-serif;max-width:780px;margin:30px auto;padding:0 24px;color:#111;font-size:13px}'
+  +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}'
+  +'.wystawca{line-height:1.7;font-size:12px;color:#333}'
+  +'.wystawca strong{font-size:14px;color:#111}'
+  +'.title-box{text-align:right}'
+  +'.title-box h1{margin:0;font-size:20px;font-weight:900;color:#1a1a2e}'
+  +'.title-box .nr{font-size:11px;color:#555;margin-top:3px}'
+  +'hr.thick{border:none;border-top:2.5px solid #1a1a2e;margin:12px 0 16px}'
+  +'.section-label{font-size:9px;font-weight:bold;color:#999;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}'
+  +'.nabywca-box{border:1px solid #ddd;padding:10px 14px;border-radius:3px;background:#fafafa;line-height:1.7}'
+  +'.nabywca-box strong{font-size:14px}'
+  +'table{width:100%;border-collapse:collapse;margin:14px 0 0}'
+  +'th{background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:600}'
+  +'th:last-child{text-align:right}'
+  +'td{padding:10px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}'
+  +'td:last-child{text-align:right;font-weight:700;white-space:nowrap}'
+  +'td:first-child{text-align:center;width:36px;color:#999}'
+  +'.obciaz-row td{padding:10px;font-size:13px;font-weight:700;border-top:2px solid #1a1a2e;background:#fafafa}'
+  +'.obciaz-row td:first-child{font-size:11px;font-weight:400;color:#333;text-align:left}'
+  +'.slownie{font-size:11px;color:#555;font-style:italic;padding:8px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:3px;margin:10px 0 16px}'
+  +'.info-row{display:flex;gap:24px;margin:10px 0;font-size:12px;color:#444}'
+  +'.info-row span b{color:#111}'
+  +'.podpisy{display:flex;justify-content:space-around;margin-top:60px}'
+  +'.podpis{width:42%;text-align:center}'
+  +'.podpis-name{font-size:12px;font-weight:700;color:#111;margin-bottom:4px}'
+  +'.linia{border-top:1px solid #999;padding-top:5px;font-size:10px;color:#888}'
+  +'.footer{margin-top:36px;font-size:9px;color:#bbb;text-align:center;border-top:1px solid #eee;padding-top:8px;line-height:1.6}'
+  +'.print-btn{display:block;margin:20px auto 0;background:#1a1a2e;color:#fff;border:none;padding:10px 28px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}'
+  +'@media print{.print-btn{display:none}body{margin:0;padding:15mm}}'
+  +'@page{margin:15mm;size:A4}'
+  +'</style></head><body>'
 
-<div class="header">
-  <div class="wystawca">
-    <strong>Old Town Vistula Premium Apartments Sp. z o.o.</strong><br>
-    ul. Rynek Podgórski 11, 30-545 Kraków<br>
-    NIP: 6793276286
-  </div>
-  <div class="title-box">
-    <h1>NOTA KSIĘGOWA</h1>
-    <div class="nr">Nr <strong>${n.numer}</strong></div>
-    <div class="nr">Data wystawienia: ${n.data}</div>
-  </div>
-</div>
+  +'<div class="header">'
+  +'<div class="wystawca"><strong>Old Town Vistula Premium Apartments Sp. z o.o.</strong><br>ul. Rynek Podgórski 11<br>30-545 Kraków<br>NIP: 6793276286</div>'
+  +'<div class="title-box"><h1>NOTA KSIĘGOWA</h1><div class="nr">Nr <strong>'+n.numer+'</strong></div><div class="nr">Data wystawienia: '+n.data+'</div></div>'
+  +'</div>'
+  +'<hr class="thick">'
 
-<hr class="thick">
+  +'<div class="section-label">Nabywca</div>'
+  +'<div class="nabywca-box"><strong>'+n.nabywca+'</strong></div>'
 
-<div class="section-label">Nabywca</div>
-<div class="nabywca-box"><strong>${n.nabywca}</strong></div>
+  +'<table>'
+  +'<thead><tr><th style="width:36px">Lp.</th><th>Opis usługi</th><th>Rodzaj zapłaty</th><th>Kwota (PLN)</th></tr></thead>'
+  +'<tbody>'
+  +'<tr><td>1</td><td>'+n.podstawa+'</td><td>'+n.zaplata+'</td><td>'+kwotaCyfra+' zł</td></tr>'
+  +'<tr class="obciaz-row"><td colspan="3">Obciążyliśmy kwotą:</td><td>'+kwotaCyfra+' PLN</td></tr>'
+  +'</tbody></table>'
 
-<table>
-  <thead>
-    <tr>
-      <th style="width:36px">Lp.</th>
-      <th>Opis</th>
-      <th>Rodzaj zapłaty</th>
-      <th>Kwota (PLN)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>1</td>
-      <td>${n.podstawa}</td>
-      <td>${n.zaplata}</td>
-      <td>${kwotaCyfra} zł</td>
-    </tr>
-    <tr class="suma-row">
-      <td colspan="3">Razem do zapłaty:</td>
-      <td>${kwotaCyfra} zł</td>
-    </tr>
-  </tbody>
-</table>
+  +'<div class="slownie">Słownie: <strong>'+kwotaSl+'</strong></div>'
 
-<div class="slownie">Słownie: <strong>${kwotaSl}</strong></div>
+  +'<div class="info-row">'
+  +'<span>Data przelewu: <b>'+dataPrzelewu+'</b></span>'
+  +'</div>'
 
-<div class="podpisy">
-  <div class="podpis">
-    <br><br>
-    <div class="linia">Wystawił(a)</div>
-  </div>
-  <div class="podpis">
-    <br><br>
-    <div class="linia">Zatwierdził(a)</div>
-  </div>
-</div>
+  +'<div class="podpisy">'
+  +'<div class="podpis"><div class="podpis-name">Kacper Kruczek</div><div class="linia">Wystawił(a)</div></div>'
+  +'<div class="podpis"><br><div class="linia">Odbiorca</div></div>'
+  +'</div>'
 
-<div class="footer">
-  Old Town Vistula Premium Apartments Sp. z o.o. | ul. Rynek Podgórski 11, 30-545 Kraków | NIP: 6793276286
-</div>
-
-<button class="print-btn" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>
-</body></html>`;
+  +'<div class="footer">Old Town Vistula Premium Apartments Sp. z o.o. | ul. Rynek Podgórski 11, 30-545 Kraków | NIP: 6793276286</div>'
+  +'<button class="print-btn" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>'
+  +'</body></html>';
 
   const w=window.open('','_blank');
   w.document.write(html);
   w.document.close();
 }
 
-function notaFromPrevio(r){
+function notaFromPrevioId(voucherId){
+  const rows=window._previoDrawerRows||[];
+  const r=rows.find(r=>(r.voucher||r.resId)===voucherId)||{};
   closePrevioDrawer();
   _state.section='noty';
-  window._notaPrefill=r;
   renderApp();
   setTimeout(()=>{
     const now=new Date();
@@ -4769,20 +4745,38 @@ function notaFromPrevio(r){
 
     const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val;};
     setVal('nota-numer',`${nextNum}/${mm}/${yyyy}/`);
+
+    // Imię i nazwisko — pole gosc
     setVal('nota-nabywca', r.gosc||'');
+
+    // Data wymeldowania jako data wystawienia
+    if(r.dataDo){
+      const d=parseDateDMY(r.dataDo);
+      if(d){
+        const dd=String(d.getDate()).padStart(2,'0');
+        const dm=String(d.getMonth()+1).padStart(2,'0');
+        const dy=d.getFullYear();
+        setVal('nota-data',`${dd}.${dm}.${dy}`);
+        setVal('nota-data-przelewu',`${dd}.${dm}.${dy}`);
+      }
+    }
+
+    // Kwota brutto
     setVal('nota-kwota', r.cena||'');
     updateKwotaSlownie();
 
-    const podstawa=`Brak realizacji usługi noclegowej — ${r.apt||''} (${r.dataOd||''}–${r.dataDo||''})`;
+    // Opis — usługa noclegowa z apartamentem i datami
+    const podstawa=`Usługa noclegowa — ${r.apt||''} (${r.dataOd||''}–${r.dataDo||''})`;
     setVal('nota-podstawa', podstawa);
 
+    // Rodzaj zapłaty
     const zaplata=document.getElementById('nota-zaplata');
     if(zaplata&&r.kanal){
       const k=r.kanal.toLowerCase();
       if(k.includes('airbnb'))zaplata.value='Płatność online (Airbnb)';
       else if(k.includes('booking'))zaplata.value='Płatność online (Booking.com)';
+      else zaplata.value='Przelew bankowy';
     }
-    window._notaPrefill=null;
     document.getElementById('nota-nabywca')?.focus();
   },150);
 }
