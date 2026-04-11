@@ -2464,7 +2464,10 @@ function openPrevioDrawer(date){
         <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}</span>
       </div>
       ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
-      <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
+        ${!r.cancelled?`<button onclick="notaFromPrevio(${JSON.stringify({gosc:r.gosc,cena:r.cena,voucher:r.voucher,kanal:r.kanal,dataOd:r.dataOd,dataDo:r.dataDo,apt:r.apt}).replace(/"/g,'&quot;')})" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
+      </div>
     </div>`;
   }).join('');
 
@@ -4456,6 +4459,268 @@ function kalGoToday(){
 }
 
 
+
+/* NOTY KSIEGOWE */
+function getNotyList(){
+  try{return JSON.parse(localStorage.getItem('noty_list')||'[]');}
+  catch(e){return[];}
+}
+function saveNotyList(list){
+  localStorage.setItem('noty_list',JSON.stringify(list));
+}
+
+function buildNotyView(){
+  const noty=getNotyList();
+
+  // Generuj numer kolejny
+  const now=new Date();
+  const ym=`${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const miesNoty=noty.filter(n=>n.numer&&n.numer.includes(ym));
+  const nextNum=String(miesNoty.length+1).padStart(3,'0');
+  const defaultNumer=`NK/${ym}/${nextNum}`;
+  const defaultData=`${String(now.getDate()).padStart(2,'0')}.${String(now.getMonth()+1).padStart(2,'0')}.${now.getFullYear()}`;
+
+  const listaHtml=noty.length?[...noty].reverse().map(n=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${n.numer}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${n.nabywca} · ${n.kwota} PLN · ${n.data}</div>
+      </div>
+      <button onclick="generateNotaPDF('${n.id}')" style="background:#475569;color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ PDF</button>
+      <button onclick="deleteNota('${n.id}')" style="background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--text-muted)">✕</button>
+    </div>`).join('')
+    :`<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Brak wystawionych not</div>`;
+
+  return`<div style="max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+
+    <!-- FORMULARZ -->
+    <div class="grid-card">
+      <div class="card-title" style="margin-bottom:4px">🧾 Nowa nota księgowa</div>
+      <div class="card-subtitle" style="margin-bottom:20px">Old Town Vistula Premium Apartments Sp. z o.o.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Numer noty</label>
+          <input id="nota-numer" type="text" value="${defaultNumer}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Data wystawienia</label>
+          <input id="nota-data" type="text" value="${defaultData}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Imię i nazwisko nabywcy</label>
+        <input id="nota-nabywca" type="text" placeholder="Np. Alexander Rodriguez" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Adres / kraj (opcjonalnie)</label>
+        <input id="nota-adres" type="text" placeholder="Np. USA lub ul. Przykładowa 1, Warszawa" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Kwota (PLN)</label>
+          <input id="nota-kwota" type="number" step="0.01" placeholder="0.00" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Nr rezerwacji (opcjonalnie)</label>
+          <input id="nota-resid" type="text" placeholder="Np. 6443198953" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Podstawa noty / opis</label>
+        <input id="nota-podstawa" type="text" value="Brak realizacji usługi noclegowej — anulowanie rezerwacji" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none"/>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:5px">Rodzaj zapłaty</label>
+        <select id="nota-zaplata" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);outline:none">
+          <option>Płatność online (Booking.com)</option>
+          <option>Płatność online (Airbnb)</option>
+          <option>Karta płatnicza</option>
+          <option>Przelew bankowy</option>
+          <option>Gotówka</option>
+          <option>Płatność wirtualną kartą (VCC)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="saveAndGenerateNota()" style="flex:1;background:#475569;color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">🧾 Zapisz i generuj PDF</button>
+        <button onclick="previewNota()" style="background:var(--bg);border:1px solid var(--border);padding:11px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-mid);font-family:'Inter',sans-serif">👁 Podgląd HTML</button>
+      </div>
+    </div>
+
+    <!-- LISTA NOT -->
+    <div class="grid-card" style="position:sticky;top:20px">
+      <div class="card-title" style="margin-bottom:16px">Wystawione noty</div>
+      ${listaHtml}
+    </div>
+
+  </div>`;
+}
+
+function getNotaById(id){
+  return getNotyList().find(n=>n.id===id);
+}
+
+function saveAndGenerateNota(){
+  const numer=document.getElementById('nota-numer')?.value.trim();
+  const data=document.getElementById('nota-data')?.value.trim();
+  const nabywca=document.getElementById('nota-nabywca')?.value.trim();
+  const adres=document.getElementById('nota-adres')?.value.trim();
+  const kwota=document.getElementById('nota-kwota')?.value.trim();
+  const resid=document.getElementById('nota-resid')?.value.trim();
+  const podstawa=document.getElementById('nota-podstawa')?.value.trim();
+  const zaplata=document.getElementById('nota-zaplata')?.value;
+
+  if(!numer||!nabywca||!kwota||!podstawa){
+    alert('Uzupełnij: numer, nabywca, kwota i podstawa.');
+    return;
+  }
+
+  const nota={
+    id: Date.now().toString(),
+    numer, data, nabywca, adres, kwota, resid, podstawa, zaplata,
+  };
+
+  const list=getNotyList();
+  list.push(nota);
+  saveNotyList(list);
+
+  generateNotaPDF(nota.id);
+  renderApp();
+}
+
+function deleteNota(id){
+  if(!confirm('Usunąć tę notę z listy?'))return;
+  const list=getNotyList().filter(n=>n.id!==id);
+  saveNotyList(list);
+  renderApp();
+}
+
+function previewNota(){
+  const numer=document.getElementById('nota-numer')?.value.trim()||'NK/—';
+  const data=document.getElementById('nota-data')?.value.trim()||'—';
+  const nabywca=document.getElementById('nota-nabywca')?.value.trim()||'—';
+  const adres=document.getElementById('nota-adres')?.value.trim()||'';
+  const kwota=parseFloat(document.getElementById('nota-kwota')?.value)||0;
+  const resid=document.getElementById('nota-resid')?.value.trim()||'';
+  const podstawa=document.getElementById('nota-podstawa')?.value.trim()||'—';
+  const zaplata=document.getElementById('nota-zaplata')?.value||'—';
+  openNotaPreview({numer,data,nabywca,adres,kwota,resid,podstawa,zaplata});
+}
+
+function notaFromPrevio(r){
+  // Zamknij drawer
+  closePrevioDrawer();
+  // Przejdź do zakładki Noty
+  _state.section='noty';
+  // Zapamiętaj dane do prefillowania
+  window._notaPrefill=r;
+  renderApp();
+  // Wypełnij formularz po renderze
+  setTimeout(()=>{
+    const now=new Date();
+    const ym=`${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+    const list=getNotyList();
+    const miesNoty=list.filter(n=>n.numer&&n.numer.includes(ym));
+    const nextNum=String(miesNoty.length+1).padStart(3,'0');
+
+    const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val;};
+    setVal('nota-numer',`NK/${ym}/${nextNum}`);
+    setVal('nota-nabywca', r.gosc||'');
+    setVal('nota-kwota', r.cena||'');
+    setVal('nota-resid', r.voucher||'');
+
+    // Podstawa z datami i apartamentem
+    const podstawa=`Brak realizacji usługi noclegowej — ${r.apt||''} (${r.dataOd||''}–${r.dataDo||''})`;
+    setVal('nota-podstawa', podstawa);
+
+    // Rodzaj zapłaty na podstawie kanału
+    const zaplata=document.getElementById('nota-zaplata');
+    if(zaplata&&r.kanal){
+      const k=r.kanal.toLowerCase();
+      if(k.includes('airbnb'))zaplata.value='Płatność online (Airbnb)';
+      else if(k.includes('booking'))zaplata.value='Płatność online (Booking.com)';
+    }
+
+    window._notaPrefill=null;
+  },100);
+}
+
+function openNotaPreview(n){
+  const kwota=parseFloat(n.kwota||0).toFixed(2);
+  const html=`<!DOCTYPE html><html lang="pl"><head><meta charset="UTF-8">
+<title>Nota ${n.numer}</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#1a1a1a}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+  .wystawca{font-size:13px;line-height:1.6}
+  .title-box{text-align:right}
+  .title-box h1{margin:0;font-size:22px;color:#1a1a2e}
+  .title-box .nr{font-size:11px;color:#666;margin-top:2px}
+  hr{border:none;border-top:2px solid #1a1a2e;margin:12px 0}
+  .section-label{font-size:10px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+  .nabywca-box{background:#f8f9fa;border:1px solid #ddd;padding:10px 14px;border-radius:4px;font-size:13px;line-height:1.6}
+  table{width:100%;border-collapse:collapse;margin:16px 0}
+  th{background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-size:12px}
+  th:last-child,td:last-child{text-align:right}
+  td{padding:10px;font-size:13px;border-bottom:1px solid #eee}
+  .suma{font-weight:bold;font-size:14px;text-align:right;padding:8px 10px;border-top:2px solid #1a1a2e;color:#dc2626}
+  .podpisy{display:flex;justify-content:space-around;margin-top:60px;text-align:center}
+  .podpis{width:45%}
+  .linia{border-top:1px solid #999;padding-top:4px;font-size:11px;color:#888}
+  .footer{margin-top:40px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:8px}
+  @media print{button{display:none}body{margin:0}}
+</style>
+</head><body>
+<div class="header">
+  <div class="wystawca">
+    <strong>Old Town Vistula Premium Apartments Sp. z o.o.</strong><br>
+    ul. Rynek Podgórski 11, 30-545 Kraków<br>
+    NIP: 6793276286
+  </div>
+  <div class="title-box">
+    <h1>NOTA KSIĘGOWA</h1>
+    <div class="nr">Nr ${n.numer}</div>
+    <div class="nr">Data: ${n.data}</div>
+  </div>
+</div>
+<hr>
+<div class="section-label">NABYWCA</div>
+<div class="nabywca-box"><strong>${n.nabywca}</strong>${n.adres?'<br>'+n.adres:''}</div>
+<table>
+  <tr><th>Lp.</th><th>Opis</th><th>Rodzaj płatności</th><th>Kwota (PLN)</th></tr>
+  <tr>
+    <td>1</td>
+    <td>${n.podstawa}</td>
+    <td>${n.zaplata}</td>
+    <td><strong>${kwota}</strong></td>
+  </tr>
+</table>
+<div class="suma">RAZEM DO ZAPŁATY: ${kwota} PLN</div>
+${n.resid?`<p style="font-size:11px;color:#666;margin-top:8px">Nr rezerwacji: <strong>${n.resid}</strong></p>`:''}
+<div class="podpisy">
+  <div class="podpis"><div class="linia">Wystawił(a)</div></div>
+  <div class="podpis"><div class="linia">Zatwierdził(a)</div></div>
+</div>
+<div class="footer">Old Town Vistula Premium Apartments Sp. z o.o. | ul. Rynek Podgórski 11, 30-545 Kraków | NIP: 6793276286</div>
+<br><button onclick="window.print()" style="background:#475569;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">🖨️ Drukuj / Zapisz PDF</button>
+</body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+function generateNotaPDF(id){
+  const n=getNotaById(id);
+  if(!n){alert('Nie znaleziono noty.');return;}
+  openNotaPreview(n);
+}
+
 /* MAIN RENDER */
 function getTodayBanner(){
   try{
@@ -4558,6 +4823,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='kalendarz'?'active':''}" style="${section==='kalendarz'?'background:#0369a1;border-color:#0369a1':''}" onclick="setSection('kalendarz')">
       <span class="icon">📆</span> Kalendarz
     </button>
+    <button class="nav-l1-btn ${section==='noty'?'active':''}" style="${section==='noty'?'background:#475569;border-color:#475569':''}" onclick="setSection('noty')">
+      <span class="icon">🧾</span> Noty
+    </button>
     ${(()=>{
       let parkingAlert=false;
       let alertCount=0;
@@ -4631,6 +4899,8 @@ function renderApp(){
     content=buildParkingView();
   } else if(section==='kalendarz'){
     content=buildKalendarzView();
+  } else if(section==='noty'){
+    content=buildNotyView();
   } else {
     // ── Dyżury ──
     content=buildDyzuryView();
