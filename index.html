@@ -1399,6 +1399,7 @@ let _state={
   dyzuryYear:new Date().getFullYear(),
   vacationMode:null,
   oblozenieDzien:'dzis',
+  oblozenieFiltry:'wszystkie',
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:(()=>{
@@ -5049,6 +5050,7 @@ function loadAllPrevioMonths(){
 
 /* OBŁOŻENIE LIVE */
 const WYLACZONE_APT=['Orzeszkowej']; // apartamenty których już nie wynajmujemy
+const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bronowicka','Plac Szczepański B41','Plac Szczepański C41']; // nie-OTV
 
 function buildOblozenieLive(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -5058,6 +5060,7 @@ function buildOblozenieLive(){
   const tmrStr=localDk(tmr);
 
   const dzien=_state.oblozenieDzien||'dzis';
+  const filtry=_state.oblozenieFiltry||'wszystkie';
   const targetDate=dzien==='dzis'?today:tmr;
   const targetStr=dzien==='dzis'?todayStr:tmrStr;
   const DOW=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
@@ -5133,13 +5136,20 @@ function buildOblozenieLive(){
 
   return`<div style="max-width:1000px;margin:0 auto">
 
-    <!-- Przełącznik Dziś / Jutro -->
-    <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center">
+    <!-- Przełącznik Dziś / Jutro + filtr -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
       <button onclick="_state.oblozenieDzien='dzis';renderApp()" style="padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${dzien==='dzis'?'#0f766e':'var(--border)'};background:${dzien==='dzis'?'#0f766e':'var(--white)'};color:${dzien==='dzis'?'#fff':'var(--text-mid)'}">
         📅 Dziś — ${dateLabel(today)}
       </button>
       <button onclick="_state.oblozenieDzien='jutro';renderApp()" style="padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${dzien==='jutro'?'#0f766e':'var(--border)'};background:${dzien==='jutro'?'#0f766e':'var(--white)'};color:${dzien==='jutro'?'#fff':'var(--text-mid)'}">
         📅 Jutro — ${dateLabel(tmr)}
+      </button>
+      <div style="width:1px;height:28px;background:var(--border)"></div>
+      <button onclick="_state.oblozenieFiltry='wszystkie';renderApp()" style="padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${filtry==='wszystkie'?'#475569':'var(--border)'};background:${filtry==='wszystkie'?'#475569':'var(--white)'};color:${filtry==='wszystkie'?'#fff':'var(--text-mid)'}">
+        Wszystkie
+      </button>
+      <button onclick="_state.oblozenieFiltry='otv';renderApp()" style="padding:6px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${filtry==='otv'?'#0369a1':'var(--border)'};background:${filtry==='otv'?'#0369a1':'var(--white)'};color:${filtry==='otv'?'#fff':'var(--text-mid)'}">
+        Tylko OTV
       </button>
       <div style="margin-left:auto;font-size:12px;color:var(--text-muted)">Dane z ${Object.values(_state.data.previo||{}).filter(m=>Array.isArray(m)&&m.length).length} mies. Previo</div>
     </div>
