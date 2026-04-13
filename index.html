@@ -1045,8 +1045,10 @@ async function loadPrevioMonth(monthKey){
       resId:   v(0,i),
       voucher: v(1,i),
       dataRez: v(2,i),
-      dataOd:  v(3,i),
-      dataDo,
+      dataOd:  v(3,i),   // może zawierać godzinę np. "2026-04-06 16:00"
+      dataDo,            // może zawierać godzinę np. "2026-04-10 10:00"
+      godzinaOd:  v(3,i).length>10?v(3,i).slice(11,16):'',  // HH:MM zameldowania
+      godzinaDo:  (()=>{const s=dataDo;return s.length>10?s.slice(11,16):'';})(),
       noce:    parseInt(v(5,i))||0,
       apt,
       kanal:   v(7,i),   // H=kanal
@@ -5128,15 +5130,22 @@ function buildOblozenieLive(){
     return`<span style="background:${c};color:#fff;font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px">${label}</span>`;
   };
 
-  const rezCard=(r,accent)=>`
-    <div style="background:var(--white);border:1px solid var(--border);border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
+  const fmtHour=s=>s&&s.length>=16?s.slice(11,16):'';
+  const rezCard=(r,accent)=>{
+    const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
+    const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
+    return`<div style="background:var(--white);border:1px solid var(--border);border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
         <div style="display:flex;gap:4px;align-items:center">${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:1px">${r.dataOd?.slice(0,10)||''} → ${r.dataDo?.slice(0,10)||''} · ${r.noce} nocy</div>
+      <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
+        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy</span>
+      </div>
     </div>`;
+  };
 
   const aptFreeCard=apt=>`
     <div style="background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:6px;padding:7px 10px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">
