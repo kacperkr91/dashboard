@@ -5071,8 +5071,10 @@ function buildOblozenieLive(){
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
     if(Array.isArray(month))month.forEach(r=>{
-      if(!r.cancelled&&r.apt&&!WYLACZONE_APT.some(w=>r.apt.includes(w)))
+      if(!r.cancelled&&r.apt&&!WYLACZONE_APT.some(w=>r.apt.includes(w))){
+        if(filtry==='otv'&&ZEWNETRZNE_APT.some(w=>r.apt.includes(w)))return;
         allRows.push(r);
+      }
     });
   });
 
