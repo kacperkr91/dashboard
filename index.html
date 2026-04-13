@@ -5138,6 +5138,21 @@ function buildOblozenieLive(){
   const zajeteDzisApty=new Set([...wTrakcie.map(r=>r.apt),...zameldowania.map(r=>r.apt)]);
   const wolneApty=[...wszystkieApty].filter(a=>!zajeteDzisApty.has(a)).sort();
 
+  // Wyczyść badge dla rezerwacji w trakcie i przedłużeń które już trwają
+  wTrakcie.forEach(r=>{delete r._typ;delete r._paraApt;delete r._para;});
+  // Przedłużenie oznaczaj tylko gdy gość ma wymeldowanie I zameldowanie dziś
+  // (nie gdy jest już w trakcie nowej rezerwacji po przedłużeniu)
+  zameldowania.forEach(r=>{
+    if(r._typ==='przedluzenie'&&r.dataOd?.slice(0,10)!==targetStr){
+      delete r._typ;delete r._paraApt;delete r._para;
+    }
+  });
+  wymeldowania.forEach(r=>{
+    if(r._typ==='przedluzenie'&&r.dataDo?.slice(0,10)!==targetStr){
+      delete r._typ;delete r._paraApt;delete r._para;
+    }
+  });
+
   // Obłożenie %
   const total=wszystkieApty.size;
   const zajetyLiczba=zajeteDzisApty.size;
