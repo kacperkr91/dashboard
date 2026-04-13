@@ -5105,12 +5105,18 @@ function buildOblozenieLive(){
   });
 
   // ── Wykryj przeprowadzki i przedłużenia ──
+  // Tylko gdy gość MA zameldowanie tego samego dnia (dataOd = targetStr)
+  // NIE oznaczaj jeśli gość po prostu wyjeżdża po wcześniejszej przeprowadzce
   const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
     const g=normGosc(wym.gosc);
     if(!g)return;
-    // Szukaj tego samego gościa w zameldowaniach
-    const match=zameldowania.find(zam=>normGosc(zam.gosc)===g);
+    // Szukaj tego samego gościa w zameldowaniach — upewnij się że dataOd = dziś
+    const match=zameldowania.find(zam=>{
+      if(normGosc(zam.gosc)!==g)return false;
+      // dataOd musi być dokładnie targetStr (zameldowanie dziś, nie wcześniej)
+      return zam.dataOd?.slice(0,10)===targetStr;
+    });
     if(match){
       if(match.apt===wym.apt){
         // Ten sam apartament = przedłużenie
