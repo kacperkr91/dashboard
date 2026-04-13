@@ -4815,6 +4815,157 @@ function notaFromPrevioId(voucherId){
   },150);
 }
 
+
+/* GOŚCIE — skąd są */
+const COUNTRY_NAMES={
+  'PL':'Polska','DE':'Niemcy','GB':'Wielka Brytania','US':'USA','FR':'Francja',
+  'IT':'Włochy','ES':'Hiszpania','NL':'Holandia','CZ':'Czechy','SK':'Słowacja',
+  'UA':'Ukraina','RU':'Rosja','BE':'Belgia','AT':'Austria','CH':'Szwajcaria',
+  'SE':'Szwecja','NO':'Norwegia','DK':'Dania','FI':'Finlandia','HU':'Węgry',
+  'RO':'Rumunia','BG':'Bułgaria','HR':'Chorwacja','SI':'Słowenia','RS':'Serbia',
+  'LT':'Litwa','LV':'Łotwa','EE':'Estonia','IL':'Izrael','TR':'Turcja',
+  'IN':'Indie','CN':'Chiny','JP':'Japonia','KR':'Korea Pd.','AU':'Australia',
+  'CA':'Kanada','BR':'Brazylia','MX':'Meksyk','ZA':'Polska Pd.','AE':'ZEA',
+  'SA':'Arabia Saudyjska','EG':'Egipt','NG':'Nigeria','GR':'Grecja','PT':'Portugalia',
+  'IE':'Irlandia','LU':'Luksemburg','CY':'Cypr','MT':'Malta','IS':'Islandia',
+  'MK':'Macedonia','AL':'Albania','BA':'Bośnia','ME':'Czarnogóra','XK':'Kosowo',
+  'BY':'Białoruś','MD':'Mołdawia','GE':'Gruzja','AM':'Armenia','AZ':'Azerbejdżan',
+  'KZ':'Kazachstan','UZ':'Uzbekistan','TM':'Turkmenistan','TJ':'Tadżykistan',
+  'USA':'USA','GBR':'Wlk. Brytania','DEU':'Niemcy','FRA':'Francja','ITA':'Włochy',
+};
+
+function getFlagEmoji(code){
+  if(!code||code.length<2)return'🏳️';
+  const c=code.toUpperCase().slice(0,2);
+  return String.fromCodePoint(...[...c].map(l=>127397+l.charCodeAt(0)));
+}
+
+function buildGoscieView(){
+  // Zbierz dane ze wszystkich miesięcy Previo
+  const allRows=[];
+  Object.values(_state.data.previo||{}).forEach(month=>{
+    if(Array.isArray(month))month.forEach(r=>{if(!r.cancelled&&r.kraj)allRows.push(r);});
+    else if(month?.rows)month.rows.forEach(r=>{if(!r.cancelled&&r.kraj)allRows.push(r);});
+  });
+
+  if(!allRows.length){
+    return`<div class="grid-card" style="text-align:center;padding:40px;color:var(--text-muted)">
+      <div style="font-size:32px;margin-bottom:12px">🌍</div>
+      <div>Brak danych — załaduj dane Previo</div>
+    </div>`;
+  }
+
+  // Zlicz kraje
+  const krajCount={};
+  const krajCena={};
+  allRows.forEach(r=>{
+    const k=(r.kraj||'??').toUpperCase().slice(0,2);
+    krajCount[k]=(krajCount[k]||0)+1;
+    krajCena[k]=(krajCena[k]||0)+(r.cena||0);
+  });
+
+  const sorted=Object.entries(krajCount).sort((a,b)=>b[1]-a[1]);
+  const total=allRows.length;
+  const maxCount=sorted[0]?.[1]||1;
+
+  // Top 3 highlights
+  const top3=sorted.slice(0,3).map(([k,n],i)=>{
+    const medals=['🥇','🥈','🥉'];
+    const name=COUNTRY_NAMES[k]||k;
+    const flag=getFlagEmoji(k);
+    const pct=Math.round(n/total*100);
+    return`<div style="flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:22px">${medals[i]}</div>
+      <div style="font-size:28px;margin:4px 0">${flag}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text)">${name}</div>
+      <div style="font-size:22px;font-weight:800;color:var(--blue);margin:4px 0">${n}</div>
+      <div style="font-size:11px;color:var(--text-muted)">${pct}% rezerwacji</div>
+    </div>`;
+  }).join('');
+
+  // Full list
+  const listRows=sorted.map(([k,n])=>{
+    const name=COUNTRY_NAMES[k]||k;
+    const flag=getFlagEmoji(k);
+    const pct=Math.round(n/total*100);
+    const barW=Math.round(n/maxCount*100);
+    const totalCena=krajCena[k]||0;
+    return`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:22px;width:32px;text-align:center">${flag}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${name}</span>
+          <span style="font-size:12px;color:var(--text-muted)">${n} rez. · ${pct}%</span>
+        </div>
+        <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+          <div style="background:var(--blue);height:100%;width:${barW}%;border-radius:4px;transition:width 0.3s"></div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-mid);white-space:nowrap;min-width:80px;text-align:right">${fmt(totalCena)} zł</div>
+    </div>`;
+  }).join('');
+
+  // Channel breakdown per country (top 5)
+  const chanByKraj={};
+  allRows.forEach(r=>{
+    const k=(r.kraj||'??').toUpperCase().slice(0,2);
+    if(!chanByKraj[k])chanByKraj[k]={};
+    chanByKraj[k][r.kanal]=(chanByKraj[k][r.kanal]||0)+1;
+  });
+
+  const top5=sorted.slice(0,5);
+  const chanCols=top5.map(([k,n])=>{
+    const name=COUNTRY_NAMES[k]||k;
+    const flag=getFlagEmoji(k);
+    const chans=Object.entries(chanByKraj[k]||{}).sort((a,b)=>b[1]-a[1]);
+    const chanHtml=chans.map(([ch,cnt])=>`
+      <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0">
+        <span style="color:var(--text-muted)">${ch||'Inne'}</span>
+        <span style="font-weight:600;color:var(--text)">${cnt}</span>
+      </div>`).join('');
+    return`<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px">
+      <div style="font-size:20px;text-align:center">${flag}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text);text-align:center;margin:4px 0 8px">${name}</div>
+      ${chanHtml}
+    </div>`;
+  }).join('');
+
+  return`<div style="max-width:1100px;margin:0 auto">
+
+    <!-- KPI -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Łącznie rezerwacji</div>
+        <div style="font-size:28px;font-weight:800;color:var(--blue)">${total}</div>
+      </div>
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Krajów</div>
+        <div style="font-size:28px;font-weight:800;color:var(--blue)">${sorted.length}</div>
+      </div>
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Najczęstszy kraj</div>
+        <div style="font-size:22px">${getFlagEmoji(sorted[0]?.[0]||'')} <span style="font-size:16px;font-weight:700">${COUNTRY_NAMES[sorted[0]?.[0]]||sorted[0]?.[0]||'—'}</span></div>
+      </div>
+    </div>
+
+    <!-- TOP 3 -->
+    <div style="display:flex;gap:12px;margin-bottom:20px">${top3}</div>
+
+    <!-- Kanały dla top 5 -->
+    <div class="grid-card" style="margin-bottom:20px">
+      <div class="card-title" style="margin-bottom:12px">Kanały rezerwacji — top 5 krajów</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">${chanCols}</div>
+    </div>
+
+    <!-- Pełna lista -->
+    <div class="grid-card">
+      <div class="card-title" style="margin-bottom:16px">Wszystkie kraje (${sorted.length})</div>
+      ${listRows}
+    </div>
+
+  </div>`;
+}
+
 /* MAIN RENDER */
 function getTodayBanner(){
   try{
@@ -4920,6 +5071,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='noty'?'active':''}" style="${section==='noty'?'background:#475569;border-color:#475569':''}" onclick="setSection('noty')">
       <span class="icon">🧾</span> Noty
     </button>
+    <button class="nav-l1-btn ${section==='goscie'?'active':''}" style="${section==='goscie'?'background:#0e7490;border-color:#0e7490':''}" onclick="setSection('goscie')">
+      <span class="icon">🌍</span> Goście
+    </button>
     ${(()=>{
       let parkingAlert=false;
       let alertCount=0;
@@ -4995,6 +5149,8 @@ function renderApp(){
     content=buildKalendarzView();
   } else if(section==='noty'){
     content=buildNotyView();
+  } else if(section==='goscie'){
+    content=buildGoscieView();
   } else {
     // ── Dyżury ──
     content=buildDyzuryView();
