@@ -5111,6 +5111,16 @@ function buildOblozenieLive(){
   const zajetyLiczba=zajeteDzisApty.size;
   const pctObl=total?Math.round(zajetyLiczba/total*100):0;
 
+  // ADR = średnia cena za noc dla zajętych apartamentów
+  const zajetyRez=[...wTrakcie,...zameldowania];
+  const adr=zajetyRez.length
+    ?Math.round(zajetyRez.reduce((s,r)=>s+(r.noce>0?r.cena/r.noce:r.cena),0)/zajetyRez.length)
+    :0;
+
+  // RevPAR = łączny dzienny przychód / wszystkie dostępne apartamenty
+  const przychodDziennyTotal=zajetyRez.reduce((s,r)=>s+(r.noce>0?r.cena/r.noce:r.cena),0);
+  const revpar=total?Math.round(przychodDziennyTotal/total):0;
+
   const CHAN_COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#16a34a','Własna':'#7c3aed'};
   const chanBadge=r=>{
     const c=CHAN_COLORS[r.kanal]||'#64748b';
@@ -5157,23 +5167,33 @@ function buildOblozenieLive(){
     </div>
 
     <!-- KPI -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-      <div class="grid-card" style="text-align:center">
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px">
+      <div class="grid-card" style="text-align:center;padding:12px">
         <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Obłożenie</div>
-        <div style="font-size:30px;font-weight:800;color:${pctObl>=70?'#16a34a':pctObl>=40?'#d97706':'#dc2626'}">${pctObl}%</div>
-        <div style="font-size:11px;color:var(--text-muted)">${zajetyLiczba} / ${total} apt.</div>
+        <div style="font-size:26px;font-weight:800;color:${pctObl>=70?'#16a34a':pctObl>=40?'#d97706':'#dc2626'}">${pctObl}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">${zajetyLiczba} / ${total} apt.</div>
       </div>
-      <div class="grid-card" style="text-align:center">
+      <div class="grid-card" style="text-align:center;padding:12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">ADR</div>
+        <div style="font-size:22px;font-weight:800;color:var(--blue)">${adr>0?fmt(adr):'—'}</div>
+        <div style="font-size:10px;color:var(--text-muted)">śr. cena/noc</div>
+      </div>
+      <div class="grid-card" style="text-align:center;padding:12px">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">RevPAR</div>
+        <div style="font-size:22px;font-weight:800;color:#7c3aed">${revpar>0?fmt(revpar):'—'}</div>
+        <div style="font-size:10px;color:var(--text-muted)">przychód/apt.</div>
+      </div>
+      <div class="grid-card" style="text-align:center;padding:12px">
         <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🚪 Wymeldowania</div>
-        <div style="font-size:30px;font-weight:800;color:#f59e0b">${wymeldowania.length}</div>
+        <div style="font-size:26px;font-weight:800;color:#f59e0b">${wymeldowania.length}</div>
       </div>
-      <div class="grid-card" style="text-align:center">
+      <div class="grid-card" style="text-align:center;padding:12px">
         <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🔑 Zameldowania</div>
-        <div style="font-size:30px;font-weight:800;color:#3b82f6">${zameldowania.length}</div>
+        <div style="font-size:26px;font-weight:800;color:#3b82f6">${zameldowania.length}</div>
       </div>
-      <div class="grid-card" style="text-align:center">
+      <div class="grid-card" style="text-align:center;padding:12px">
         <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">✓ Wolne</div>
-        <div style="font-size:30px;font-weight:800;color:#16a34a">${wolneApty.length}</div>
+        <div style="font-size:26px;font-weight:800;color:#16a34a">${wolneApty.length}</div>
       </div>
     </div>
 
