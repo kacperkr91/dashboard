@@ -4817,7 +4817,9 @@ function notaFromPrevioId(voucherId){
 
 
 /* GOŚCIE — skąd są */
+// Mapa kodów krajów — obsługuje ISO 3166-1 alpha-2 (2-lit) i alpha-3 (3-lit)
 const COUNTRY_NAMES={
+  // 2-literowe
   'PL':'Polska','DE':'Niemcy','GB':'Wielka Brytania','US':'USA','FR':'Francja',
   'IT':'Włochy','ES':'Hiszpania','NL':'Holandia','CZ':'Czechy','SK':'Słowacja',
   'UA':'Ukraina','RU':'Rosja','BE':'Belgia','AT':'Austria','CH':'Szwajcaria',
@@ -4825,19 +4827,60 @@ const COUNTRY_NAMES={
   'RO':'Rumunia','BG':'Bułgaria','HR':'Chorwacja','SI':'Słowenia','RS':'Serbia',
   'LT':'Litwa','LV':'Łotwa','EE':'Estonia','IL':'Izrael','TR':'Turcja',
   'IN':'Indie','CN':'Chiny','JP':'Japonia','KR':'Korea Pd.','AU':'Australia',
-  'CA':'Kanada','BR':'Brazylia','MX':'Meksyk','ZA':'Polska Pd.','AE':'ZEA',
+  'CA':'Kanada','BR':'Brazylia','MX':'Meksyk','ZA':'Płd. Afryka','AE':'ZEA',
   'SA':'Arabia Saudyjska','EG':'Egipt','NG':'Nigeria','GR':'Grecja','PT':'Portugalia',
   'IE':'Irlandia','LU':'Luksemburg','CY':'Cypr','MT':'Malta','IS':'Islandia',
   'MK':'Macedonia','AL':'Albania','BA':'Bośnia','ME':'Czarnogóra','XK':'Kosowo',
   'BY':'Białoruś','MD':'Mołdawia','GE':'Gruzja','AM':'Armenia','AZ':'Azerbejdżan',
-  'KZ':'Kazachstan','UZ':'Uzbekistan','TM':'Turkmenistan','TJ':'Tadżykistan',
-  'USA':'USA','GBR':'Wlk. Brytania','DEU':'Niemcy','FRA':'Francja','ITA':'Włochy',
+  'KZ':'Kazachstan','UZ':'Uzbekistan','KG':'Kirgistan','TJ':'Tadżykistan',
+  'TH':'Tajlandia','VN':'Wietnam','ID':'Indonezja','MY':'Malezja','SG':'Singapur',
+  'PH':'Filipiny','TW':'Tajwan','HK':'Hongkong','NZ':'Nowa Zelandia',
+  'AR':'Argentyna','CL':'Chile','CO':'Kolumbia','PE':'Peru','VE':'Wenezuela',
+  'MA':'Maroko','TN':'Tunezja','DZ':'Algieria','KE':'Kenia','GH':'Ghana',
+  'ET':'Etiopia','TZ':'Tanzania','UG':'Uganda','ZW':'Zimbabwe','MZ':'Mozambik',
+  // 3-literowe (Previo używa ISO 3166-1 alpha-3)
+  'POL':'Polska','DEU':'Niemcy','GBR':'Wielka Brytania','USA':'USA','FRA':'Francja',
+  'ITA':'Włochy','ESP':'Hiszpania','NLD':'Holandia','CZE':'Czechy','SVK':'Słowacja',
+  'UKR':'Ukraina','RUS':'Rosja','BEL':'Belgia','AUT':'Austria','CHE':'Szwajcaria',
+  'SWE':'Szwecja','NOR':'Norwegia','DNK':'Dania','FIN':'Finlandia','HUN':'Węgry',
+  'ROU':'Rumunia','BGR':'Bułgaria','HRV':'Chorwacja','SVN':'Słowenia','SRB':'Serbia',
+  'LTU':'Litwa','LVA':'Łotwa','EST':'Estonia','ISR':'Izrael','TUR':'Turcja',
+  'IND':'Indie','CHN':'Chiny','JPN':'Japonia','KOR':'Korea Pd.','AUS':'Australia',
+  'CAN':'Kanada','BRA':'Brazylia','MEX':'Meksyk','ZAF':'Płd. Afryka','ARE':'ZEA',
+  'SAU':'Arabia Saudyjska','EGY':'Egipt','NGA':'Nigeria','GRC':'Grecja','PRT':'Portugalia',
+  'IRL':'Irlandia','LUX':'Luksemburg','CYP':'Cypr','MLT':'Malta','ISL':'Islandia',
+  'MKD':'Macedonia','ALB':'Albania','BIH':'Bośnia','MNE':'Czarnogóra','XKX':'Kosowo',
+  'BLR':'Białoruś','MDA':'Mołdawia','GEO':'Gruzja','ARM':'Armenia','AZE':'Azerbejdżan',
+  'KAZ':'Kazachstan','UZB':'Uzbekistan','THA':'Tajlandia','VNM':'Wietnam','IDN':'Indonezja',
+  'MYS':'Malezja','SGP':'Singapur','PHL':'Filipiny','NZL':'Nowa Zelandia',
+  'ARG':'Argentyna','CHL':'Chile','COL':'Kolumbia','PER':'Peru','MAR':'Maroko',
+  'TUN':'Tunezja','KEN':'Kenia','GHA':'Ghana','LBN':'Liban','JOR':'Jordania',
+  'IRN':'Iran','IRQ':'Irak','PAK':'Pakistan','BGD':'Bangladesz','LKA':'Sri Lanka',
+};
+
+// Konwersja kodu 3-literowego na 2-literowy dla emoji flagi
+const ISO3_TO_2={
+  'POL':'PL','DEU':'DE','GBR':'GB','USA':'US','FRA':'FR','ITA':'IT','ESP':'ES',
+  'NLD':'NL','CZE':'CZ','SVK':'SK','UKR':'UA','RUS':'RU','BEL':'BE','AUT':'AT',
+  'CHE':'CH','SWE':'SE','NOR':'NO','DNK':'DK','FIN':'FI','HUN':'HU','ROU':'RO',
+  'BGR':'BG','HRV':'HR','SVN':'SI','SRB':'RS','LTU':'LT','LVA':'LV','EST':'EE',
+  'ISR':'IL','TUR':'TR','IND':'IN','CHN':'CN','JPN':'JP','KOR':'KR','AUS':'AU',
+  'CAN':'CA','BRA':'BR','MEX':'MX','ZAF':'ZA','ARE':'AE','SAU':'SA','EGY':'EG',
+  'NGA':'NG','GRC':'GR','PRT':'PT','IRL':'IE','LUX':'LU','CYP':'CY','MLT':'MT',
+  'ISL':'IS','MKD':'MK','ALB':'AL','BIH':'BA','MNE':'ME','BLR':'BY','MDA':'MD',
+  'GEO':'GE','ARM':'AM','AZE':'AZ','KAZ':'KZ','UZB':'UZ','THA':'TH','VNM':'VN',
+  'IDN':'ID','MYS':'MY','SGP':'SG','PHL':'PH','NZL':'NZ','ARG':'AR','CHL':'CL',
+  'COL':'CO','PER':'PE','MAR':'MA','TUN':'TN','KEN':'KE','GHA':'GH','LBN':'LB',
+  'JOR':'JO','PAK':'PK','BGD':'BD','LKA':'LK','IRN':'IR','IRQ':'IQ',
 };
 
 function getFlagEmoji(code){
   if(!code||code.length<2)return'🏳️';
-  const c=code.toUpperCase().slice(0,2);
-  return String.fromCodePoint(...[...c].map(l=>127397+l.charCodeAt(0)));
+  const upper=code.toUpperCase();
+  // Konwertuj 3-literowy kod na 2-literowy
+  const c2=(upper.length===3&&ISO3_TO_2[upper])?ISO3_TO_2[upper]:upper.slice(0,2);
+  try{return String.fromCodePoint(...[...c2].map(l=>127397+l.charCodeAt(0)));}
+  catch(e){return'🏳️';}
 }
 
 function buildGoscieView(){
@@ -4855,13 +4898,13 @@ function buildGoscieView(){
     </div>`;
   }
 
-  // Zlicz kraje
+  // Zlicz kraje — normalizuj do oryginalnego kodu (2 lub 3 literowego)
   const krajCount={};
   const krajCena={};
   allRows.forEach(r=>{
-    const k=(r.kraj||'??').toUpperCase().slice(0,2);
-    krajCount[k]=(krajCount[k]||0)+1;
-    krajCena[k]=(krajCena[k]||0)+(r.cena||0);
+    const raw=(r.kraj||'??').toUpperCase().trim();
+    krajCount[raw]=(krajCount[raw]||0)+1;
+    krajCena[raw]=(krajCena[raw]||0)+(r.cena||0);
   });
 
   const sorted=Object.entries(krajCount).sort((a,b)=>b[1]-a[1]);
@@ -4908,7 +4951,7 @@ function buildGoscieView(){
   // Channel breakdown per country (top 5)
   const chanByKraj={};
   allRows.forEach(r=>{
-    const k=(r.kraj||'??').toUpperCase().slice(0,2);
+    const k=(r.kraj||'??').toUpperCase().trim();
     if(!chanByKraj[k])chanByKraj[k]={};
     chanByKraj[k][r.kanal]=(chanByKraj[k][r.kanal]||0)+1;
   });
@@ -4930,7 +4973,19 @@ function buildGoscieView(){
     </div>`;
   }).join('');
 
+  // Info o zakresie danych
+  const loadedMonths=Object.keys(_state.data.previo||{}).filter(k=>Array.isArray(_state.data.previo[k])&&_state.data.previo[k].length>0);
+  const notLoaded=PREVIO_MONTHS.filter(m=>!loadedMonths.includes(m.key));
+  const rangeInfo=loadedMonths.length?`Dane z ${loadedMonths.length} miesiąca/miesięcy (${loadedMonths.sort()[0]} – ${loadedMonths.sort().slice(-1)[0]})`:'Brak danych';
+
   return`<div style="max-width:1100px;margin:0 auto">
+
+    <!-- Zakres danych -->
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#92400e">📊 ${rangeInfo}</span>
+      ${notLoaded.length?`<span style="font-size:11px;color:#92400e;opacity:0.7">· Brak: ${notLoaded.map(m=>m.short).join(', ')}</span>`:''}
+      <button onclick="loadAllPrevioMonths()" style="margin-left:auto;background:#fef3c7;border:1px solid #fcd34d;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;color:#92400e;font-family:'Inter',sans-serif">⬇ Załaduj wszystkie miesiące</button>
+    </div>
 
     <!-- KPI -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
@@ -4964,6 +5019,30 @@ function buildGoscieView(){
     </div>
 
   </div>`;
+}
+
+function loadAllPrevioMonths(){
+  const toLoad=PREVIO_MONTHS.filter(m=>{
+    const d=_state.data.previo[m.key];
+    return !d||(d.error)||(Array.isArray(d)&&d.length===0);
+  });
+  if(!toLoad.length){alert('Wszystkie miesiące już załadowane!');return;}
+
+  let idx=0;
+  const loadNext=async()=>{
+    if(idx>=toLoad.length){renderApp();return;}
+    const m=toLoad[idx++];
+    try{
+      const d=await loadPrevioMonth(m.key);
+      _state.data.previo[m.key]=d;
+    }catch(e){
+      _state.data.previo[m.key]={error:e.message};
+    }
+    renderApp();
+    await delay(1000);
+    loadNext();
+  };
+  loadNext();
 }
 
 /* MAIN RENDER */
