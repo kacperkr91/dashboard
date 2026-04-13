@@ -2794,12 +2794,11 @@ function getDutyPerson(dateStr, overrides){
 function buildDyzuryView(){
   const overrides=getDyzuryState();
   const today=new Date();today.setHours(0,0,0,0);
-  const todayStr=today.toISOString().slice(0,10);
+  // Użyj lokalnej daty (nie UTC) żeby uniknąć błędu strefy czasowej
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
   const KACPER_COLOR='#3b82f6';
   const ARTUR_COLOR='#059669';
-  const KACPER_LIGHT='#dbeafe';
-  const ARTUR_LIGHT='#d1fae5';
 
   // Year selector
   const currentYear=today.getFullYear();
@@ -2809,29 +2808,10 @@ function buildDyzuryView(){
     `<button class="hk-month-btn ${selectedYear===y?'active':''}" onclick="setDyzuryYear(${y})">${y}</button>`
   ).join('');
 
-  // Who is on duty this week
-  const thisWeekPerson=getDutyPerson(todayStr,overrides);
-  const nextMonday=new Date(today);
-  const dow=today.getDay();
-  const daysToNextMon=dow===1?7:(8-dow)%7;
-  nextMonday.setDate(today.getDate()+daysToNextMon);
-  const nextMondayStr=nextMonday.toISOString().slice(0,10);
-  const nextWeekPerson=getDutyPerson(nextMondayStr,overrides);
-
   const header=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:20px">
     <div>
       <div style="font-size:20px;font-weight:700;color:var(--text)">📅 Dyżury ${selectedYear}</div>
       <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Zmiana co poniedziałek · kliknij dzień aby zmienić dyżurnego</div>
-    </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="background:${KACPER_LIGHT};border:2px solid ${KACPER_COLOR};border-radius:10px;padding:10px 16px;text-align:center">
-        <div style="font-size:11px;color:${KACPER_COLOR};font-weight:600;text-transform:uppercase">Ten tydzień</div>
-        <div style="font-size:16px;font-weight:700;color:${thisWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR}">${thisWeekPerson}</div>
-      </div>
-      <div style="background:${nextWeekPerson==='Kacper'?KACPER_LIGHT:ARTUR_LIGHT};border:2px solid ${nextWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR};border-radius:10px;padding:10px 16px;text-align:center">
-        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Następny tydzień</div>
-        <div style="font-size:16px;font-weight:700;color:${nextWeekPerson==='Kacper'?KACPER_COLOR:ARTUR_COLOR}">${nextWeekPerson}</div>
-      </div>
     </div>
   </div>
   <div class="hk-month-nav">${yearBtns}</div>`;
