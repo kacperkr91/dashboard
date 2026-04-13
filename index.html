@@ -1397,6 +1397,7 @@ let _state={
   kalendarzYear:new Date().getFullYear(),
   kalendarzMonth:new Date().getMonth(),
   dyzuryYear:new Date().getFullYear(),
+  vacationMode:null,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:(()=>{
@@ -2765,6 +2766,27 @@ function buildBookingPayoutView(){
 
 
 /* DYŻURY */
+function getVacations(){
+  try{return JSON.parse(localStorage.getItem('dyzury_vacations')||'{}');}
+  catch(e){return{};}
+}
+function saveVacations(v){
+  localStorage.setItem('dyzury_vacations',JSON.stringify(v));
+}
+function toggleVacation(dateStr, person){
+  const v=getVacations();
+  const key=`${dateStr}__${person}`;
+  if(v[key])delete v[key];
+  else v[key]=true;
+  saveVacations(v);
+  renderApp();
+}
+function isOnVacation(dateStr, person){
+  const v=getVacations();
+  return !!v[`${dateStr}__${person}`];
+}
+
+
 // Dyżury state — stored in localStorage
 function getDyzuryState(){
   try{
@@ -2839,8 +2861,11 @@ function buildDyzuryView(){
       const dow2=new Date(selectedYear,mi,d).getDay();
       const isMonday=dow2===1;
       const isSunday=dow2===0;
+      const kVac=isOnVacation(dateStr,'Kacper');
+      const aVac=isOnVacation(dateStr,'Artur');
+      const vacIcons=(kVac?'<span title="Kacper — urlop" style="font-size:8px">🏖K</span>':'')+(aVac?'<span title="Artur — urlop" style="font-size:8px">🏖A</span>':'');
 
-      cells+=`<div onclick="toggleDyzur('${dateStr}')" style="
+      cells+=`<div style="
         cursor:pointer;
         border-radius:6px;
         padding:4px 2px;
@@ -2852,9 +2877,11 @@ function buildDyzuryView(){
         font-size:11px;
         color:${isKacper?KACPER_COLOR:ARTUR_COLOR};
         transition:opacity 0.15s;
-        " title="${person}${isOverride?' (zmieniony)':''}">
+        position:relative;
+        " onclick="toggleDyzur('${dateStr}')" title="${person}${isOverride?' (zmieniony)':''}${kVac?' | Kacper: urlop':''}${aVac?' | Artur: urlop':''}">
         <div style="font-size:10px;color:${isSunday?'#ef4444':'var(--text-muted)'}">${d}</div>
         <div style="font-size:9px;font-weight:600">${person[0]}</div>
+        ${kVac||aVac?`<div style="font-size:7px;line-height:1;color:#b45309;margin-top:1px">${vacIcons}</div>`:''}
       </div>`;
     }
 
@@ -2882,24 +2909,49 @@ function buildDyzuryView(){
 
   const grid=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">${calendars}</div>`;
 
-  const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;font-size:12px">
+  const vacK=Object.keys(getVacations()).filter(k=>k.endsWith('__Kacper')).length;
+  const vacA=Object.keys(getVacations()).filter(k=>k.endsWith('__Artur')).length;
+
+  const legend=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;font-size:12px;align-items:center">
     <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:${KACPER_LIGHT};border:1px solid ${KACPER_COLOR}"></div><span style="color:${KACPER_COLOR};font-weight:600">Kacper</span></div>
     <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;background:${ARTUR_LIGHT};border:1px solid ${ARTUR_COLOR}"></div><span style="color:${ARTUR_COLOR};font-weight:600">Artur</span></div>
-    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;border:2px dashed #f59e0b;background:white"></div><span style="color:#92400e">Ręcznie zmieniony</span></div>
-    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;border:2px solid #f59e0b"></div><span style="color:#92400e">Dziś</span></div>
-    <button onclick="resetDyzury()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-muted)">↺ Resetuj zmiany</button>
+    <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:12px;border-radius:3px;border:2px dashed #f59e0b;background:white"></div><span style="color:#92400e">Zmieniony</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px">🏖️</span><span style="color:#b45309;font-weight:600">Urlop</span></div>
+    <div style="display:flex;gap:6px;margin-left:8px">
+      <button onclick="toggleVacationMode('Kacper')" id="vacBtn-Kacper" style="background:${_state.vacationMode==='Kacper'?'#b45309':'var(--white)'};color:${_state.vacationMode==='Kacper'?'#fff':'var(--text-muted)'};border:1px solid ${_state.vacationMode==='Kacper'?'#b45309':'var(--border)'};border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">🏖️ Urlop Kacper</button>
+      <button onclick="toggleVacationMode('Artur')" style="background:${_state.vacationMode==='Artur'?'#b45309':'var(--white)'};color:${_state.vacationMode==='Artur'?'#fff':'var(--text-muted)'};border:1px solid ${_state.vacationMode==='Artur'?'#b45309':'var(--border)'};border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">🏖️ Urlop Artur</button>
+      ${_state.vacationMode?'<button onclick="toggleVacationMode(null)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-muted)">&#10005; Wyłącz tryb urlopu</button>':''}
+    </div>
+    <button onclick="resetDyzury()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-muted)">↺ Resetuj dyżury</button>
+    ${vacK||vacA?`<button onclick="resetVacations()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:#b45309">↺ Resetuj urlopy (K:${vacK} A:${vacA})</button>`:''}
   </div>`;
 
   return`<div style="max-width:1200px;margin:0 auto">${header}${legend}${grid}</div>`;
 }
 
 function toggleDyzur(dateStr){
+  // Jeśli tryb urlopu — zaznacz urlop zamiast zmieniać dyżur
+  if(_state.vacationMode){
+    toggleVacation(dateStr,_state.vacationMode);
+    return;
+  }
   const overrides=getDyzuryState();
   const current=getDutyPerson(dateStr,overrides);
-  // Toggle to the other person
   overrides[dateStr]=current==='Kacper'?'Artur':'Kacper';
   saveDyzuryState(overrides);
   if(_state.section==='dyzury')renderApp();
+}
+
+function toggleVacationMode(person){
+  _state.vacationMode=_state.vacationMode===person?null:person;
+  if(_state.section==='dyzury')renderApp();
+}
+
+function resetVacations(){
+  if(confirm('Usunąć wszystkie zaznaczone urlopy?')){
+    saveVacations({});
+    if(_state.section==='dyzury')renderApp();
+  }
 }
 
 function resetDyzury(){
