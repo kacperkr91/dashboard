@@ -5045,6 +5045,163 @@ function loadAllPrevioMonths(){
   loadNext();
 }
 
+
+/* OBŁOŻENIE LIVE */
+function buildOblozenieLive(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const todayStr=localDk(today);
+  const tmr=new Date(today);tmr.setDate(today.getDate()+1);
+  const tmrStr=localDk(tmr);
+  const dayAfter=new Date(today);dayAfter.setDate(today.getDate()+2);
+  const dayAfterStr=localDk(dayAfter);
+
+  // Zbierz wszystkie aktywne rezerwacje z Previo
+  const allRows=[];
+  Object.values(_state.data.previo||{}).forEach(month=>{
+    if(Array.isArray(month))month.forEach(r=>{if(!r.cancelled)allRows.push(r);});
+  });
+
+  if(!allRows.length){
+    return`<div class="grid-card" style="text-align:center;padding:40px;color:var(--text-muted)">
+      <div style="font-size:32px;margin-bottom:12px">🏠</div>
+      <div>Brak danych Previo — odśwież dashboard</div>
+    </div>`;
+  }
+
+  // Kategoryzuj rezerwacje
+  const wymeldowujeDzis=[];  // dataDo = dziś
+  const zameldowujeDzis=[];  // dataOd = dziś
+  const zajete=[];           // dataOd < dziś < dataDo
+  const zameldowujeJutro=[];  // dataOd = jutro
+  const wolneApty=new Set();
+
+  // Zbierz wszystkie znane apartamenty
+  const wszystkieApty=new Set(allRows.map(r=>r.apt).filter(Boolean));
+
+  allRows.forEach(r=>{
+    if(!r.apt||!r.dataOd||!r.dataDo)return;
+    const od=r.dataOd.slice(0,10);
+    const doD=r.dataDo.slice(0,10);
+
+    if(doD===todayStr) wymeldowujeDzis.push(r);
+    else if(od===todayStr) zameldowujeDzis.push(r);
+    else if(od<todayStr&&doD>todayStr) zajete.push(r);
+    else if(od===tmrStr) zameldowujeJutro.push(r);
+  });
+
+  // Które są wolne dziś (nie mają żadnej aktywnej rez)
+  const zajeteDzisApty=new Set([
+    ...zajete.map(r=>r.apt),
+    ...zameldowujeDzis.map(r=>r.apt),
+  ]);
+  wszystkieApty.forEach(apt=>{
+    if(!zajeteDzisApty.has(apt))wolneApty.add(apt);
+  });
+
+  const CHAN_COLORS={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#16a34a','Własna':'#7c3aed'};
+  const chanBadge=r=>{
+    const c=CHAN_COLORS[r.kanal]||'#64748b';
+    return`<span style="background:${c};color:#fff;font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px">${(r.kanal||'?').replace('Booking.com','BK').replace('Airbnb','AB').replace('Profitroom','PR')}</span>`;
+  };
+
+  const rezCard=(r,accent)=>`
+    <div style="background:var(--white);border:1px solid var(--border);border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
+        <div style="display:flex;gap:4px;align-items:center">${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${r.gosc||'—'} · ${r.dataOd?.slice(0,10)||''} → ${r.dataDo?.slice(0,10)||''} (${r.noce} n.)</div>
+    </div>`;
+
+  const aptFreeCard=apt=>`
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:6px;padding:8px 10px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:#15803d">${apt}</div>
+      <div style="font-size:11px;color:#16a34a;margin-top:2px">✓ Wolny</div>
+    </div>`;
+
+  // Odsetek obłożenia
+  const total=wszystkieApty.size;
+  const zajetyLiczba=zajeteDzisApty.size;
+  const pctObl=total?Math.round(zajetyLiczba/total*100):0;
+  const przychodDzis=zajete.reduce((s,r)=>s+r.cena,0)+zameldowujeDzis.reduce((s,r)=>s+r.cena,0);
+
+  // Dni tygodnia
+  const DOW=['Niedz','Pon','Wt','Śr','Czw','Pt','Sob'];
+  const dateLabel=(d)=>`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')} (${DOW[d.getDay()]})`;
+
+  return`<div style="max-width:1100px;margin:0 auto">
+
+    <!-- KPI -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Obłożenie dziś</div>
+        <div style="font-size:32px;font-weight:800;color:${pctObl>70?'#16a34a':pctObl>40?'#d97706':'#dc2626'}">${pctObl}%</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${zajetyLiczba} / ${total} apt.</div>
+      </div>
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Wymeldowania dziś</div>
+        <div style="font-size:32px;font-weight:800;color:#f59e0b">${wymeldowujeDzis.length}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${dateLabel(today)}</div>
+      </div>
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Zameldowania dziś</div>
+        <div style="font-size:32px;font-weight:800;color:#3b82f6">${zameldowujeDzis.length}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${dateLabel(today)}</div>
+      </div>
+      <div class="grid-card" style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Zameldowania jutro</div>
+        <div style="font-size:32px;font-weight:800;color:#8b5cf6">${zameldowujeJutro.length}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${dateLabel(tmr)}</div>
+      </div>
+    </div>
+
+    <!-- Pasek obłożenia -->
+    <div class="grid-card" style="margin-bottom:20px;padding:16px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Obłożenie — ${dateLabel(today)}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${zajetyLiczba} zajętych · ${wolneApty.size} wolnych</div>
+      </div>
+      <div style="background:var(--border);border-radius:6px;height:12px;overflow:hidden">
+        <div style="background:linear-gradient(90deg,#3b82f6,#0f766e);height:100%;width:${pctObl}%;border-radius:6px;transition:width 0.5s"></div>
+      </div>
+    </div>
+
+    <!-- 3 kolumny -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+      <!-- Wymeldowania dziś -->
+      <div class="grid-card">
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:12px">🚪 Wymeldowania dziś (${wymeldowujeDzis.length})</div>
+        ${wymeldowujeDzis.length
+          ?wymeldowujeDzis.sort((a,b)=>(a.apt||'').localeCompare(b.apt||'')).map(r=>rezCard(r,'#f59e0b')).join('')
+          :`<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px">Brak wymeldowań</div>`}
+      </div>
+
+      <!-- Zameldowania dziś -->
+      <div class="grid-card">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;margin-bottom:12px">🔑 Zameldowania dziś (${zameldowujeDzis.length})</div>
+        ${zameldowujeDzis.length
+          ?zameldowujeDzis.sort((a,b)=>(a.apt||'').localeCompare(b.apt||'')).map(r=>rezCard(r,'#3b82f6')).join('')
+          :`<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:16px">Brak zameldowań</div>`}
+        ${zameldowujeJutro.length?`
+        <div style="font-size:13px;font-weight:700;color:#8b5cf6;margin:16px 0 8px">🗓 Jutro (${zameldowujeJutro.length})</div>
+        ${zameldowujeJutro.sort((a,b)=>(a.apt||'').localeCompare(b.apt||'')).map(r=>rezCard(r,'#8b5cf6')).join('')}`:''}
+      </div>
+
+      <!-- Aktualnie zajęte + wolne -->
+      <div class="grid-card">
+        <div style="font-size:13px;font-weight:700;color:#0f766e;margin-bottom:12px">🏠 Zajęte w trakcie pobytu (${zajete.length})</div>
+        ${zajete.sort((a,b)=>(a.apt||'').localeCompare(b.apt||'')).map(r=>rezCard(r,'#0f766e')).join('')}
+        ${wolneApty.size?`
+        <div style="font-size:13px;font-weight:700;color:#16a34a;margin:16px 0 8px">✓ Wolne dziś (${wolneApty.size})</div>
+        ${[...wolneApty].sort().map(aptFreeCard).join('')}`:''}
+      </div>
+
+    </div>
+  </div>`;
+}
+
 /* MAIN RENDER */
 function getTodayBanner(){
   try{
@@ -5153,6 +5310,9 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='goscie'?'active':''}" style="${section==='goscie'?'background:#0e7490;border-color:#0e7490':''}" onclick="setSection('goscie')">
       <span class="icon">🌍</span> Goście
     </button>
+    <button class="nav-l1-btn ${section==='oblozenie'?'active':''}" style="${section==='oblozenie'?'background:#0f766e;border-color:#0f766e':''}" onclick="setSection('oblozenie')">
+      <span class="icon">🏠</span> Obłożenie
+    </button>
     ${(()=>{
       let parkingAlert=false;
       let alertCount=0;
@@ -5230,6 +5390,8 @@ function renderApp(){
     content=buildNotyView();
   } else if(section==='goscie'){
     content=buildGoscieView();
+  } else if(section==='oblozenie'){
+    content=buildOblozenieLive();
   } else {
     // ── Dyżury ──
     content=buildDyzuryView();
