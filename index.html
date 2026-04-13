@@ -5104,6 +5104,30 @@ function buildOblozenieLive(){
     else if(od<targetStr&&doD>targetStr) wTrakcie.push(r);
   });
 
+  // ── Wykryj przeprowadzki i przedłużenia ──
+  const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+  wymeldowania.forEach(wym=>{
+    const g=normGosc(wym.gosc);
+    if(!g)return;
+    // Szukaj tego samego gościa w zameldowaniach
+    const match=zameldowania.find(zam=>normGosc(zam.gosc)===g);
+    if(match){
+      if(match.apt===wym.apt){
+        // Ten sam apartament = przedłużenie
+        wym._typ='przedluzenie';
+        match._typ='przedluzenie';
+        wym._para=match;
+        match._para=wym;
+      } else {
+        // Inny apartament = przeprowadzka
+        wym._typ='przeprowadzka';
+        match._typ='przeprowadzka';
+        wym._paraApt=match.apt;
+        match._paraApt=wym.apt;
+      }
+    }
+  });
+
   // Wolne apartamenty
   const zajeteDzisApty=new Set([...wTrakcie.map(r=>r.apt),...zameldowania.map(r=>r.apt)]);
   const wolneApty=[...wszystkieApty].filter(a=>!zajeteDzisApty.has(a)).sort();
@@ -5134,10 +5158,15 @@ function buildOblozenieLive(){
   const rezCard=(r,accent)=>{
     const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
     const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
-    return`<div style="background:var(--white);border:1px solid var(--border);border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+    const specBadge=r._typ==='przeprowadzka'
+      ?`<span style="background:#f59e0b;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px">🔄 ${r._paraApt?'→ '+r._paraApt:''}</span>`
+      :r._typ==='przedluzenie'
+      ?`<span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px">↻ Przedłużenie</span>`
+      :'';
+    return`<div style="background:${r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)'};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
-        <div style="display:flex;gap:4px;align-items:center">${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${specBadge}${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
