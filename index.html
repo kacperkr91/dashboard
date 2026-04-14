@@ -5262,9 +5262,7 @@ function buildOblozenieLive(){
         Tylko OTV
       </button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <button onclick="generateHKMessage()" style="background:#25D366;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:6px">
-          <span style="font-size:14px">📱</span> Wiadomość dla HK
-        </button>
+        
         <div style="display:flex;align-items:center;gap:8px">
           <button onclick="generateHKMessage()" style="background:#25D366;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📱 Wiadomość dla HK</button>
           <div style="font-size:12px;color:var(--text-muted)">Dane z ${Object.values(_state.data.previo||{}).filter(m=>Array.isArray(m)&&m.length).length} mies.</div>
@@ -5353,12 +5351,13 @@ function generateHKMessage(){
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
   const dateLabel=`${today.getDate()} ${MONTHS_PL[today.getMonth()]} (${DOW_PL[today.getDay()]})`;
 
-  const filtry=_state.oblozenieFiltry||'wszystkie';
+  // Generator dotyczy TYLKO OTV — wyklucz Orzeszkową i apartamenty zewnętrzne
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
     if(Array.isArray(month))month.forEach(r=>{
-      if(!r.cancelled&&r.apt&&!WYLACZONE_APT.some(w=>r.apt.includes(w))){
-        if(filtry==='otv'&&ZEWNETRZNE_APT.some(w=>r.apt.includes(w)))return;
+      if(!r.cancelled&&r.apt
+        &&!WYLACZONE_APT.some(w=>r.apt.includes(w))
+        &&!ZEWNETRZNE_APT.some(w=>r.apt.includes(w))){
         allRows.push({...r});
       }
     });
@@ -5376,6 +5375,7 @@ function generateHKMessage(){
     else if(od===todayStr)zameldowania.push({...r});
   });
 
+  // Wykryj przeprowadzki i przedłużenia — tylko gdy obie strony są dziś
   const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
     const g=normGosc(wym.gosc);
@@ -5391,20 +5391,25 @@ function generateHKMessage(){
     }
   });
 
-  const pozneWym=wymeldowania.filter(r=>!r._typ&&(fmtHour(r.dataDo)||'10:00')>'10:00').sort((a,b)=>(fmtHour(b.dataDo)||'').localeCompare(fmtHour(a.dataDo)||''));
-  const wczesneZam=zameldowania.filter(r=>!r._typ&&(fmtHour(r.dataOd)||'16:00')<'16:00').sort((a,b)=>(fmtHour(a.dataOd)||'').localeCompare(fmtHour(b.dataOd)||''));
+  const pozneWym=wymeldowania.filter(r=>!r._typ&&(fmtHour(r.dataDo)||'10:00')>'10:00')
+    .sort((a,b)=>(fmtHour(b.dataDo)||'').localeCompare(fmtHour(a.dataDo)||''));
+  const wczesneZam=zameldowania.filter(r=>!r._typ&&(fmtHour(r.dataOd)||'16:00')<'16:00')
+    .sort((a,b)=>(fmtHour(a.dataOd)||'').localeCompare(fmtHour(b.dataOd)||''));
   const przeprowadzki=wymeldowania.filter(r=>r._typ==='przeprowadzka');
   const przedluzenia=wymeldowania.filter(r=>r._typ==='przedluzenie');
 
+  const brakWyjatkow=!pozneWym.length&&!wczesneZam.length&&!przeprowadzki.length&&!przedluzenia.length;
+
   const lines=[];
-  lines.push('Dzień dobry, na razie bez próśb');
+  // "na razie bez próśb" tylko gdy wszystko standardowe
+  lines.push(brakWyjatkow?'Dzień dobry, na razie bez próśb':'Dzień dobry,');
 
   if(pozneWym.length){
     lines.push('');
     lines.push('Późne wymeldowania:');
     pozneWym.forEach(r=>{
       const h=fmtHour(r.dataDo);
-      lines.push('• ' + r.apt + (h?' (do '+h+')':''));
+      lines.push('• '+r.apt+(h?' (do '+h+')':''));
     });
   }
 
@@ -5413,7 +5418,7 @@ function generateHKMessage(){
     lines.push('Wczesne zameldowania:');
     wczesneZam.forEach(r=>{
       const h=fmtHour(r.dataOd);
-      lines.push('• ' + r.apt + (h?' (od '+h+')':''));
+      lines.push('• '+r.apt+(h?' (od '+h+')':''));
     });
   }
 
@@ -5421,7 +5426,7 @@ function generateHKMessage(){
     lines.push('');
     lines.push('Przeprowadzki:');
     przeprowadzki.forEach(r=>{
-      lines.push('• ' + r.apt + ' → ' + (r._paraApt||'?'));
+      lines.push('• '+r.apt+' → '+(r._paraApt||'?'));
     });
   }
 
@@ -5429,7 +5434,7 @@ function generateHKMessage(){
     lines.push('');
     lines.push('Przedłużenia:');
     przedluzenia.forEach(r=>{
-      lines.push('• ' + r.apt);
+      lines.push('• '+r.apt);
     });
   }
 
@@ -5437,17 +5442,16 @@ function generateHKMessage(){
 
   const modal=document.createElement('div');
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  const closeBtn='this.closest(".hk-modal").remove()';
   modal.className='hk-modal';
   modal.innerHTML=`<div style="background:var(--white);border-radius:14px;padding:24px;max-width:500px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:16px">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:15px;font-weight:700;color:var(--text)">Wiadomość dla housekeepingu</div>
-      <button onclick="${closeBtn}" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
+      <button onclick="this.closest('.hk-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
     <textarea id="hkMsgBox" style="flex:1;min-height:280px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
     <div style="display:flex;gap:10px">
       <button id="hkCopyBtn" style="flex:1;background:#25D366;color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Kopiuj</button>
-      <button onclick="${closeBtn}" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
+      <button onclick="this.closest('.hk-modal').remove()" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
