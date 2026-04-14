@@ -2380,10 +2380,12 @@ function buildPrevioView(){
     </div>
   </div>`;
 
-  // Group by dataDo
+  // Group by dataDo — only show dates belonging to this month
   const byDate={};const dateOrder=[];
   rows.forEach(r=>{
     const d=(r.dataDo||'—').slice(0,10);
+    // Only include if dataDo belongs to monthKey (YYYY-MM)
+    if(!d.startsWith(monthKey))return;
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
