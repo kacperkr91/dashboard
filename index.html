@@ -5349,17 +5349,15 @@ function generateHKMessage(){
   const todayStr=localDk(today);
   const DOW_PL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
-  const dateLabel=`${today.getDate()} ${MONTHS_PL[today.getMonth()]} (${DOW_PL[today.getDay()]})`;
 
-  // Zawsze tylko OTV — bez Orzeszkowej i bez apartamentów zewnętrznych
+  // Tylko OTV — twarda lista wykluczeń, niezależna od filtra
+  const ZEWNETRZNE=['Wawel','Wawel II','Zamkowa','Bronowicka','Plac Szczepański','Orzeszkowej'];
+  const isZewnetrzny=apt=>ZEWNETRZNE.some(w=>apt.toLowerCase().includes(w.toLowerCase()));
+
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
     if(Array.isArray(month))month.forEach(r=>{
-      if(!r.cancelled&&r.apt
-        &&!WYLACZONE_APT.some(w=>r.apt.includes(w))
-        &&!ZEWNETRZNE_APT.some(w=>r.apt.includes(w))){
-        allRows.push({...r});
-      }
+      if(!r.cancelled&&r.apt&&!isZewnetrzny(r.apt))allRows.push({...r});
     });
   });
 
@@ -5375,19 +5373,13 @@ function generateHKMessage(){
     else if(od===todayStr)zameldowania.push({...r});
   });
 
-  // Wykryj przeprowadzki i przedłużenia — tylko gdy obie strony są dziś
   const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
-    const g=normGosc(wym.gosc);
-    if(!g)return;
+    const g=normGosc(wym.gosc);if(!g)return;
     const match=zameldowania.find(zam=>normGosc(zam.gosc)===g&&zam.dataOd?.slice(0,10)===todayStr);
     if(match){
-      if(match.apt===wym.apt){
-        wym._typ='przedluzenie';match._typ='przedluzenie';
-      } else {
-        wym._typ='przeprowadzka';match._typ='przeprowadzka';
-        wym._paraApt=match.apt;match._paraApt=wym.apt;
-      }
+      if(match.apt===wym.apt){wym._typ='przedluzenie';match._typ='przedluzenie';}
+      else{wym._typ='przeprowadzka';match._typ='przeprowadzka';wym._paraApt=match.apt;match._paraApt=wym.apt;}
     }
   });
 
@@ -5401,50 +5393,29 @@ function generateHKMessage(){
   const brakWyjatkow=!pozneWym.length&&!wczesneZam.length&&!przeprowadzki.length&&!przedluzenia.length;
 
   const lines=[];
-  if(brakWyjatkow){
-    // Wszystko standardowe — jedno zdanie wystarczy
-    lines.push('Dzień dobry, na razie bez próśb');
-  } else {
-    // Są wyjątki — samo powitanie, potem bloki
-    lines.push('Dzień dobry,');
+  // "na razie bez próśb" TYLKO gdy absolutnie nic niestandardowego
+  lines.push(brakWyjatkow?'Dzień dobry, na razie bez próśb':'Dzień dobry,');
 
+  if(!brakWyjatkow){
     if(pozneWym.length){
-      lines.push('');
-      lines.push('Późne wymeldowania:');
-      pozneWym.forEach(r=>{
-        const h=fmtHour(r.dataDo);
-        lines.push('• '+r.apt+(h?' (do '+h+')':''));
-      });
+      lines.push('');lines.push('Późne wymeldowania:');
+      pozneWym.forEach(r=>{const h=fmtHour(r.dataDo);lines.push('• '+r.apt+(h?' (do '+h+')':''));});
     }
-
     if(wczesneZam.length){
-      lines.push('');
-      lines.push('Wczesne zameldowania:');
-      wczesneZam.forEach(r=>{
-        const h=fmtHour(r.dataOd);
-        lines.push('• '+r.apt+(h?' (od '+h+')':''));
-      });
+      lines.push('');lines.push('Wczesne zameldowania:');
+      wczesneZam.forEach(r=>{const h=fmtHour(r.dataOd);lines.push('• '+r.apt+(h?' (od '+h+')':''));});
     }
-
     if(przeprowadzki.length){
-      lines.push('');
-      lines.push('Przeprowadzki:');
-      przeprowadzki.forEach(r=>{
-        lines.push('• '+r.apt+' → '+(r._paraApt||'?'));
-      });
+      lines.push('');lines.push('Przeprowadzki:');
+      przeprowadzki.forEach(r=>{lines.push('• '+r.apt+' → '+(r._paraApt||'?'));});
     }
-
     if(przedluzenia.length){
-      lines.push('');
-      lines.push('Przedłużenia:');
-      przedluzenia.forEach(r=>{
-        lines.push('• '+r.apt);
-      });
+      lines.push('');lines.push('Przedłużenia:');
+      przedluzenia.forEach(r=>{lines.push('• '+r.apt);});
     }
   }
 
   const msg=lines.join('\n');
-
   const modal=document.createElement('div');
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.className='hk-modal';
@@ -5453,7 +5424,7 @@ function generateHKMessage(){
       <div style="font-size:15px;font-weight:700;color:var(--text)">Wiadomość dla housekeepingu</div>
       <button onclick="this.closest('.hk-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
-    <textarea id="hkMsgBox" style="flex:1;min-height:280px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
+    <textarea id="hkMsgBox" style="flex:1;min-height:260px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
     <div style="display:flex;gap:10px">
       <button id="hkCopyBtn" style="flex:1;background:#25D366;color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Kopiuj</button>
       <button onclick="this.closest('.hk-modal').remove()" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
@@ -5463,8 +5434,7 @@ function generateHKMessage(){
   document.getElementById('hkMsgBox').value=msg;
   document.getElementById('hkCopyBtn').onclick=function(){
     navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-      this.textContent='✓ Skopiowano!';
-      this.style.background='#16a34a';
+      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
       setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
     });
   };
