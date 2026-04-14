@@ -5351,7 +5351,7 @@ function generateHKMessage(){
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
   const dateLabel=`${today.getDate()} ${MONTHS_PL[today.getMonth()]} (${DOW_PL[today.getDay()]})`;
 
-  // Generator dotyczy TYLKO OTV — wyklucz Orzeszkową i apartamenty zewnętrzne
+  // Zawsze tylko OTV — bez Orzeszkowej i bez apartamentów zewnętrznych
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
     if(Array.isArray(month))month.forEach(r=>{
@@ -5401,41 +5401,46 @@ function generateHKMessage(){
   const brakWyjatkow=!pozneWym.length&&!wczesneZam.length&&!przeprowadzki.length&&!przedluzenia.length;
 
   const lines=[];
-  // "na razie bez próśb" tylko gdy wszystko standardowe
-  lines.push(brakWyjatkow?'Dzień dobry, na razie bez próśb':'Dzień dobry,');
+  if(brakWyjatkow){
+    // Wszystko standardowe — jedno zdanie wystarczy
+    lines.push('Dzień dobry, na razie bez próśb');
+  } else {
+    // Są wyjątki — samo powitanie, potem bloki
+    lines.push('Dzień dobry,');
 
-  if(pozneWym.length){
-    lines.push('');
-    lines.push('Późne wymeldowania:');
-    pozneWym.forEach(r=>{
-      const h=fmtHour(r.dataDo);
-      lines.push('• '+r.apt+(h?' (do '+h+')':''));
-    });
-  }
+    if(pozneWym.length){
+      lines.push('');
+      lines.push('Późne wymeldowania:');
+      pozneWym.forEach(r=>{
+        const h=fmtHour(r.dataDo);
+        lines.push('• '+r.apt+(h?' (do '+h+')':''));
+      });
+    }
 
-  if(wczesneZam.length){
-    lines.push('');
-    lines.push('Wczesne zameldowania:');
-    wczesneZam.forEach(r=>{
-      const h=fmtHour(r.dataOd);
-      lines.push('• '+r.apt+(h?' (od '+h+')':''));
-    });
-  }
+    if(wczesneZam.length){
+      lines.push('');
+      lines.push('Wczesne zameldowania:');
+      wczesneZam.forEach(r=>{
+        const h=fmtHour(r.dataOd);
+        lines.push('• '+r.apt+(h?' (od '+h+')':''));
+      });
+    }
 
-  if(przeprowadzki.length){
-    lines.push('');
-    lines.push('Przeprowadzki:');
-    przeprowadzki.forEach(r=>{
-      lines.push('• '+r.apt+' → '+(r._paraApt||'?'));
-    });
-  }
+    if(przeprowadzki.length){
+      lines.push('');
+      lines.push('Przeprowadzki:');
+      przeprowadzki.forEach(r=>{
+        lines.push('• '+r.apt+' → '+(r._paraApt||'?'));
+      });
+    }
 
-  if(przedluzenia.length){
-    lines.push('');
-    lines.push('Przedłużenia:');
-    przedluzenia.forEach(r=>{
-      lines.push('• '+r.apt);
-    });
+    if(przedluzenia.length){
+      lines.push('');
+      lines.push('Przedłużenia:');
+      przedluzenia.forEach(r=>{
+        lines.push('• '+r.apt);
+      });
+    }
   }
 
   const msg=lines.join('\n');
