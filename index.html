@@ -5120,6 +5120,7 @@ function buildOblozenieLive(){
     if(match){
       if(match.apt===wym.apt){
         // Ten sam apartament = przedłużenie
+        // Badge tylko gdy gość ma OBIE: wymeldowanie I zameldowanie dziś
         wym._typ='przedluzenie';
         match._typ='przedluzenie';
         wym._para=match;
