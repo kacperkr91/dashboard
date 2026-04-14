@@ -5343,103 +5343,6 @@ function buildOblozenieLive(){
 
 
 
-function generateHKMessage(){
-  const today=new Date();today.setHours(0,0,0,0);
-  const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const todayStr=localDk(today);
-  const DOW_PL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-  const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
-
-  // Tylko OTV — twarda lista wykluczeń, niezależna od filtra
-  const ZEWNETRZNE=['Wawel','Wawel II','Zamkowa','Bronowicka','Plac Szczepański','Orzeszkowej'];
-  const isZewnetrzny=apt=>ZEWNETRZNE.some(w=>apt.toLowerCase().includes(w.toLowerCase()));
-
-  const allRows=[];
-  Object.values(_state.data.previo||{}).forEach(month=>{
-    if(Array.isArray(month))month.forEach(r=>{
-      if(!r.cancelled&&r.apt&&!isZewnetrzny(r.apt))allRows.push({...r});
-    });
-  });
-
-  const fmtHour=s=>s&&s.length>=16?s.slice(11,16):'';
-  const wymeldowania=[];
-  const zameldowania=[];
-
-  allRows.forEach(r=>{
-    if(!r.dataOd||!r.dataDo)return;
-    const od=r.dataOd.slice(0,10);
-    const doD=r.dataDo.slice(0,10);
-    if(doD===todayStr)wymeldowania.push({...r});
-    else if(od===todayStr)zameldowania.push({...r});
-  });
-
-  const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
-  wymeldowania.forEach(wym=>{
-    const g=normGosc(wym.gosc);if(!g)return;
-    const match=zameldowania.find(zam=>normGosc(zam.gosc)===g&&zam.dataOd?.slice(0,10)===todayStr);
-    if(match){
-      if(match.apt===wym.apt){wym._typ='przedluzenie';match._typ='przedluzenie';}
-      else{wym._typ='przeprowadzka';match._typ='przeprowadzka';wym._paraApt=match.apt;match._paraApt=wym.apt;}
-    }
-  });
-
-  const pozneWym=wymeldowania.filter(r=>!r._typ&&(fmtHour(r.dataDo)||'10:00')>'10:00')
-    .sort((a,b)=>(fmtHour(b.dataDo)||'').localeCompare(fmtHour(a.dataDo)||''));
-  const wczesneZam=zameldowania.filter(r=>!r._typ&&(fmtHour(r.dataOd)||'16:00')<'16:00')
-    .sort((a,b)=>(fmtHour(a.dataOd)||'').localeCompare(fmtHour(b.dataOd)||''));
-  const przeprowadzki=wymeldowania.filter(r=>r._typ==='przeprowadzka');
-  const przedluzenia=wymeldowania.filter(r=>r._typ==='przedluzenie');
-
-  const brakWyjatkow=!pozneWym.length&&!wczesneZam.length&&!przeprowadzki.length&&!przedluzenia.length;
-
-  const lines=[];
-  // "na razie bez próśb" TYLKO gdy absolutnie nic niestandardowego
-  lines.push(brakWyjatkow?'Dzień dobry, na razie bez próśb':'Dzień dobry,');
-
-  if(!brakWyjatkow){
-    if(pozneWym.length){
-      lines.push('');lines.push('Późne wymeldowania:');
-      pozneWym.forEach(r=>{const h=fmtHour(r.dataDo);lines.push('• '+r.apt+(h?' (do '+h+')':''));});
-    }
-    if(wczesneZam.length){
-      lines.push('');lines.push('Wczesne zameldowania:');
-      wczesneZam.forEach(r=>{const h=fmtHour(r.dataOd);lines.push('• '+r.apt+(h?' (od '+h+')':''));});
-    }
-    if(przeprowadzki.length){
-      lines.push('');lines.push('Przeprowadzki:');
-      przeprowadzki.forEach(r=>{lines.push('• '+r.apt+' → '+(r._paraApt||'?'));});
-    }
-    if(przedluzenia.length){
-      lines.push('');lines.push('Przedłużenia:');
-      przedluzenia.forEach(r=>{lines.push('• '+r.apt);});
-    }
-  }
-
-  const msg=lines.join('\n');
-  const modal=document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.className='hk-modal';
-  modal.innerHTML=`<div style="background:var(--white);border-radius:14px;padding:24px;max-width:500px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:15px;font-weight:700;color:var(--text)">Wiadomość dla housekeepingu</div>
-      <button onclick="this.closest('.hk-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
-    </div>
-    <textarea id="hkMsgBox" style="flex:1;min-height:260px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
-    <div style="display:flex;gap:10px">
-      <button id="hkCopyBtn" style="flex:1;background:#25D366;color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Kopiuj</button>
-      <button onclick="this.closest('.hk-modal').remove()" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  document.getElementById('hkMsgBox').value=msg;
-  document.getElementById('hkCopyBtn').onclick=function(){
-    navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
-      setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
-    });
-  };
-}
-
 
 function getPolishHolidays(year){
   // Fixed holidays
@@ -6293,22 +6196,20 @@ function setHkMonth(key){
 }
 
 
+
 function generateHKMessage(){
   const today=new Date();today.setHours(0,0,0,0);
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const todayStr=localDk(today);
-  const DOW_PL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
-  const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
-  const dateLabel=`${today.getDate()} ${MONTHS_PL[today.getMonth()]} (${DOW_PL[today.getDay()]})`;
 
-  const filtry=_state.oblozenieFiltry||'wszystkie';
+  // Zawsze tylko OTV — twarda lista wykluczeń niezależna od filtra w widoku
+  const WYKLUCZ=['wawel','zamkowa','bronowicka','plac szczepański','orzeszkowej'];
+  const isWykluczone=apt=>WYKLUCZ.some(w=>apt.toLowerCase().includes(w));
+
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
     if(Array.isArray(month))month.forEach(r=>{
-      if(!r.cancelled&&r.apt&&!WYLACZONE_APT.some(w=>r.apt.includes(w))){
-        if(filtry==='otv'&&ZEWNETRZNE_APT.some(w=>r.apt.includes(w)))return;
-        allRows.push({...r});
-      }
+      if(!r.cancelled&&r.apt&&!isWykluczone(r.apt))allRows.push({...r});
     });
   });
 
@@ -6324,19 +6225,13 @@ function generateHKMessage(){
     else if(od===todayStr)zameldowania.push({...r});
   });
 
-  // Wykryj przeprowadzki i przedłużenia — tylko gdy obie strony są dziś
   const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
-    const g=normGosc(wym.gosc);
-    if(!g)return;
+    const g=normGosc(wym.gosc);if(!g)return;
     const match=zameldowania.find(zam=>normGosc(zam.gosc)===g&&zam.dataOd?.slice(0,10)===todayStr);
     if(match){
-      if(match.apt===wym.apt){
-        wym._typ='przedluzenie';match._typ='przedluzenie';
-      } else {
-        wym._typ='przeprowadzka';match._typ='przeprowadzka';
-        wym._paraApt=match.apt;match._paraApt=wym.apt;
-      }
+      if(match.apt===wym.apt){wym._typ='przedluzenie';match._typ='przedluzenie';}
+      else{wym._typ='przeprowadzka';match._typ='przeprowadzka';wym._paraApt=match.apt;match._paraApt=wym.apt;}
     }
   });
 
@@ -6347,45 +6242,33 @@ function generateHKMessage(){
   const przeprowadzki=wymeldowania.filter(r=>r._typ==='przeprowadzka');
   const przedluzenia=wymeldowania.filter(r=>r._typ==='przedluzenie');
 
+  // "na razie bez próśb" TYLKO gdy zero wyjątków
+  const brakWyjatkow=!pozneWym.length&&!wczesneZam.length&&!przeprowadzki.length&&!przedluzenia.length;
+
   const lines=[];
-  lines.push('Dzień dobry, na razie bez próśb');
-
-  if(pozneWym.length){
-    lines.push('');
-    lines.push('Późne wymeldowania:');
-    pozneWym.forEach(r=>{
-      const h=fmtHour(r.dataDo);
-      lines.push('• '+r.apt+(h?' (do '+h+')':''));
-    });
-  }
-
-  if(wczesneZam.length){
-    lines.push('');
-    lines.push('Wczesne zameldowania:');
-    wczesneZam.forEach(r=>{
-      const h=fmtHour(r.dataOd);
-      lines.push('• '+r.apt+(h?' (od '+h+')':''));
-    });
-  }
-
-  if(przeprowadzki.length){
-    lines.push('');
-    lines.push('Przeprowadzki:');
-    przeprowadzki.forEach(r=>{
-      lines.push('• '+r.apt+' → '+(r._paraApt||'?'));
-    });
-  }
-
-  if(przedluzenia.length){
-    lines.push('');
-    lines.push('Przedłużenia:');
-    przedluzenia.forEach(r=>{
-      lines.push('• '+r.apt);
-    });
+  if(brakWyjatkow){
+    lines.push('Dzień dobry, na razie bez próśb');
+  } else {
+    lines.push('Dzień dobry,');
+    if(pozneWym.length){
+      lines.push('');lines.push('Późne wymeldowania:');
+      pozneWym.forEach(r=>{const h=fmtHour(r.dataDo);lines.push('• '+r.apt+(h?' (do '+h+')':''));});
+    }
+    if(wczesneZam.length){
+      lines.push('');lines.push('Wczesne zameldowania:');
+      wczesneZam.forEach(r=>{const h=fmtHour(r.dataOd);lines.push('• '+r.apt+(h?' (od '+h+')':''));});
+    }
+    if(przeprowadzki.length){
+      lines.push('');lines.push('Przeprowadzki:');
+      przeprowadzki.forEach(r=>{lines.push('• '+r.apt+' → '+(r._paraApt||'?'));});
+    }
+    if(przedluzenia.length){
+      lines.push('');lines.push('Przedłużenia:');
+      przedluzenia.forEach(r=>{lines.push('• '+r.apt);});
+    }
   }
 
   const msg=lines.join('\n');
-
   const modal=document.createElement('div');
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.className='hk-modal';
@@ -6394,7 +6277,7 @@ function generateHKMessage(){
       <div style="font-size:15px;font-weight:700;color:var(--text)">Wiadomość dla housekeepingu</div>
       <button onclick="this.closest('.hk-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
-    <textarea id="hkMsgBox" style="flex:1;min-height:280px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
+    <textarea id="hkMsgBox" style="flex:1;min-height:260px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;font-family:monospace;font-size:13px;line-height:1.6;resize:none;color:#166534;outline:none"></textarea>
     <div style="display:flex;gap:10px">
       <button id="hkCopyBtn" style="flex:1;background:#25D366;color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">Kopiuj</button>
       <button onclick="this.closest('.hk-modal').remove()" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
@@ -6404,19 +6287,21 @@ function generateHKMessage(){
   document.getElementById('hkMsgBox').value=msg;
   document.getElementById('hkCopyBtn').onclick=function(){
     navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-      this.textContent='✓ Skopiowano!';
-      this.style.background='#16a34a';
+      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
       setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
     });
   };
 }
+
+
+
 
 window.addEventListener('load',()=>{
   if(typeof Chart==='undefined'){
     console.warn('Chart.js not available');
     window.Chart=function(){return{destroy:()=>{},update:()=>{}};};window.Chart.register=()=>{};
   }
-  init();
+  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());}else{init();}
 });
 </script>
 </body>
