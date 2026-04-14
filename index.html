@@ -5099,9 +5099,10 @@ function buildOblozenieLive(){
     if(!r.dataOd||!r.dataDo)return;
     const od=r.dataOd.slice(0,10);
     const doD=r.dataDo.slice(0,10);
-    if(doD===targetStr) wymeldowania.push(r);
-    else if(od===targetStr) zameldowania.push(r);
-    else if(od<targetStr&&doD>targetStr) wTrakcie.push(r);
+    // Klonuj obiekt żeby uniknąć mutacji między renderami
+    if(doD===targetStr) wymeldowania.push({...r});
+    else if(od===targetStr) zameldowania.push({...r});
+    else if(od<targetStr&&doD>targetStr) wTrakcie.push({...r});
   });
 
   // ── Wykryj przeprowadzki i przedłużenia ──
