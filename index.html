@@ -2338,7 +2338,8 @@ function buildPrevioView(){
   if(rows.error)return monthNav+renderError(rows.error);
   if(!rows.length)return monthNav+`<div class="empty-section"><div class="empty-icon">📋</div><p>Brak danych dla ${activeMonth?.label||monthKey}</p></div>`;
 
-  const active=rows.filter(r=>!r.cancelled);
+  // Filter to only rows whose dataDo belongs to this month
+  const active=rows.filter(r=>!r.cancelled&&(r.dataDo||'').slice(0,7)===monthKey);
 
   // KPIs
   const totalCena=active.reduce((s,r)=>s+r.cena,0);
