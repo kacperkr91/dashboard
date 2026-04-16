@@ -6,7 +6,6 @@
   <title>Old Town Vistula Premium Apartments</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <style>
     :root{
       --blue:#2563eb;--blue-light:#eff6ff;--blue-mid:#bfdbfe;
@@ -6725,4 +6724,5 @@ function generateHKMessage(){
   const isWykluczone=apt=>WYKLUCZ.some(w=>apt.toLowerCase().includes(w));
 
   const allRows=[];
-  Ob
+  Object.values(_state.data.previo||{}).forEach(month=>{
+    if(Array.isArray(month))month.f
