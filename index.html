@@ -6630,7 +6630,10 @@ function saveConfig(){
 }
 
 function ensureKsefLoaded(){
-  if(_state.data.ksef!==null)return;
+  if(_state.data.ksef!==null){
+    renderApp();
+    return;
+  }
   _state.data.ksef=null;
   renderApp();
   loadKsefData().then(rows=>{
