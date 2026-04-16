@@ -552,9 +552,18 @@ function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
 /* API */
 async function apiFetch(url){
-  const res=await fetch(url);
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
-  return res.json();
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),12000);
+  try{
+    const res=await fetch(url,{signal:controller.signal,cache:'no-store'});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+    return res.json();
+  }catch(err){
+    if(err?.name==='AbortError')throw new Error('REQUEST_TIMEOUT');
+    throw err;
+  }finally{
+    clearTimeout(timer);
+  }
 }
 async function fetchSheetNames(id,key){
   const d=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title&key=${key}`);
@@ -4292,6 +4301,35 @@ function saveKsefPaidMap(map){
   syncPushKsefPaid(map);
 }
 
+function patchKsefRowPaidState(ksefNumber,paidDate=''){
+  const rows=_state?.data?.ksef;
+  if(!Array.isArray(rows)||!ksefNumber)return;
+  const target=rows.find(item=>String(item.ksefNumber||'').trim()===String(ksefNumber||'').trim());
+  if(!target)return;
+  if(paidDate){
+    target.manualPaidDate=paidDate;
+    target.status='paid';
+  }else{
+    target.manualPaidDate='';
+    const now=new Date();
+    now.setHours(0,0,0,0);
+    const dueObj=target.dueDateObj instanceof Date && !isNaN(target.dueDateObj) ? target.dueDateObj : null;
+    if(target.autoPaidAtPurchase){
+      target.status='paid';
+      return;
+    }
+    if(!dueObj){
+      target.status='missing';
+      return;
+    }
+    const days=Math.round((dueObj-now)/86400000);
+    target.daysToDue=days;
+    if(days < 0)target.status='overdue';
+    else if(days <= 7)target.status='due-soon';
+    else target.status='upcoming';
+  }
+}
+
 function closeKsefPaidModal(){
   document.getElementById('ksefPaidModal')?.remove();
 }
@@ -4304,6 +4342,7 @@ function saveKsefInvoicePaidDate(ksefNumber,paidDate){
     updatedAt:new Date().toISOString(),
   };
   saveKsefPaidMap(existing);
+  patchKsefRowPaidState(ksefNumber,paidDate);
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
@@ -4349,6 +4388,7 @@ function clearKsefInvoicePaid(ksefNumber){
   if(!existing[ksefNumber])return;
   delete existing[ksefNumber];
   saveKsefPaidMap(existing);
+  patchKsefRowPaidState(ksefNumber,'');
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
@@ -4366,6 +4406,7 @@ function markKsefInvoicePaidToday(ksefNumber){
     updatedAt:new Date().toISOString(),
   };
   saveKsefPaidMap(existing);
+  patchKsefRowPaidState(ksefNumber,today);
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
@@ -5851,9 +5892,18 @@ function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
 /* API */
 async function apiFetch(url){
-  const res=await fetch(url);
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
-  return res.json();
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),12000);
+  try{
+    const res=await fetch(url,{signal:controller.signal,cache:'no-store'});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+    return res.json();
+  }catch(err){
+    if(err?.name==='AbortError')throw new Error('REQUEST_TIMEOUT');
+    throw err;
+  }finally{
+    clearTimeout(timer);
+  }
 }
 async function fetchSheetNames(id,key){
   const d=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title&key=${key}`);
