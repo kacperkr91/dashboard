@@ -338,12 +338,29 @@
     .ksef-badge.upcoming{background:#dbeafe;color:#1d4ed8;}
     .ksef-badge.paid{background:#dcfce7;color:#15803d;}
     .ksef-badge.missing{background:#e2e8f0;color:#475569;}
-    .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;}
+    .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;min-height:32px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;}
     .ksef-action-btn:hover{background:var(--bg);}
     .ksef-action-btn.paid{background:#f0fdf4;border-color:#86efac;color:#15803d;}
     .ksef-table-wrap{overflow:auto;}
-    .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2),.ksef-table thead th:nth-child(3),.ksef-table tbody td:nth-child(3){text-align:left;}
-    .ksef-table tbody td{vertical-align:middle;}
+    .ksef-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;}
+    .ksef-table thead th,.ksef-table tbody td{padding:12px 14px;vertical-align:middle;}
+    .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2){text-align:left;}
+    .ksef-table .col-status,.ksef-table .col-days,.ksef-table .col-paid,.ksef-table .col-updated{text-align:center;}
+    .ksef-table .col-amount{text-align:right;font-variant-numeric:tabular-nums;}
+    .ksef-table .col-date{white-space:nowrap;text-align:left;}
+    .ksef-table .col-nip{white-space:nowrap;}
+    .ksef-table .col-ksef{font-family:monospace;font-size:11px;word-break:break-all;}
+    .ksef-table .col-seller{min-width:240px;}
+    .ksef-table .col-status{width:140px;}
+    .ksef-table .col-date{width:110px;}
+    .ksef-table .col-days{width:72px;}
+    .ksef-table .col-amount{width:120px;}
+    .ksef-table .col-nip{width:130px;}
+    .ksef-table .col-paid{width:210px;}
+    .ksef-table .col-updated{width:120px;}
+    .ksef-table tbody td.col-paid{padding-top:10px;padding-bottom:10px;}
+    .ksef-table .ksef-badge{justify-content:center;min-width:108px;}
+    .ksef-paid-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
     .ksef-table tbody tr.overdue{background:#fff7f7;}
     .ksef-table tbody tr.due-soon{background:#fffaf5;}
     .ksef-table tbody tr.paid{background:#f7fff8;}
@@ -2141,44 +2158,44 @@ function buildKsefView(rows){
         <table class="ksef-table">
           <thead>
             <tr>
-              <th>Dostawca</th>
-              <th>Numer KSeF</th>
-              <th>Status</th>
-              <th>Wystawienie</th>
-              <th>Termin</th>
-              <th>Dni</th>
-              <th>Brutto</th>
-              <th>NIP</th>
-              <th>Opłacenie</th>
-              <th>Aktualizacja</th>
+              <th class="col-seller">Dostawca</th>
+              <th class="col-ksef">Numer KSeF</th>
+              <th class="col-status">Status</th>
+              <th class="col-date">Wystawienie</th>
+              <th class="col-date">Termin</th>
+              <th class="col-days">Dni</th>
+              <th class="col-amount">Brutto</th>
+              <th class="col-nip">NIP</th>
+              <th class="col-paid">Opłacenie</th>
+              <th class="col-updated">Aktualizacja</th>
             </tr>
           </thead>
           <tbody>
             ${filtered.map(item=>`
               <tr class="${item.status}">
-                <td>
+                <td class="col-seller">
                   <div style="font-weight:700">${item.seller}</div>
                   <div class="ksef-muted" style="font-size:11px">${item.nip||'Brak NIP'}</div>
                 </td>
-                <td style="font-family:monospace;font-size:11px">${item.ksefNumber||'—'}</td>
-                <td><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
-                <td>${item.issueDate||'—'}</td>
-                <td>${item.dueDate||'—'}</td>
-                <td>${item.daysToDue===''?'—':item.daysToDue}</td>
-                <td style="font-weight:700">${item.brutto||'0,00'} zł</td>
-                <td>${item.nip||'—'}</td>
-                <td>
+                <td class="col-ksef">${item.ksefNumber||'—'}</td>
+                <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
+                <td class="col-date">${item.issueDate||'—'}</td>
+                <td class="col-date">${item.dueDate||'—'}</td>
+                <td class="col-days">${item.daysToDue===''?'—':item.daysToDue}</td>
+                <td class="col-amount" style="font-weight:700">${item.brutto||'0,00'} zł</td>
+                <td class="col-nip">${item.nip||'—'}</td>
+                <td class="col-paid">
                   ${item.status==='paid'
                     ? (item.manualPaidDate
                         ? `<button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>`
                         : `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`)
-                    : `<div style="display:flex;gap:6px;flex-wrap:wrap">
+                    : `<div class="ksef-paid-actions">
                         <button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">Opłacona dziś</button>
                         <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Wybierz datę</button>
                       </div>`
                   }
                 </td>
-                <td class="ksef-muted">${item.updatedAt||'—'}</td>
+                <td class="ksef-muted col-updated">${item.updatedAt||'—'}</td>
               </tr>
             `).join('')}
           </tbody>
