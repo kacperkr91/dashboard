@@ -340,6 +340,9 @@
     .ksef-badge.upcoming{background:#dbeafe;color:#1d4ed8;}
     .ksef-badge.paid{background:#dcfce7;color:#15803d;}
     .ksef-badge.missing{background:#e2e8f0;color:#475569;}
+    .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;}
+    .ksef-action-btn:hover{background:var(--bg);}
+    .ksef-action-btn.paid{background:#f0fdf4;border-color:#86efac;color:#15803d;}
     .ksef-table-wrap{overflow:auto;}
     .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2),.ksef-table thead th:nth-child(3),.ksef-table tbody td:nth-child(3){text-align:left;}
     .ksef-table tbody td{vertical-align:middle;}
@@ -404,7 +407,7 @@ const CONFIG={
   ksefApiKey:         localStorage.getItem('gs_ksef_api_key')||'',
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
-  ksefRange:          'A2:K2000',
+  ksefRange:          'A2:M2000',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
   otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
   otvStartRow:        4,
@@ -735,6 +738,7 @@ async function loadKsefData(){
     const parsed=parseDateDMY(String(value).slice(0,10))||parseDatePL(String(value).slice(0,10))||parseHKDate(String(value).slice(0,10));
     return parsed&& !isNaN(parsed)?parsed:null;
   };
+  const manualPaidMap=getKsefPaidMap();
 
   return rows.map(row=>{
     const brutto=parseFloat(String(row[6]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
@@ -747,6 +751,12 @@ async function loadKsefData(){
     now.setHours(0,0,0,0);
     const dueObj=toDate(dueDate);
     const issueObj=toDate(issueDate);
+    const ksefNumber=String(row[0]||'').trim();
+    const manualPaid=manualPaidMap[ksefNumber]||null;
+    const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
+    const sheetPaidDate=String(row[12]||'').trim();
+    const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||!!sheetPaidDate;
+    const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
 
     let status='missing';
     let daysToDue='';
@@ -759,9 +769,11 @@ async function loadKsefData(){
     const normalizedDays=Number.isFinite(daysValue)?daysValue:(Number.isFinite(daysToDue)?daysToDue:'');
     if(dueObj && normalizedDays < 0)status='overdue';
     if(dueObj && normalizedDays >=0 && normalizedDays <=7)status='due-soon';
+    if(autoPaidAtPurchase)status='paid';
+    if(sheetPaid || manualPaid?.paidDate)status='paid';
 
     return{
-      ksefNumber:String(row[0]||'').trim(),
+      ksefNumber,
       issueDate,
       seller:String(row[2]||'').trim()||'Nieznany dostawca',
       nip:String(row[3]||'').trim(),
@@ -775,6 +787,9 @@ async function loadKsefData(){
       alert,
       updatedAt:String(row[10]||'').trim(),
       status,
+      manualPaidDate:sheetPaidDate||manualPaid?.paidDate||'',
+      autoPaidAtPurchase,
+      sheetPaid,
     };
   }).filter(item=>item.ksefNumber||item.seller);
 }
@@ -2039,19 +2054,26 @@ function buildKsefView(rows){
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
   const dueSoon=rows.filter(r=>r.status==='due-soon').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
+  const paid=rows.filter(r=>r.status==='paid');
   const missing=rows.filter(r=>r.status==='missing');
-  const totalOpen=rows.filter(r=>r.status!=='missing').reduce((s,r)=>s+r.bruttoValue,0);
+  const totalOpen=rows.filter(r=>r.status!=='missing'&&r.status!=='paid').reduce((s,r)=>s+r.bruttoValue,0);
   const overdueTotal=overdue.reduce((s,r)=>s+r.bruttoValue,0);
   const dueSoonTotal=dueSoon.reduce((s,r)=>s+r.bruttoValue,0);
+  const paidTotal=paid.reduce((s,r)=>s+r.bruttoValue,0);
   const missingTotal=missing.reduce((s,r)=>s+r.bruttoValue,0);
 
   const labelFor=item=>{
+    if(item.status==='paid'){
+      if(item.manualPaidDate)return `Opłacona ${item.manualPaidDate}`;
+      if(item.autoPaidAtPurchase)return 'Opłacona przy zakupie';
+      return 'Opłacona';
+    }
     if(item.status==='overdue')return `${Math.abs(item.daysToDue||0)} dni po terminie`;
     if(item.status==='due-soon')return (item.daysToDue===0?'Termin dziś':`Za ${item.daysToDue} dni`);
     if(item.status==='upcoming')return item.daysToDue===''?'W toku':`Za ${item.daysToDue} dni`;
     return 'Brak terminu';
   };
-  const badgeClassFor=status=>status==='overdue'?'overdue':status==='due-soon'?'due-soon':status==='upcoming'?'upcoming':'missing';
+  const badgeClassFor=status=>status==='paid'?'paid':status==='overdue'?'overdue':status==='due-soon'?'due-soon':status==='upcoming'?'upcoming':'missing';
 
   const highlightList=(items, emptyLabel)=>items.length?`<div class="ksef-list">${items.slice(0,6).map(item=>`
       <div class="ksef-row ${item.status}">
@@ -2078,8 +2100,8 @@ function buildKsefView(rows){
           <div class="ksef-stats">
             <span class="ksef-pill overdue">Po terminie: ${overdue.length} · ${fmt(overdueTotal)} zł</span>
             <span class="ksef-pill due">Do 7 dni: ${dueSoon.length} · ${fmt(dueSoonTotal)} zł</span>
-            <span class="ksef-pill total">Z terminem: ${rows.length-missing.length} · ${fmt(totalOpen)} zł</span>
-            <span class="ksef-pill paid">Bez terminu: ${missing.length} · ${fmt(missingTotal)} zł</span>
+            <span class="ksef-pill total">Otwarte: ${rows.length-missing.length-paid.length} · ${fmt(totalOpen)} zł</span>
+            <span class="ksef-pill paid">Opłacone: ${paid.length} · ${fmt(paidTotal)} zł</span>
           </div>
         </div>
       </div>
@@ -2088,8 +2110,8 @@ function buildKsefView(rows){
     <div class="kpi-row">
       <div class="kpi-card c-red"><div class="label">Po terminie</div><div class="value">${overdue.length}</div><div class="sub">${fmt(overdueTotal)} zł do reakcji</div></div>
       <div class="kpi-card c-orange"><div class="label">Najbliższe 7 dni</div><div class="value">${dueSoon.length}</div><div class="sub">${fmt(dueSoonTotal)} zł zaplanowanych</div></div>
-      <div class="kpi-card c-blue"><div class="label">Faktury z terminem</div><div class="value">${rows.length-missing.length}</div><div class="sub">${fmt(totalOpen)} zł brutto</div></div>
-      <div class="kpi-card c-green"><div class="label">Bez terminu</div><div class="value">${missing.length}</div><div class="sub">${fmt(missingTotal)} zł do weryfikacji</div></div>
+      <div class="kpi-card c-blue"><div class="label">Otwarte faktury</div><div class="value">${rows.length-missing.length-paid.length}</div><div class="sub">${fmt(totalOpen)} zł brutto</div></div>
+      <div class="kpi-card c-green"><div class="label">Opłacone / kupione od razu</div><div class="value">${paid.length}</div><div class="sub">${fmt(paidTotal)} zł łącznie</div></div>
     </div>
 
     <div class="ksef-section-grid">
@@ -2118,6 +2140,7 @@ function buildKsefView(rows){
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
             <option value="due-soon" ${filter==='due-soon'?'selected':''}>Do 7 dni</option>
             <option value="upcoming" ${filter==='upcoming'?'selected':''}>Później</option>
+            <option value="paid" ${filter==='paid'?'selected':''}>Opłacone</option>
             <option value="missing" ${filter==='missing'?'selected':''}>Brak terminu</option>
           </select>
         </div>
@@ -2134,6 +2157,7 @@ function buildKsefView(rows){
               <th>Dni</th>
               <th>Brutto</th>
               <th>NIP</th>
+              <th>Opłacenie</th>
               <th>Aktualizacja</th>
             </tr>
           </thead>
@@ -2151,6 +2175,14 @@ function buildKsefView(rows){
                 <td>${item.daysToDue===''?'—':item.daysToDue}</td>
                 <td style="font-weight:700">${item.brutto||'0,00'} zł</td>
                 <td>${item.nip||'—'}</td>
+                <td>
+                  ${item.status==='paid'
+                    ? (item.manualPaidDate
+                        ? `<button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>`
+                        : `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`)
+                    : `<button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Oznacz opłaconą</button>`
+                  }
+                </td>
                 <td class="ksef-muted">${item.updatedAt||'—'}</td>
               </tr>
             `).join('')}
@@ -4094,29 +4126,36 @@ function initHkChart(){
 // ── Lokalny cache (natychmiast) + sync do Sheets (async) ──
 let _kalCache=null;
 let _paidCache=null;
+let _ksefPaidCache=null;
 
 async function syncPull(){
   if(!CONFIG.syncUrl)return;
   try{
-    const [kalRes,paidRes,doneRes]=await Promise.all([
-      fetch(`${CONFIG.syncUrl}?action=getKalendar`),
-      fetch(`${CONFIG.syncUrl}?action=getParkingPaid`),
-      fetch(`${CONFIG.syncUrl}?action=getDone`),
+    const results=await Promise.allSettled([
+      fetch(`${CONFIG.syncUrl}?action=getKalendar`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getParkingPaid`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getDone`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getKsefPaid`).then(r=>r.json()),
     ]);
-    const kalData=await kalRes.json();
-    const paidData=await paidRes.json();
-    const doneData=await doneRes.json();
-    if(kalData.events){
+    const kalData=results[0].status==='fulfilled'?results[0].value:null;
+    const paidData=results[1].status==='fulfilled'?results[1].value:null;
+    const doneData=results[2].status==='fulfilled'?results[2].value:null;
+    const ksefPaidData=results[3].status==='fulfilled'?results[3].value:null;
+    if(kalData?.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
     }
-    if(paidData.paidDates){
+    if(paidData?.paidDates){
       _paidCache=paidData.paidDates;
       localStorage.setItem('parking_paid_dates',JSON.stringify(_paidCache));
     }
-    if(doneData.done){
+    if(doneData?.done){
       _doneCache=doneData.done;
       localStorage.setItem('kal_done',JSON.stringify(_doneCache));
+    }
+    if(ksefPaidData?.paidMap){
+      _ksefPaidCache=ksefPaidData.paidMap;
+      localStorage.setItem('ksef_paid_map',JSON.stringify(_ksefPaidCache));
     }
   }catch(e){console.warn('syncPull failed:',e);}
 }
@@ -4181,10 +4220,92 @@ async function syncPushPaid(paidDates){
   }catch(e){console.warn('syncPushPaid failed:',e);}
 }
 
+async function syncPushKsefPaid(paidMap){
+  if(!CONFIG.syncUrl)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveKsefPaid',paidMap}),
+    });
+  }catch(e){console.warn('syncPushKsefPaid failed:',e);}
+}
+
+async function syncPushKsefPaidEntry(payload){
+  if(!CONFIG.syncUrl)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveKsefPaidEntry',...payload}),
+    });
+  }catch(e){console.warn('syncPushKsefPaidEntry failed:',e);}
+}
+
 function getKalEvents(){
   if(_kalCache!==null)return _kalCache;
   try{_kalCache=JSON.parse(localStorage.getItem('kal_events')||'{}');return _kalCache;}
   catch(e){_kalCache={};return{};}
+}
+
+function getKsefPaidMap(){
+  if(_ksefPaidCache!==null)return _ksefPaidCache;
+  try{
+    _ksefPaidCache=JSON.parse(localStorage.getItem('ksef_paid_map')||'{}');
+    return _ksefPaidCache;
+  }catch(e){
+    _ksefPaidCache={};
+    return {};
+  }
+}
+
+function saveKsefPaidMap(map){
+  _ksefPaidCache=map;
+  localStorage.setItem('ksef_paid_map',JSON.stringify(map));
+  syncPushKsefPaid(map);
+}
+
+function markKsefInvoicePaid(ksefNumber,currentDate=''){
+  if(!ksefNumber)return;
+  const existing=getKsefPaidMap();
+  const suggestion=currentDate||new Date().toISOString().slice(0,10);
+  const input=prompt('Podaj datę opłacenia faktury (YYYY-MM-DD):', suggestion);
+  if(input===null)return;
+  const value=input.trim();
+  if(value && !/^\d{4}-\d{2}-\d{2}$/.test(value)){
+    alert('Data musi być w formacie YYYY-MM-DD');
+    return;
+  }
+  existing[ksefNumber]={
+    paidDate:value||suggestion,
+    updatedAt:new Date().toISOString(),
+  };
+  saveKsefPaidMap(existing);
+  syncPushKsefPaidEntry({
+    spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
+    sheetName:CONFIG.ksefSheet,
+    ksefNumber,
+    paidDate:existing[ksefNumber].paidDate,
+    paid:true,
+  });
+  if(_state.section==='ksef')renderApp();
+}
+
+function clearKsefInvoicePaid(ksefNumber){
+  if(!ksefNumber)return;
+  const existing=getKsefPaidMap();
+  if(!existing[ksefNumber])return;
+  delete existing[ksefNumber];
+  saveKsefPaidMap(existing);
+  syncPushKsefPaidEntry({
+    spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
+    sheetName:CONFIG.ksefSheet,
+    ksefNumber,
+    paid:false,
+  });
+  if(_state.section==='ksef')renderApp();
 }
 
 function saveKalEvents(ev){
@@ -6087,7 +6208,7 @@ async function refresh(){await init();}
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null,ksef:null};
-  _kalCache=null;_paidCache=null;_doneCache=null;
+  _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;
 
   mount(`<div class="app"><header>
     <div class="brand"><div class="brand-icon">🏛️</div>
