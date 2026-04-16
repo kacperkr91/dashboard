@@ -342,7 +342,7 @@
     .ksef-action-btn:hover{background:var(--bg);}
     .ksef-action-btn.paid{background:#f0fdf4;border-color:#86efac;color:#15803d;}
     .ksef-table-wrap{overflow:auto;}
-    .ksef-table{width:100%;min-width:1480px;border-collapse:separate;border-spacing:0;table-layout:fixed;}
+    .ksef-table{width:100%;min-width:1320px;border-collapse:separate;border-spacing:0;table-layout:fixed;}
     .ksef-table thead th,.ksef-table tbody td{padding:12px 14px;vertical-align:middle;}
     .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2){text-align:left;}
     .ksef-table thead th.col-status,.ksef-table tbody td.col-status,
@@ -354,17 +354,18 @@
     .ksef-table thead th.col-nip,.ksef-table tbody td.col-nip{text-align:left;white-space:nowrap;}
     .ksef-table .col-ksef{font-family:monospace;font-size:11px;word-break:break-word;overflow-wrap:anywhere;line-height:1.25;}
     .ksef-table .col-seller{min-width:0;word-break:normal;overflow-wrap:anywhere;line-height:1.25;}
-    .ksef-table .col-status{width:140px;}
-    .ksef-table .col-date{width:126px;}
+    .ksef-table .col-status{width:150px;}
+    .ksef-table .col-date{width:118px;}
     .ksef-table .col-days{width:72px;}
-    .ksef-table .col-amount{width:120px;}
-    .ksef-table .col-nip{width:144px;}
-    .ksef-table .col-paid{width:210px;}
-    .ksef-table .col-updated{width:120px;}
+    .ksef-table .col-amount{width:110px;}
+    .ksef-table .col-nip{width:126px;}
+    .ksef-table .col-paid{width:172px;}
+    .ksef-table .col-updated{width:96px;}
     .ksef-seller-name{font-weight:700;line-height:1.22;}
     .ksef-table tbody td.col-paid{padding-top:10px;padding-bottom:10px;}
     .ksef-table .ksef-badge{justify-content:center;min-width:108px;}
     .ksef-paid-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
+    .ksef-table td.col-updated{font-size:11px;line-height:1.25;word-break:break-word;}
     .ksef-table tbody tr.overdue{background:#fff7f7;}
     .ksef-table tbody tr.due-soon{background:#fffaf5;}
     .ksef-table tbody tr.paid{background:#f7fff8;}
@@ -2161,16 +2162,16 @@ function buildKsefView(rows){
       <div class="ksef-table-wrap" style="margin-top:18px">
         <table class="ksef-table">
           <colgroup>
-            <col style="width:170px"/>
+            <col style="width:150px"/>
+            <col style="width:150px"/>
+            <col style="width:150px"/>
             <col style="width:118px"/>
-            <col style="width:176px"/>
-            <col style="width:126px"/>
-            <col style="width:126px"/>
+            <col style="width:118px"/>
             <col style="width:72px"/>
-            <col style="width:120px"/>
-            <col style="width:144px"/>
-            <col style="width:210px"/>
-            <col style="width:120px"/>
+            <col style="width:110px"/>
+            <col style="width:126px"/>
+            <col style="width:172px"/>
+            <col style="width:96px"/>
           </colgroup>
           <thead>
             <tr>
