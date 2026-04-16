@@ -343,8 +343,6 @@
     .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;}
     .ksef-action-btn:hover{background:var(--bg);}
     .ksef-action-btn.paid{background:#f0fdf4;border-color:#86efac;color:#15803d;}
-    .ksef-action-btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
-    .ksef-action-btn.primary:hover{background:#1d4ed8;}
     .ksef-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:500;}
     .ksef-modal{width:min(420px,100%);background:var(--white);border:1px solid var(--border);border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(15,23,42,0.2);}
     .ksef-modal-title{font-size:16px;font-weight:700;color:var(--text);}
@@ -352,16 +350,12 @@
     .ksef-modal-date{width:100%;margin-top:16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);}
     .ksef-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
     .ksef-toast{position:fixed;right:20px;bottom:20px;background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 18px 40px rgba(15,23,42,0.22);z-index:700;animation:fadeUp 0.2s ease both;}
-    .ksef-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px;}
-    .ksef-sort-btn{background:none;border:none;color:var(--text-muted);font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;padding:0;}
-    .ksef-sort-btn:hover{color:var(--text);}
     .ksef-table-wrap{overflow:auto;}
     .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2),.ksef-table thead th:nth-child(3),.ksef-table tbody td:nth-child(3){text-align:left;}
     .ksef-table tbody td{vertical-align:middle;}
     .ksef-table tbody tr.overdue{background:#fff7f7;}
     .ksef-table tbody tr.due-soon{background:#fffaf5;}
     .ksef-table tbody tr.paid{background:#f7fff8;}
-    .ksef-table tbody tr.selected{outline:2px solid #93c5fd;outline-offset:-2px;background:#eff6ff;}
     .ksef-muted{color:var(--text-muted);}
     @media(max-width:980px){.ksef-section-grid{grid-template-columns:1fr;}}
 
@@ -1526,8 +1520,6 @@ let _state={
   section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
   ksefFilter:'all',
   ksefSearch:'',
-  ksefSort:'dueAsc',
-  ksefSelected:{},
   hkMonth:'2026-04',
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -2061,26 +2053,11 @@ function buildKsefView(rows){
 
   const search=(_state.ksefSearch||'').trim().toLowerCase();
   const filter=_state.ksefFilter||'all';
-  const filteredBase=rows.filter(item=>{
+  const filtered=rows.filter(item=>{
     if(filter!=='all' && item.status!==filter)return false;
     if(!search)return true;
     return [item.seller,item.ksefNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
   });
-  const sortKey=_state.ksefSort||'dueAsc';
-  const statusRank={overdue:0,'due-soon':1,upcoming:2,missing:3,paid:4};
-  const filtered=[...filteredBase].sort((a,b)=>{
-    if(sortKey==='amountDesc') return (b.bruttoValue||0)-(a.bruttoValue||0);
-    if(sortKey==='amountAsc') return (a.bruttoValue||0)-(b.bruttoValue||0);
-    if(sortKey==='sellerAsc') return a.seller.localeCompare(b.seller,'pl');
-    if(sortKey==='status') return (statusRank[a.status]??9)-(statusRank[b.status]??9) || ((a.daysToDue||999)-(b.daysToDue||999));
-    const ad = a.daysToDue===''?9999:a.daysToDue;
-    const bd = b.daysToDue===''?9999:b.daysToDue;
-    return ad-bd;
-  });
-  window._visibleKsefRows=filtered;
-  const selectedCount=getSelectedKsefNumbers().filter(num=>filtered.some(r=>r.ksefNumber===num)).length;
-  const selectableVisible=filtered.filter(r=>r.status!=='paid').length;
-  const allVisibleSelected=selectableVisible>0 && filtered.filter(r=>r.status!=='paid').every(r=>_state.ksefSelected?.[r.ksefNumber]);
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
   const dueSoon=rows.filter(r=>r.status==='due-soon').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
@@ -2186,24 +2163,10 @@ function buildKsefView(rows){
           </select>
         </div>
       </div>
-      <div class="ksef-toolbar">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="ksef-action-btn primary" onclick="markSelectedKsefPaidToday()">Zaznaczone opłacone dziś</button>
-          <span class="ksef-muted" style="font-size:12px">Zaznaczone: ${selectedCount}</span>
-        </div>
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-          <span class="ksef-muted" style="font-size:12px">Sortuj:</span>
-          <button class="ksef-sort-btn" onclick="setKsefSort('dueAsc')">Termin</button>
-          <button class="ksef-sort-btn" onclick="setKsefSort('amountDesc')">Kwota</button>
-          <button class="ksef-sort-btn" onclick="setKsefSort('sellerAsc')">Dostawca</button>
-          <button class="ksef-sort-btn" onclick="setKsefSort('status')">Status</button>
-        </div>
-      </div>
       <div class="ksef-table-wrap" style="margin-top:18px">
         <table class="ksef-table">
           <thead>
             <tr>
-              <th style="text-align:center"><input type="checkbox" ${allVisibleSelected?'checked':''} onchange="toggleAllVisibleKsef(this.checked)"></th>
               <th>Dostawca</th>
               <th>Numer KSeF</th>
               <th>Status</th>
@@ -2218,10 +2181,7 @@ function buildKsefView(rows){
           </thead>
           <tbody>
             ${filtered.map(item=>`
-              <tr class="${item.status} ${_state.ksefSelected?.[item.ksefNumber]?'selected':''}">
-                <td style="text-align:center">
-                  ${item.status==='paid'?'':`<input type="checkbox" ${_state.ksefSelected?.[item.ksefNumber]?'checked':''} onchange="toggleKsefSelection('${item.ksefNumber.replace(/'/g,"\\'")}',this.checked)">`}
-                </td>
+              <tr class="${item.status}">
                 <td>
                   <div style="font-weight:700">${item.seller}</div>
                   <div class="ksef-muted" style="font-size:11px">${item.nip||'Brak NIP'}</div>
@@ -4346,34 +4306,6 @@ function showKsefToast(message){
   setTimeout(()=>toast.remove(),2200);
 }
 
-function getSelectedKsefNumbers(){
-  return Object.keys(_state.ksefSelected||{}).filter(key=>_state.ksefSelected[key]);
-}
-
-function toggleKsefSelection(ksefNumber, checked){
-  _state.ksefSelected={...(_state.ksefSelected||{}), [ksefNumber]:checked};
-  if(!checked) delete _state.ksefSelected[ksefNumber];
-  if(_state.section==='ksef')renderApp();
-}
-
-function toggleAllVisibleKsef(checked){
-  const rows=window._visibleKsefRows||[];
-  const next={...(_state.ksefSelected||{})};
-  rows.forEach(row=>{
-    if(row.status!=='paid') next[row.ksefNumber]=checked;
-  });
-  if(!checked){
-    rows.forEach(row=>delete next[row.ksefNumber]);
-  }
-  _state.ksefSelected=next;
-  if(_state.section==='ksef')renderApp();
-}
-
-function setKsefSort(sortKey){
-  _state.ksefSort=sortKey;
-  if(_state.section==='ksef')renderApp();
-}
-
 function closeKsefPaidModal(){
   document.getElementById('ksefPaidModalOverlay')?.remove();
 }
@@ -4487,16 +4419,6 @@ function markKsefInvoicePaidToday(ksefNumber){
   });
 }
 
-function markSelectedKsefPaidToday(){
-  const selected=getSelectedKsefNumbers();
-  if(!selected.length){
-    showKsefToast('Najpierw zaznacz faktury');
-    return;
-  }
-  selected.forEach(ksefNumber=>markKsefInvoicePaidToday(ksefNumber));
-  _state.ksefSelected={};
-  if(_state.section==='ksef')renderApp();
-}
 
 function saveKalEvents(ev){
   _kalCache=ev;
@@ -6685,4 +6607,122 @@ function saveConfig(){
   const hs=document.getElementById('inp-hksheetid')?.value.trim()||'';
   CONFIG.hkApiKey=hk;CONFIG.hkSpreadsheetId=hs;
   localStorage.setItem('gs_hk_api_key',hk);localStorage.setItem('gs_hk_spreadsheet_id',hs);
-  const kk=d
+  const kk=document.getElementById('inp-ksefkey')?.value.trim()||'';
+  const ks=document.getElementById('inp-ksefsheetid')?.value.trim()||'';
+  CONFIG.ksefApiKey=kk;CONFIG.ksefSpreadsheetId=ks;
+  localStorage.setItem('gs_ksef_api_key',kk);localStorage.setItem('gs_ksef_spreadsheet_id',ks);
+  const pk=document.getElementById('inp-previokey')?.value.trim()||'';
+  CONFIG.previoApiKey=pk;localStorage.setItem('gs_previo_api_key',pk);
+  const su=document.getElementById('inp-syncurl')?.value.trim()||'';
+  CONFIG.syncUrl=su;localStorage.setItem('sync_url',su);
+  const ok=document.getElementById('inp-otvkey')?.value.trim()||'';
+  const os=document.getElementById('inp-otvsheetid')?.value.trim()||'';
+  CONFIG.otvApiKey=ok;CONFIG.otvSpreadsheetId=os;
+  localStorage.setItem('gs_otv_api_key',ok);localStorage.setItem('gs_otv_spreadsheet_id',os);
+  init();
+}
+
+function ensureKsefLoaded(){
+  if(_state.data.ksef!==null)return;
+  _state.data.ksef=null;
+  renderApp();
+  loadKsefData().then(rows=>{
+    _state.data.ksef=rows;
+    if(_state.section==='ksef')renderApp();
+  }).catch(e=>{
+    _state.data.ksef={error:e.message||'Błąd'};
+    if(_state.section==='ksef')renderApp();
+  });
+}
+
+function setSection(s){
+  _state.section=s;
+  if(s==='ksef')ensureKsefLoaded();
+  renderApp();
+}
+function setKsefFilterState(type,val){
+  if(type==='search')_state.ksefSearch=val;
+  if(type==='status')_state.ksefFilter=val;
+  if(_state.section==='ksef')renderApp();
+}
+function setAptsFilter(type,val){
+  if(type==='search')_state.aptsFilterSearch=val;
+  else if(type==='owner')_state.aptsFilterOwner=val;
+  else if(type==='type')_state.aptsFilterType=val;
+  const d=_state.data.apartments;
+  if(d&&!d.error){
+    const wrap=document.getElementById('apt-section-wrap');
+    if(wrap)wrap.innerHTML=buildApartmentsView(d);
+  }
+}
+function setRentalYear(y){
+  _state.rentalYear=y;
+  const first=NAV.rental.years[y]?.months.find(m=>m.hasData);
+  if(first)_state.rentalMonth=first.key;
+  renderApp();
+}
+function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
+function setMediaYear(y){_state.mediaYear=y;renderApp();}
+function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
+function setBookingPeriod(key){_state.bookingPeriodKey=key;renderApp();}
+
+function setPrevioMonth(key){
+  _state.previoMonth=key;
+  if(!_state.data.previo[key]){
+    _state.data.previo[key]=null;
+    renderApp();
+    loadPrevioMonth(key).then(rows=>{
+      _state.data.previo[key]=rows;
+      if(_state.section==='previo'&&_state.previoMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.previo[key]={error:e.message||'Błąd'};
+      if(_state.section==='previo'&&_state.previoMonth===key)renderApp();
+    });
+  } else renderApp();
+}
+
+function setOtvMonth(key){
+  _state.otvMonth=key;
+  if(!_state.data.otv[key]){
+    _state.data.otv[key]=null;
+    renderApp();
+    loadOtvMonth(key).then(rows=>{
+      _state.data.otv[key]=rows;
+      if(_state.section==='otv'&&_state.otvMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.otv[key]={error:e.message||'Błąd'};
+      if(_state.section==='otv'&&_state.otvMonth===key)renderApp();
+    });
+  } else renderApp();
+}
+
+function setHkMonth(key){
+  _state.hkMonth=key;
+  if(!_state.data.housekeeping[key]){
+    _state.data.housekeeping[key]=null;
+    renderApp();
+    loadHousekeepingMonth(key).then(data=>{
+      _state.data.housekeeping[key]=data;
+      if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.housekeeping[key]={error:e.message||'Błąd'};
+      if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
+    });
+  } else {
+    renderApp();
+  }
+}
+
+
+
+function generateHKMessage(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const todayStr=localDk(today);
+
+  // Zawsze tylko OTV — twarda lista wykluczeń niezależna od filtra w widoku
+  const WYKLUCZ=['wawel','zamkowa','bronowicka','plac szczepański','orzeszkowej'];
+  const isWykluczone=apt=>WYKLUCZ.some(w=>apt.toLowerCase().includes(w));
+
+  const allRows=[];
+  Ob
