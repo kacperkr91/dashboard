@@ -2174,7 +2174,7 @@ function buildKsefView(rows){
                         : `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`)
                     : `<div style="display:flex;gap:6px;flex-wrap:wrap">
                         <button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">Opłacona dziś</button>
-                        <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Wpisz datę</button>
+                        <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Wybierz datę</button>
                       </div>`
                   }
                 </td>
@@ -4259,19 +4259,15 @@ function saveKsefPaidMap(map){
   syncPushKsefPaid(map);
 }
 
-function markKsefInvoicePaid(ksefNumber,currentDate=''){
-  if(!ksefNumber)return;
-  const suggestion=currentDate||new Date().toISOString().slice(0,10);
-  const input=prompt('Podaj datę opłacenia faktury (YYYY-MM-DD):', suggestion);
-  if(input===null)return;
-  const value=input.trim();
-  if(value && !/^\d{4}-\d{2}-\d{2}$/.test(value)){
-    alert('Data musi być w formacie YYYY-MM-DD');
-    return;
-  }
+function closeKsefPaidModal(){
+  document.getElementById('ksefPaidModal')?.remove();
+}
+
+function saveKsefInvoicePaidDate(ksefNumber,paidDate){
+  if(!ksefNumber||!paidDate)return;
   const existing=getKsefPaidMap();
   existing[ksefNumber]={
-    paidDate:value||suggestion,
+    paidDate,
     updatedAt:new Date().toISOString(),
   };
   saveKsefPaidMap(existing);
@@ -4279,10 +4275,39 @@ function markKsefInvoicePaid(ksefNumber,currentDate=''){
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
     ksefNumber,
-    paidDate:existing[ksefNumber].paidDate,
+    paidDate,
     paid:true,
   });
+  closeKsefPaidModal();
   if(_state.section==='ksef')renderApp();
+}
+
+function markKsefInvoicePaid(ksefNumber,currentDate=''){
+  if(!ksefNumber)return;
+  closeKsefPaidModal();
+  const suggestion=currentDate||new Date().toISOString().slice(0,10);
+  const safeNumber=String(ksefNumber).replace(/'/g,"\\'");
+  const modal=document.createElement('div');
+  modal.id='ksefPaidModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML=`<div style="background:var(--white);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:420px;width:100%;box-shadow:0 18px 60px rgba(15,23,42,0.22)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:var(--text)">Data opłacenia</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Wybierz datę z kalendarza dla faktury KSeF.</div>
+      </div>
+      <button onclick="closeKsefPaidModal()" style="background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--text-muted)">✕</button>
+    </div>
+    <input id="ksefPaidDateInput" type="date" value="${suggestion}" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+      <button onclick="closeKsefPaidModal()" style="background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:10px 14px;border-radius:9px;cursor:pointer">Anuluj</button>
+      <button onclick="saveKsefInvoicePaidDate('${safeNumber}',document.getElementById('ksefPaidDateInput').value)" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;font-family:Inter,sans-serif;font-size:13px;font-weight:700;padding:10px 14px;border-radius:9px;cursor:pointer">Zapisz</button>
+    </div>
+  </div>`;
+  modal.addEventListener('click',e=>{ if(e.target===modal) closeKsefPaidModal(); });
+  document.body.appendChild(modal);
+  document.getElementById('ksefPaidDateInput')?.showPicker?.();
+  document.getElementById('ksefPaidDateInput')?.focus();
 }
 
 function clearKsefInvoicePaid(ksefNumber){
