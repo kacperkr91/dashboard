@@ -345,17 +345,20 @@
     .ksef-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;}
     .ksef-table thead th,.ksef-table tbody td{padding:12px 14px;vertical-align:middle;}
     .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2){text-align:left;}
-    .ksef-table .col-status,.ksef-table .col-days,.ksef-table .col-paid,.ksef-table .col-updated{text-align:center;}
-    .ksef-table .col-amount{text-align:right;font-variant-numeric:tabular-nums;}
-    .ksef-table .col-date{white-space:nowrap;text-align:left;}
-    .ksef-table .col-nip{white-space:nowrap;}
+    .ksef-table thead th.col-status,.ksef-table tbody td.col-status,
+    .ksef-table thead th.col-days,.ksef-table tbody td.col-days,
+    .ksef-table thead th.col-paid,.ksef-table tbody td.col-paid,
+    .ksef-table thead th.col-updated,.ksef-table tbody td.col-updated{text-align:center;}
+    .ksef-table thead th.col-amount,.ksef-table tbody td.col-amount{text-align:right;font-variant-numeric:tabular-nums;}
+    .ksef-table thead th.col-date,.ksef-table tbody td.col-date{text-align:center;white-space:nowrap;}
+    .ksef-table thead th.col-nip,.ksef-table tbody td.col-nip{text-align:left;white-space:nowrap;}
     .ksef-table .col-ksef{font-family:monospace;font-size:11px;word-break:break-all;}
     .ksef-table .col-seller{min-width:240px;}
     .ksef-table .col-status{width:140px;}
-    .ksef-table .col-date{width:110px;}
+    .ksef-table .col-date{width:126px;}
     .ksef-table .col-days{width:72px;}
     .ksef-table .col-amount{width:120px;}
-    .ksef-table .col-nip{width:130px;}
+    .ksef-table .col-nip{width:144px;}
     .ksef-table .col-paid{width:210px;}
     .ksef-table .col-updated{width:120px;}
     .ksef-table tbody td.col-paid{padding-top:10px;padding-bottom:10px;}
