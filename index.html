@@ -2081,6 +2081,11 @@ function buildKsefView(rows){
   const dueSoon=rows.filter(r=>r.status==='due-soon').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
   const paid=rows.filter(r=>r.status==='paid');
   const missing=rows.filter(r=>r.status==='missing');
+  const newest=[...rows].sort((a,b)=>{
+    const ad=(a.issueDate||'').slice(0,10);
+    const bd=(b.issueDate||'').slice(0,10);
+    return bd.localeCompare(ad);
+  });
   const totalOpen=rows.filter(r=>r.status!=='missing'&&r.status!=='paid').reduce((s,r)=>s+r.bruttoValue,0);
   const overdueTotal=overdue.reduce((s,r)=>s+r.bruttoValue,0);
   const dueSoonTotal=dueSoon.reduce((s,r)=>s+r.bruttoValue,0);
@@ -2148,6 +2153,11 @@ function buildKsefView(rows){
         <div class="card-title">Nadchodzące zobowiązania</div>
         <div class="card-subtitle">Najbliższe faktury do zaplanowania.</div>
         ${highlightList(dueSoon.filter(item=>item.daysToDue!==0),'Brak faktur z terminem w ciągu 7 dni.')}
+      </div>
+      <div class="ksef-mini-card">
+        <div class="card-title">Najnowsze faktury</div>
+        <div class="card-subtitle">Ostatnio wystawione dokumenty z KSeF.</div>
+        ${highlightList(newest,'Brak świeżych faktur do pokazania.')}
       </div>
     </div>
 
