@@ -320,7 +320,7 @@
     .ksef-search,.ksef-select{background:var(--white);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:10px 12px;border-radius:10px;outline:none;}
     .ksef-search{flex:1;min-width:240px;}
     .ksef-search:focus,.ksef-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
-    .ksef-section-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;}
+    .ksef-section-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
     .ksef-mini-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:20px 22px;}
     .ksef-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
     .ksef-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--white);}
@@ -329,7 +329,8 @@
     .ksef-row.paid{border-color:#bbf7d0;background:#f5fff7;}
     .ksef-row-main{min-width:0;}
     .ksef-row-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .ksef-row-sub{font-size:11px;color:var(--text-muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;}
+    .ksef-row-sub{font-size:11px;color:var(--text-muted);margin-top:5px;display:flex;flex-direction:column;gap:4px;}
+    .ksef-row-sub span{display:block;line-height:1.25;}
     .ksef-row-amount{font-size:16px;font-weight:700;color:var(--text);text-align:right;}
     .ksef-row-meta{font-size:11px;color:var(--text-muted);margin-top:3px;text-align:right;}
     .ksef-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;}
@@ -2109,8 +2110,8 @@ function buildKsefView(rows){
         <div class="ksef-row-main">
           <div class="ksef-row-name">${item.seller}</div>
           <div class="ksef-row-sub">
-            <span>${item.dueDate||'Brak terminu'}</span>
-            <span>${item.ksefNumber.slice(-12)||'—'}</span>
+            <span>Wystawienie: ${item.issueDate||'—'}</span>
+            <span>Termin: ${item.dueDate||'Brak terminu'}</span>
           </div>
         </div>
         <div>
