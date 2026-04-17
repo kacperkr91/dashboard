@@ -1644,6 +1644,7 @@ let _state={
   vacationMode:null,
   oblozenieDzien:'dzis',
   oblozenieFiltry:'wszystkie',
+  oblozenieTelefony:false,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:(()=>{
@@ -5675,6 +5676,7 @@ function buildOblozenieLive(){
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
+  const showPhones=!!_state.oblozenieTelefony;
   const targetDate=dzien==='dzis'?today:tmr;
   const targetStr=dzien==='dzis'?todayStr:tmrStr;
   const DOW=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
@@ -5793,7 +5795,7 @@ function buildOblozenieLive(){
   const rezCard=(r,accent)=>{
     const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
     const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
-    const phoneBadge=r.telefon
+    const phoneBadge=showPhones && r.telefon
       ? `<a href="tel:${r.telefon}" style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid var(--border);color:var(--text-mid);font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-decoration:none">📞 ${r.telefon}</a>`
       : '';
     const flagBadge=r.kraj
@@ -5931,6 +5933,7 @@ function buildOblozenieLive(){
         
         <div style="display:flex;align-items:center;gap:8px">
           <button onclick="generateHKMessage()" style="background:#25D366;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">📱 Wiadomość dla HK</button>
+          <button onclick="_state.oblozenieTelefony=!_state.oblozenieTelefony;renderApp()" style="background:${showPhones?'#0f766e':'var(--white)'};color:${showPhones?'#fff':'var(--text-mid)'};border:1px solid ${showPhones?'#0f766e':'var(--border)'};padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif">${showPhones?'🙈 Ukryj telefony':'📞 Pokaż telefony'}</button>
           <div style="font-size:12px;color:var(--text-muted)">Dane z ${Object.values(_state.data.previo||{}).filter(m=>Array.isArray(m)&&m.length).length} mies.</div>
         </div>
       </div>
