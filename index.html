@@ -2190,7 +2190,7 @@ function buildKsefView(rows){
   };
   const badgeClassFor=status=>status==='paid'?'paid':status==='partial'?'partial':status==='overdue'?'overdue':status==='due-soon'?'due-soon':status==='upcoming'?'upcoming':'missing';
 
-  const highlightList=(items, emptyLabel)=>items.length?`<div class="ksef-list">${items.slice(0,6).map(item=>`
+  const highlightList=(items, emptyLabel, options={})=>items.length?`<div class="ksef-list">${items.slice(0,6).map(item=>`
       <div class="ksef-row ${item.status}">
         <div class="ksef-row-main">
           <div class="ksef-row-name">${item.seller}</div>
@@ -2200,8 +2200,17 @@ function buildKsefView(rows){
           </div>
         </div>
         <div>
-          <div class="ksef-row-amount">${fmt(getKsefOutstandingValue(item))} zł</div>
+          <div class="ksef-row-amount">${
+            options.showInvoiceAmount
+              ? `${fmt(item.bruttoValue||0)} zł`
+              : `${fmt(getKsefOutstandingValue(item))} zł`
+          }</div>
           <div class="ksef-row-meta">${labelFor(item)}</div>
+          ${
+            options.showInvoiceAmount && item.status==='partial'
+              ? `<div class="ksef-row-meta">Zostało ${fmt(item.remainingAmount||0)} zł</div>`
+              : ''
+          }
         </div>
       </div>
     `).join('')}</div>`:`<div class="empty-section" style="min-height:180px"><div class="empty-icon">✅</div><p>${emptyLabel}</p></div>`;
@@ -2243,7 +2252,7 @@ function buildKsefView(rows){
       <div class="ksef-mini-card">
         <div class="card-title">Najnowsze faktury</div>
         <div class="card-subtitle">Ostatnio wystawione dokumenty z KSeF.</div>
-        ${highlightList(newest,'Brak świeżych faktur do pokazania.')}
+        ${highlightList(newest,'Brak świeżych faktur do pokazania.',{showInvoiceAmount:true})}
       </div>
     </div>
 
