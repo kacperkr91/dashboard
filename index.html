@@ -5674,7 +5674,12 @@ function buildOblozenieLive(){
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  const currentPrevioForecast=Array.isArray(_state.data.previo?.[currentMonthKey]) ? calcPrevioForecast(currentMonthKey) : null;
+  const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey]) ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled) : [];
+  const currentMonthEarned=currentMonthRows.reduce((sum,row)=>{
+    const checkout=parseDateDMY(row.dataDo||'');
+    return checkout && checkout<=today ? sum+(row.cena||0) : sum;
+  },0);
+  const currentMonthTotal=currentMonthRows.reduce((sum,row)=>sum+(row.cena||0),0);
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -5914,11 +5919,11 @@ function buildOblozenieLive(){
           </div>
           <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Dotychczas w miesiącu</div>
-            <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentPrevioForecast?fmt(currentPrevioForecast.earned)+' zł':'—'}</div>
+            <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—'}</div>
           </div>
           <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
-            <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentPrevioForecast?fmt(currentPrevioForecast.forecastTotal)+' zł':'—'}</div>
+            <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
           </div>
         </div>
       </div>
