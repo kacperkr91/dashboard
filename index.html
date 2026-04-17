@@ -337,6 +337,7 @@
     .ksef-badge.overdue{background:#fee2e2;color:#b91c1c;}
     .ksef-badge.due-soon{background:#ffedd5;color:#c2410c;}
     .ksef-badge.upcoming{background:#dbeafe;color:#1d4ed8;}
+    .ksef-badge.partial{background:#fef3c7;color:#b45309;}
     .ksef-badge.paid{background:#dcfce7;color:#15803d;}
     .ksef-badge.missing{background:#e2e8f0;color:#475569;}
     .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;min-height:32px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;}
@@ -369,6 +370,7 @@
     .ksef-table td.col-updated{font-size:11px;line-height:1.25;word-break:break-word;}
     .ksef-table tbody tr.overdue{background:#fff7f7;}
     .ksef-table tbody tr.due-soon{background:#fffaf5;}
+    .ksef-table tbody tr.partial{background:#fffdf4;}
     .ksef-table tbody tr.paid{background:#f7fff8;}
     .ksef-muted{color:var(--text-muted);}
     @media(max-width:980px){.ksef-section-grid{grid-template-columns:1fr;}}
@@ -429,7 +431,7 @@ const CONFIG={
   ksefApiKey:         localStorage.getItem('gs_ksef_api_key')||'',
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
-  ksefRange:          'A2:M2000',
+  ksefRange:          'A2:O2000',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
   otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
   otvStartRow:        4,
@@ -783,7 +785,8 @@ async function loadKsefData(){
     const manualPaid=paidMap[ksefNumber]||null;
     const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
     const sheetPaidDate=String(row[12]||'').trim();
-    const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||!!sheetPaidDate;
+    const sheetPaidAmount=parseMoneyValue(row[13]||'0');
+    const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
 
     let status='missing';
@@ -797,9 +800,7 @@ async function loadKsefData(){
     const normalizedDays=Number.isFinite(daysValue)?daysValue:(Number.isFinite(daysToDue)?daysToDue:'');
     if(dueObj && normalizedDays < 0)status='overdue';
     if(dueObj && normalizedDays >= 0 && normalizedDays <= 7)status='due-soon';
-    if(autoPaidAtPurchase || sheetPaid || manualPaid?.paidDate)status='paid';
-
-    return{
+    const baseItem={
       ksefNumber,
       issueDate,
       seller:String(row[2]||'').trim()||'Nieznany dostawca',
@@ -813,9 +814,21 @@ async function loadKsefData(){
       daysToDue:normalizedDays,
       updatedAt:String(row[10]||'').trim(),
       status,
-      manualPaidDate:sheetPaidDate||manualPaid?.paidDate||'',
+      urgencyStatus:status,
+      manualPaidDate:'',
+      latestPaidDate:'',
+      paidAmount:0,
+      remainingAmount:brutto,
+      paymentCount:0,
+      paymentHistory:[],
+      paymentState:'none',
       autoPaidAtPurchase,
     };
+    const sheetEntry=(!manualPaid && (sheetPaidAmount>0 || sheetPaidDate))
+      ? {paidDate:sheetPaidDate,paidAmount:sheetPaidAmount || Math.max(brutto-sheetRemainingAmount,0),updatedAt:''}
+      : null;
+    applyKsefPaymentState(baseItem,manualPaid||sheetEntry);
+    return baseItem;
   }).filter(item=>item.ksefNumber||item.seller);
 }
 
@@ -1533,6 +1546,77 @@ function dateKey(d){
 
 const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+const parseMoneyValue=value=>{
+  if(value===null||value===undefined)return 0;
+  const raw=String(value).replace(/\s/g,'').replace(/[^\d,.-]/g,'').replace(',','.');
+  const num=parseFloat(raw);
+  return Number.isFinite(num)?num:0;
+};
+function normalizeKsefPaymentEntry(entry, bruttoValue=0){
+  if(!entry||typeof entry!=='object')return{payments:[],paidAmount:0,remainingAmount:Math.max(bruttoValue,0),latestPaidDate:'',updatedAt:''};
+  const updatedAt=String(entry.updatedAt||'').trim();
+  let payments=Array.isArray(entry.payments)?entry.payments:[];
+  if(!payments.length && entry.paidDate){
+    const fallbackAmount=parseMoneyValue(entry.paidAmount)||Math.max(bruttoValue,0);
+    payments=[{date:String(entry.paidDate||'').trim(),amount:fallbackAmount}];
+  }
+  payments=payments.map(p=>({
+    date:String(p?.date||'').trim(),
+    amount:Math.max(parseMoneyValue(p?.amount),0),
+  })).filter(p=>p.date&&p.amount>0)
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const paidAmount=payments.reduce((sum,p)=>sum+p.amount,0);
+  const remainingAmount=Math.max((Number(bruttoValue)||0)-paidAmount,0);
+  const latestPaidDate=payments.length?payments[payments.length-1].date:'';
+  return{payments,paidAmount,remainingAmount,latestPaidDate,updatedAt};
+}
+function getKsefBaseStatus(dueObj, daysValue=''){
+  if(!dueObj)return'missing';
+  const now=new Date();
+  now.setHours(0,0,0,0);
+  const days=Number.isFinite(daysValue)?daysValue:Math.round((dueObj-now)/86400000);
+  if(days<0)return'overdue';
+  if(days<=7)return'due-soon';
+  return'upcoming';
+}
+function applyKsefPaymentState(target, entry){
+  if(!target)return;
+  const normalized=normalizeKsefPaymentEntry(entry,target.bruttoValue||0);
+  target.paymentHistory=normalized.payments;
+  target.paymentCount=normalized.payments.length;
+  target.paidAmount=normalized.paidAmount;
+  target.remainingAmount=normalized.remainingAmount;
+  target.manualPaidDate=normalized.latestPaidDate;
+  target.latestPaidDate=normalized.latestPaidDate;
+  const baseStatus=getKsefBaseStatus(target.dueDateObj,target.daysToDue);
+  target.urgencyStatus=baseStatus;
+  if(target.autoPaidAtPurchase){
+    target.paymentState='paid';
+    target.status='paid';
+    target.remainingAmount=0;
+    target.paidAmount=target.bruttoValue||0;
+    if(!target.latestPaidDate)target.latestPaidDate=target.issueDate||'';
+    return;
+  }
+  if(normalized.paidAmount>0 && normalized.remainingAmount<=0.009){
+    target.paymentState='paid';
+    target.status='paid';
+    target.remainingAmount=0;
+    return;
+  }
+  if(normalized.paidAmount>0){
+    target.paymentState='partial';
+    target.status='partial';
+    return;
+  }
+  target.paymentState='none';
+  target.status=baseStatus;
+}
+function getKsefOutstandingValue(item){
+  if(item?.status==='paid')return 0;
+  if(item?.paymentState==='partial')return Math.max(item.remainingAmount||0,0);
+  return item?.bruttoValue||0;
+}
 
 /* STATE */
 let _state={
@@ -2079,7 +2163,7 @@ function buildKsefView(rows){
   });
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
-  const dueSoon=rows.filter(r=>r.status==='due-soon').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
+  const dueSoon=rows.filter(r=>r.status==='due-soon' || r.status==='partial').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
   const paid=rows.filter(r=>r.status==='paid');
   const missing=rows.filter(r=>r.status==='missing');
   const newest=[...rows].sort((a,b)=>{
@@ -2087,23 +2171,24 @@ function buildKsefView(rows){
     const bd=(b.issueDate||'').slice(0,10);
     return bd.localeCompare(ad);
   });
-  const totalOpen=rows.filter(r=>r.status!=='missing'&&r.status!=='paid').reduce((s,r)=>s+r.bruttoValue,0);
-  const overdueTotal=overdue.reduce((s,r)=>s+r.bruttoValue,0);
-  const dueSoonTotal=dueSoon.reduce((s,r)=>s+r.bruttoValue,0);
+  const totalOpen=rows.filter(r=>r.status!=='missing'&&r.status!=='paid').reduce((s,r)=>s+getKsefOutstandingValue(r),0);
+  const overdueTotal=overdue.reduce((s,r)=>s+getKsefOutstandingValue(r),0);
+  const dueSoonTotal=dueSoon.reduce((s,r)=>s+getKsefOutstandingValue(r),0);
   const paidTotal=paid.reduce((s,r)=>s+r.bruttoValue,0);
 
   const labelFor=item=>{
     if(item.status==='paid'){
-      if(item.manualPaidDate)return `Opłacona ${item.manualPaidDate}`;
+      if(item.latestPaidDate)return `Opłacona ${item.latestPaidDate}`;
       if(item.autoPaidAtPurchase)return 'Opłacona przy zakupie';
       return 'Opłacona';
     }
+    if(item.status==='partial')return `Częściowo · zostało ${fmt(item.remainingAmount||0)} zł`;
     if(item.status==='overdue')return `${Math.abs(item.daysToDue||0)} dni po terminie`;
     if(item.status==='due-soon')return (item.daysToDue===0?'Termin dziś':`Za ${item.daysToDue} dni`);
     if(item.status==='upcoming')return item.daysToDue===''?'W toku':`Za ${item.daysToDue} dni`;
     return 'Brak terminu';
   };
-  const badgeClassFor=status=>status==='paid'?'paid':status==='overdue'?'overdue':status==='due-soon'?'due-soon':status==='upcoming'?'upcoming':'missing';
+  const badgeClassFor=status=>status==='paid'?'paid':status==='partial'?'partial':status==='overdue'?'overdue':status==='due-soon'?'due-soon':status==='upcoming'?'upcoming':'missing';
 
   const highlightList=(items, emptyLabel)=>items.length?`<div class="ksef-list">${items.slice(0,6).map(item=>`
       <div class="ksef-row ${item.status}">
@@ -2115,7 +2200,7 @@ function buildKsefView(rows){
           </div>
         </div>
         <div>
-          <div class="ksef-row-amount">${item.brutto||'0,00'} zł</div>
+          <div class="ksef-row-amount">${fmt(getKsefOutstandingValue(item))} zł</div>
           <div class="ksef-row-meta">${labelFor(item)}</div>
         </div>
       </div>
@@ -2174,6 +2259,7 @@ function buildKsefView(rows){
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
             <option value="due-soon" ${filter==='due-soon'?'selected':''}>Do 7 dni</option>
+            <option value="partial" ${filter==='partial'?'selected':''}>Częściowo opłacone</option>
             <option value="upcoming" ${filter==='upcoming'?'selected':''}>Później</option>
             <option value="paid" ${filter==='paid'?'selected':''}>Opłacone</option>
             <option value="missing" ${filter==='missing'?'selected':''}>Brak terminu</option>
@@ -2219,16 +2305,15 @@ function buildKsefView(rows){
                 <td class="col-date">${item.issueDate||'—'}</td>
                 <td class="col-date">${item.dueDate||'—'}</td>
                 <td class="col-days">${item.daysToDue===''?'—':item.daysToDue}</td>
-                <td class="col-amount" style="font-weight:700">${item.brutto||'0,00'} zł</td>
+                <td class="col-amount" style="font-weight:700">${item.brutto||'0,00'} zł${item.paymentState==='partial'?`<div class="ksef-muted" style="font-size:10px;margin-top:3px">Zostało ${fmt(item.remainingAmount||0)} zł</div>`:''}</td>
                 <td class="col-nip">${item.nip||'—'}</td>
                 <td class="col-paid">
-                  ${item.status==='paid'
-                    ? (item.manualPaidDate
-                        ? `<button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>`
-                        : `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`)
+                  ${item.autoPaidAtPurchase && item.paymentCount===0
+                    ? `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`
                     : `<div class="ksef-paid-actions">
-                        <button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">Opłacona dziś</button>
-                        <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Wybierz datę</button>
+                        ${item.status!=='paid' ? `<button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">${item.paymentCount>0?'Dopłać dziś':'Całość dziś'}</button>` : ''}
+                        <button class="ksef-action-btn ${item.status==='paid'?'paid':''}" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">${item.paymentCount>0?'Dodaj ratę':'Dodaj płatność'}</button>
+                        ${item.paymentCount>0 ? `<button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>` : ''}
                       </div>`
                   }
                 </td>
@@ -4313,53 +4398,38 @@ function saveKsefPaidMap(map){
   syncPushKsefPaid(map);
 }
 
-function patchKsefRowPaidState(ksefNumber,paidDate=''){
+function patchKsefRowPaidState(ksefNumber,entry=null){
   const rows=_state?.data?.ksef;
   if(!Array.isArray(rows)||!ksefNumber)return;
   const target=rows.find(item=>String(item.ksefNumber||'').trim()===String(ksefNumber||'').trim());
   if(!target)return;
-  if(paidDate){
-    target.manualPaidDate=paidDate;
-    target.status='paid';
-  }else{
-    target.manualPaidDate='';
-    const now=new Date();
-    now.setHours(0,0,0,0);
-    const dueObj=target.dueDateObj instanceof Date && !isNaN(target.dueDateObj) ? target.dueDateObj : null;
-    if(target.autoPaidAtPurchase){
-      target.status='paid';
-      return;
-    }
-    if(!dueObj){
-      target.status='missing';
-      return;
-    }
-    const days=Math.round((dueObj-now)/86400000);
-    target.daysToDue=days;
-    if(days < 0)target.status='overdue';
-    else if(days <= 7)target.status='due-soon';
-    else target.status='upcoming';
-  }
+  applyKsefPaymentState(target,entry);
 }
 
 function closeKsefPaidModal(){
   document.getElementById('ksefPaidModal')?.remove();
 }
 
-function saveKsefInvoicePaidDate(ksefNumber,paidDate){
+function saveKsefInvoicePayment(ksefNumber,paidDate,paidAmount){
   if(!ksefNumber||!paidDate)return;
+  const amount=Math.max(parseMoneyValue(paidAmount),0);
+  if(!(amount>0)){
+    alert('Podaj kwotę płatności większą od zera.');
+    return;
+  }
   const existing=getKsefPaidMap();
-  existing[ksefNumber]={
-    paidDate,
-    updatedAt:new Date().toISOString(),
-  };
+  const current=normalizeKsefPaymentEntry(existing[ksefNumber],0);
+  current.payments.push({date:paidDate,amount});
+  current.payments=current.payments.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  current.updatedAt=new Date().toISOString();
+  existing[ksefNumber]=current;
   saveKsefPaidMap(existing);
-  patchKsefRowPaidState(ksefNumber,paidDate);
+  patchKsefRowPaidState(ksefNumber,current);
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
     ksefNumber,
-    paidDate,
+    entry:current,
     paid:true,
   });
   closeKsefPaidModal();
@@ -4369,7 +4439,9 @@ function saveKsefInvoicePaidDate(ksefNumber,paidDate){
 function markKsefInvoicePaid(ksefNumber,currentDate=''){
   if(!ksefNumber)return;
   closeKsefPaidModal();
+  const item=Array.isArray(_state?.data?.ksef)?_state.data.ksef.find(row=>String(row.ksefNumber||'')===String(ksefNumber||'')):null;
   const suggestion=currentDate||new Date().toISOString().slice(0,10);
+  const suggestedAmount=item ? Math.max(item.remainingAmount||item.bruttoValue||0,0) : 0;
   const safeNumber=String(ksefNumber).replace(/'/g,"\\'");
   const modal=document.createElement('div');
   modal.id='ksefPaidModal';
@@ -4377,15 +4449,16 @@ function markKsefInvoicePaid(ksefNumber,currentDate=''){
   modal.innerHTML=`<div style="background:var(--white);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:420px;width:100%;box-shadow:0 18px 60px rgba(15,23,42,0.22)">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
       <div>
-        <div style="font-size:17px;font-weight:700;color:var(--text)">Data opłacenia</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Wybierz datę z kalendarza dla faktury KSeF.</div>
+        <div style="font-size:17px;font-weight:700;color:var(--text)">Dodaj płatność</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Wybierz datę i kwotę dla tej faktury KSeF.</div>
       </div>
       <button onclick="closeKsefPaidModal()" style="background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
     <input id="ksefPaidDateInput" type="date" value="${suggestion}" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
+    <input id="ksefPaidAmountInput" type="number" min="0" step="0.01" value="${suggestedAmount?Number(suggestedAmount.toFixed(2)):''}" placeholder="Kwota płatności" style="width:100%;margin-top:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
       <button onclick="closeKsefPaidModal()" style="background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:10px 14px;border-radius:9px;cursor:pointer">Anuluj</button>
-      <button onclick="saveKsefInvoicePaidDate('${safeNumber}',document.getElementById('ksefPaidDateInput').value)" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;font-family:Inter,sans-serif;font-size:13px;font-weight:700;padding:10px 14px;border-radius:9px;cursor:pointer">Zapisz</button>
+      <button onclick="saveKsefInvoicePayment('${safeNumber}',document.getElementById('ksefPaidDateInput').value,document.getElementById('ksefPaidAmountInput').value)" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;font-family:Inter,sans-serif;font-size:13px;font-weight:700;padding:10px 14px;border-radius:9px;cursor:pointer">Zapisz</button>
     </div>
   </div>`;
   modal.addEventListener('click',e=>{ if(e.target===modal) closeKsefPaidModal(); });
@@ -4400,7 +4473,7 @@ function clearKsefInvoicePaid(ksefNumber){
   if(!existing[ksefNumber])return;
   delete existing[ksefNumber];
   saveKsefPaidMap(existing);
-  patchKsefRowPaidState(ksefNumber,'');
+  patchKsefRowPaidState(ksefNumber,null);
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
@@ -4412,18 +4485,22 @@ function clearKsefInvoicePaid(ksefNumber){
 
 function markKsefInvoicePaidToday(ksefNumber){
   const today=new Date().toISOString().slice(0,10);
+  const item=Array.isArray(_state?.data?.ksef)?_state.data.ksef.find(row=>String(row.ksefNumber||'')===String(ksefNumber||'')):null;
+  const amount=item ? Math.max(item.remainingAmount||item.bruttoValue||0,0) : 0;
+  if(!(amount>0))return;
   const existing=getKsefPaidMap();
-  existing[ksefNumber]={
-    paidDate:today,
-    updatedAt:new Date().toISOString(),
-  };
+  const current=normalizeKsefPaymentEntry(existing[ksefNumber],0);
+  current.payments.push({date:today,amount});
+  current.payments=current.payments.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  current.updatedAt=new Date().toISOString();
+  existing[ksefNumber]=current;
   saveKsefPaidMap(existing);
-  patchKsefRowPaidState(ksefNumber,today);
+  patchKsefRowPaidState(ksefNumber,current);
   syncPushKsefPaidEntry({
     spreadsheetId:CONFIG.ksefSpreadsheetId||CONFIG.spreadsheetId,
     sheetName:CONFIG.ksefSheet,
     ksefNumber,
-    paidDate:today,
+    entry:current,
     paid:true,
   });
   if(_state.section==='ksef')renderApp();
