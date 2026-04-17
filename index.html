@@ -2157,8 +2157,8 @@ function buildKsefView(rows){
           <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF albo statusie płatności.</div>
         </div>
         <div class="ksef-filters">
-          <input class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
-          <select class="ksef-select" onchange="setKsefFilterState('status',this.value)">
+          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
+          <select id="ksefStatusFilter" class="ksef-select" onchange="setKsefFilterState('status',this.value)">
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
             <option value="due-soon" ${filter==='due-soon'?'selected':''}>Do 7 dni</option>
@@ -6655,9 +6655,25 @@ function setSection(s){
 }
 
 function setKsefFilterState(type,val){
+  const scrollY=window.scrollY;
   if(type==='search')_state.ksefSearch=val;
   else if(type==='status')_state.ksefFilter=val;
-  if(_state.section==='ksef')renderApp();
+  if(_state.section==='ksef'){
+    renderApp();
+    requestAnimationFrame(()=>{
+      window.scrollTo(0,scrollY);
+      if(type==='search'){
+        const input=document.getElementById('ksefSearchInput');
+        if(input){
+          input.focus();
+          const pos=String(val||'').length;
+          try{input.setSelectionRange(pos,pos);}catch(e){}
+        }
+      }else{
+        document.getElementById('ksefStatusFilter')?.focus();
+      }
+    });
+  }
 }
 
 function setAptsFilter(type,val){
