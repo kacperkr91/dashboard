@@ -1165,7 +1165,7 @@ async function loadPrevioMonth(monthKey){
   const apiKey=previoApiKey||CONFIG.apiKey; // fallback to main API key
   if(!apiKey||!previoSpreadsheetId)throw new Error('MISSING_PREVIO_CONFIG');
 
-  // Cols: A=resId, B=voucher, C=dataRez, D=dataOd, E=dataDo, F=noce, G=apt, H=kanal, I=cena, J=waluta, K=status, L=gosc, M=kraj
+  // Cols: A=resId, B=voucher, C=dataRez, D=dataOd, E=dataDo, F=noce, G=apt, H=kanal, I=cena, J=waluta, K=status, L=gosc, M=kraj, N=telefon
   // Step 1: fetch only dataDo column (E) to find rows for this month
   const encE=encodeURIComponent(`'${previoSheet}'!E${previoStartRow}:E${previoEndRow}`);
   const dateData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values/${encE}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`);
@@ -1189,7 +1189,7 @@ async function loadPrevioMonth(monthKey){
   
   // Step 2: fetch only those rows
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
-  ['A','B','C','D','E','F','G','H','I','K','L','M'].forEach(c=>
+  ['A','B','C','D','E','F','G','H','I','K','L','M','N'].forEach(c=>
     params.append('ranges',`'${previoSheet}'!${c}${firstRow}:${c}${lastRow}`)
   );
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
@@ -1206,7 +1206,7 @@ async function loadPrevioMonth(monthKey){
     const apt=v(6,i);   // G=apartament
     if(!apt)continue;
 
-    const statusId=v(10,i); // K=status (2=confirmed, 3=cancelled)
+    const statusId=v(9,i); // K=status (2=confirmed, 3=cancelled)
     const cancelled=statusId==='3'||statusId==='4';
 
     result.push({
@@ -1229,8 +1229,9 @@ async function loadPrevioMonth(monthKey){
       })(),
       cenaNetto: v(7,i).toLowerCase().includes('airbnb')?n(8,i):null,
       status:  statusId,
-      gosc:    v(10,i),   // L=gosc (index 10 in our selected cols: A,B,C,D,E,F,G,H,I,K,L,M)
-      kraj:    v(11,i),   // M=kraj (index 11)
+      gosc:    v(10,i),   // L=gosc
+      kraj:    v(11,i),   // M=kraj
+      telefon: normalizePhoneNumber(v(12,i)), // N=telefon
       cancelled,
     });
   }
@@ -5487,6 +5488,17 @@ function getFlagEmoji(code){
   catch(e){return'🏳️';}
 }
 
+function normalizePhoneNumber(phone){
+  const raw=String(phone||'').trim();
+  if(!raw)return'';
+  const cleaned=raw.replace(/[^\d+]/g,'');
+  if(!cleaned)return'';
+  if(cleaned.startsWith('+'))return cleaned;
+  if(cleaned.startsWith('00'))return '+'+cleaned.slice(2);
+  if(cleaned.length===9)return '+48'+cleaned;
+  return '+'+cleaned;
+}
+
 function buildGoscieView(){
   // Zbierz dane ze wszystkich miesięcy Previo
   const allRows=[];
@@ -5781,6 +5793,9 @@ function buildOblozenieLive(){
   const rezCard=(r,accent)=>{
     const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
     const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
+    const phoneBadge=r.telefon
+      ? `<a href="tel:${r.telefon}" style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid var(--border);color:var(--text-mid);font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-decoration:none">📞 ${r.telefon}</a>`
+      : '';
     const flagBadge=r.kraj
       ? `<span title="${COUNTRY_NAMES[(r.kraj||'').toUpperCase()]||String(r.kraj||'').toUpperCase()}" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--border);font-size:14px;line-height:1;padding:2px 6px;border-radius:999px">${getFlagEmoji(r.kraj)}</span>`
       : '';
@@ -5795,6 +5810,7 @@ function buildOblozenieLive(){
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
+      ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
         <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy</span>
