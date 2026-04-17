@@ -1626,7 +1626,7 @@ function getKsefOutstandingValue(item){
 
 /* STATE */
 let _state={
-  section:'rental',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
+  section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
   ksefFilter:'all',
   ksefSearch:'',
   hkMonth:'2026-04',
@@ -2325,11 +2325,20 @@ function buildKsefView(rows){
                 <td class="col-paid">
                   ${item.autoPaidAtPurchase && item.paymentCount===0
                     ? `<button class="ksef-action-btn paid" disabled style="cursor:default;opacity:.8">Auto</button>`
-                    : `<div class="ksef-paid-actions">
-                        ${item.status!=='paid' ? `<button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">${item.paymentCount>0?'Dopłać dziś':'Całość dziś'}</button>` : ''}
-                        <button class="ksef-action-btn ${item.status==='paid'?'paid':''}" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">${item.paymentCount>0?'Dodaj ratę':'Dodaj płatność'}</button>
-                        ${item.paymentCount>0 ? `<button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>` : ''}
-                      </div>`
+                    : item.status==='paid'
+                      ? `<div class="ksef-paid-actions">
+                          <button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>
+                        </div>`
+                      : item.status==='partial'
+                        ? `<div class="ksef-paid-actions">
+                            <button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">Dopłać dziś</button>
+                            <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Dodaj ratę</button>
+                            <button class="ksef-action-btn paid" onclick="clearKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}')">Usuń ręczne</button>
+                          </div>`
+                        : `<div class="ksef-paid-actions">
+                            <button class="ksef-action-btn" onclick="markKsefInvoicePaidToday('${item.ksefNumber.replace(/'/g,"\\'")}')">Całość dziś</button>
+                            <button class="ksef-action-btn" onclick="markKsefInvoicePaid('${item.ksefNumber.replace(/'/g,"\\'")}','${item.dueDate||item.issueDate||''}')">Dodaj płatność</button>
+                          </div>`
                   }
                 </td>
                 <td class="ksef-muted col-updated">${item.updatedAt||'—'}</td>
@@ -5835,7 +5844,54 @@ function buildOblozenieLive(){
 
   const sorted=arr=>arr.sort((a,b)=>(a.apt||'').localeCompare(b.apt||''));
 
-  return`<div style="max-width:1000px;margin:0 auto">
+  const pozneWymeldowania=wymeldowania.filter(r=>getGodzina(r,'do')>'10:00');
+  const wczesneZameldowania=zameldowania.filter(r=>getGodzina(r,'od')<'16:00');
+  const przeprowadzkiCount=wymeldowania.filter(r=>r._typ==='przeprowadzka').length;
+  const przedluzeniaCount=wymeldowania.filter(r=>r._typ==='przedluzenie').length;
+  const focusToday=[
+    {title:'Wymeldowania',count:wymeldowania.length,accent:'#f59e0b',sub:pozneWymeldowania.length?`${pozneWymeldowania.length} późnych`:'bez opóźnień'},
+    {title:'Zameldowania',count:zameldowania.length,accent:'#3b82f6',sub:wczesneZameldowania.length?`${wczesneZameldowania.length} wczesnych`:'standardowe godziny'},
+    {title:'W trakcie',count:wTrakcie.length,accent:'#0f766e',sub:`${zajetyLiczba} zajętych dziś`},
+    {title:'Wolne',count:wolneApty.length,accent:'#16a34a',sub:`${total-zajetyLiczba} gotowych lokali`},
+  ];
+
+  return`<div style="max-width:1220px;margin:0 auto">
+
+    <div style="background:linear-gradient(135deg,#ecfeff 0%,#f0fdfa 42%,#f8fafc 100%);border:1px solid #99f6e4;border-radius:18px;padding:24px 26px;margin-bottom:18px;position:relative;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        <div style="max-width:760px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:8px">Centrum Operacyjne</div>
+          <div style="font-size:30px;font-weight:800;color:var(--text);line-height:1.05">Dzień pod kontrolą</div>
+          <div style="font-size:14px;color:var(--text-mid);margin-top:8px;line-height:1.6">
+            Główny ekran operacyjny dla ${dzien==='dzis'?'dzisiejszych':'jutrzejszych'} ruchów gości, wolnych apartamentów i szybkich priorytetów zespołu.
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #bfdbfe;font-size:12px;font-weight:700;color:#1d4ed8">Obłożenie ${pctObl}%</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #fed7aa;font-size:12px;font-weight:700;color:#c2410c">${wymeldowania.length} wyjazdów</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #bfdbfe;font-size:12px;font-weight:700;color:#2563eb">${zameldowania.length} przyjazdów</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #bbf7d0;font-size:12px;font-weight:700;color:#15803d">${wolneApty.length} wolnych</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;min-width:290px;max-width:340px;flex:1">
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
+          </div>
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Filtr</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${filtry==='otv'?'Tylko OTV':'Wszystkie'}</div>
+          </div>
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">ADR</div>
+            <div style="font-size:18px;font-weight:800;color:#2563eb;margin-top:6px">${adr>0?fmt(adr)+' zł':'—'}</div>
+          </div>
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">RevPAR</div>
+            <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Przełącznik Dziś / Jutro + filtr -->
     <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
@@ -5861,45 +5917,58 @@ function buildOblozenieLive(){
       </div>
     </div>
 
-    <!-- KPI -->
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px">
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Obłożenie</div>
-        <div style="font-size:26px;font-weight:800;color:${pctObl>=70?'#16a34a':pctObl>=40?'#d97706':'#dc2626'}">${pctObl}%</div>
-        <div style="font-size:10px;color:var(--text-muted)">${zajetyLiczba} / ${total} apt.</div>
-      </div>
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">ADR</div>
-        <div style="font-size:22px;font-weight:800;color:var(--blue)">${adr>0?fmt(adr):'—'}</div>
-        <div style="font-size:10px;color:var(--text-muted)">śr. cena/noc</div>
-      </div>
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">RevPAR</div>
-        <div style="font-size:22px;font-weight:800;color:#7c3aed">${revpar>0?fmt(revpar):'—'}</div>
-        <div style="font-size:10px;color:var(--text-muted)">przychód/apt.</div>
-      </div>
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🚪 Wymeldowania</div>
-        <div style="font-size:26px;font-weight:800;color:#f59e0b">${wymeldowania.length}</div>
-      </div>
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🔑 Zameldowania</div>
-        <div style="font-size:26px;font-weight:800;color:#3b82f6">${zameldowania.length}</div>
-      </div>
-      <div class="grid-card" style="text-align:center;padding:12px">
-        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">✓ Wolne</div>
-        <div style="font-size:26px;font-weight:800;color:#16a34a">${wolneApty.length}</div>
-      </div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px">
+      ${focusToday.map(card=>`<div class="grid-card" style="padding:16px 18px;border-top:4px solid ${card.accent}">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${card.title}</div>
+            <div style="font-size:30px;font-weight:800;color:${card.accent};line-height:1;margin-top:8px">${card.count}</div>
+          </div>
+          <div style="width:12px;height:12px;border-radius:999px;background:${card.accent};opacity:.22;flex-shrink:0"></div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:10px">${card.sub}</div>
+      </div>`).join('')}
     </div>
 
-    <!-- Pasek -->
-    <div class="grid-card" style="margin-bottom:20px;padding:12px 16px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:12px;font-weight:600;color:var(--text)">${zajetyLiczba} zajętych · ${wolneApty.length} wolnych</span>
-        <span style="font-size:12px;color:var(--text-muted)">${wTrakcie.length} w trakcie · ${zameldowania.length} przyjeżdża · ${wymeldowania.length} wyjeżdża</span>
+    <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-bottom:20px">
+      <div class="grid-card" style="padding:16px 18px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:var(--text)">Obłożenie i rytm dnia</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${zajetyLiczba} zajętych · ${wolneApty.length} wolnych · ${wTrakcie.length} pobytów w toku</div>
+          </div>
+          <div style="font-size:22px;font-weight:800;color:${pctObl>=70?'#16a34a':pctObl>=40?'#d97706':'#dc2626'}">${pctObl}%</div>
+        </div>
+        <div style="background:var(--border);border-radius:999px;height:12px;overflow:hidden">
+          <div style="background:linear-gradient(90deg,#3b82f6,#0f766e);height:100%;width:${pctObl}%;border-radius:999px"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#fff7ed;color:#c2410c;font-size:12px;font-weight:700">${pozneWymeldowania.length} późnych wyjazdów</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:700">${wczesneZameldowania.length} wczesnych przyjazdów</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#fffbeb;color:#b45309;font-size:12px;font-weight:700">${przeprowadzkiCount} przeprowadzek</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f5f3ff;color:#7c3aed;font-size:12px;font-weight:700">${przedluzeniaCount} przedłużeń</span>
+        </div>
       </div>
-      <div style="background:var(--border);border-radius:6px;height:10px;overflow:hidden">
-        <div style="background:linear-gradient(90deg,#3b82f6,#0f766e);height:100%;width:${pctObl}%;border-radius:6px"></div>
+      <div class="grid-card" style="padding:16px 18px">
+        <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px">Szybki obraz dnia</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px">
+            <div style="font-size:11px;color:#9a3412;font-weight:700;text-transform:uppercase">Wyjazdy</div>
+            <div style="font-size:22px;color:#c2410c;font-weight:800;margin-top:6px">${wymeldowania.length}</div>
+          </div>
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px">
+            <div style="font-size:11px;color:#1d4ed8;font-weight:700;text-transform:uppercase">Przyjazdy</div>
+            <div style="font-size:22px;color:#2563eb;font-weight:800;margin-top:6px">${zameldowania.length}</div>
+          </div>
+          <div style="background:#f5fffa;border:1px solid #bbf7d0;border-radius:12px;padding:12px">
+            <div style="font-size:11px;color:#15803d;font-weight:700;text-transform:uppercase">Wolne</div>
+            <div style="font-size:22px;color:#16a34a;font-weight:800;margin-top:6px">${wolneApty.length}</div>
+          </div>
+          <div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px">
+            <div style="font-size:11px;color:#7c3aed;font-weight:700;text-transform:uppercase">RevPAR</div>
+            <div style="font-size:22px;color:#7c3aed;font-weight:800;margin-top:6px">${revpar>0?fmt(revpar):'—'}</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -6610,7 +6679,7 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='kalendarz'?'active':''}" style="${section==='kalendarz'?'background:#0369a1;border-color:#0369a1':''}" onclick="setSection('kalendarz')"><span class="icon">📆</span> Kalendarz</button>
     <button class="nav-l1-btn ${section==='noty'?'active':''}" style="${section==='noty'?'background:#475569;border-color:#475569':''}" onclick="setSection('noty')"><span class="icon">🧾</span> Noty</button>
     <button class="nav-l1-btn ${section==='goscie'?'active':''}" style="${section==='goscie'?'background:#0e7490;border-color:#0e7490':''}" onclick="setSection('goscie')"><span class="icon">🌍</span> Goście</button>
-    <button class="nav-l1-btn ${section==='oblozenie'?'active':''}" style="${section==='oblozenie'?'background:#0f766e;border-color:#0f766e':''}" onclick="setSection('oblozenie')"><span class="icon">🏠</span> Obłożenie</button>
+    <button class="nav-l1-btn ${section==='oblozenie'?'active':''}" style="${section==='oblozenie'?'background:#0f766e;border-color:#0f766e':''}" onclick="setSection('oblozenie')"><span class="icon">🏠</span> Start</button>
     ${(()=>{
       let parkingAlert=false;
       let alertCount=0;
