@@ -5674,7 +5674,9 @@ function buildOblozenieLive(){
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey]) ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled) : [];
+  const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
+    ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled && String(r.dataDo||'').slice(0,7)===currentMonthKey)
+    : [];
   const currentMonthEarned=currentMonthRows.reduce((sum,row)=>{
     const checkout=parseDateDMY(row.dataDo||'');
     return checkout && checkout<=today ? sum+(row.cena||0) : sum;
