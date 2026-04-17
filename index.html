@@ -5673,6 +5673,8 @@ function buildOblozenieLive(){
   const todayStr=localDk(today);
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
+  const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const currentPrevioForecast=Array.isArray(_state.data.previo?.[currentMonthKey]) ? calcPrevioForecast(currentMonthKey) : null;
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -5909,6 +5911,14 @@ function buildOblozenieLive(){
           <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">RevPAR</div>
             <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
+          </div>
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Dotychczas w miesiącu</div>
+            <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentPrevioForecast?fmt(currentPrevioForecast.earned)+' zł':'—'}</div>
+          </div>
+          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
+            <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentPrevioForecast?fmt(currentPrevioForecast.forecastTotal)+' zł':'—'}</div>
           </div>
         </div>
       </div>
