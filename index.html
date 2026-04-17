@@ -787,6 +787,8 @@ async function loadKsefData(){
     const sheetPaidDate=String(row[12]||'').trim();
     const sheetPaidAmount=parseMoneyValue(row[13]||'0');
     const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
+    const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||sheetPaidFlag==='OPLACONA';
+    const sheetPartial=sheetPaidFlag==='CZESCIOWO'||sheetPaidFlag==='CZĘŚCIOWO';
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
 
     let status='missing';
@@ -824,8 +826,12 @@ async function loadKsefData(){
       paymentState:'none',
       autoPaidAtPurchase,
     };
-    const sheetEntry=(!manualPaid && (sheetPaidAmount>0 || sheetPaidDate))
-      ? {paidDate:sheetPaidDate,paidAmount:sheetPaidAmount || Math.max(brutto-sheetRemainingAmount,0),updatedAt:''}
+    const sheetEntry=(!manualPaid && (sheetPaid || sheetPartial || sheetPaidAmount>0 || sheetPaidDate || sheetRemainingAmount>0))
+      ? {
+          paidDate:sheetPaidDate,
+          paidAmount:sheetPaidAmount || (sheetPartial ? Math.max(brutto-sheetRemainingAmount,0) : (sheetPaid ? brutto : Math.max(brutto-sheetRemainingAmount,0))),
+          updatedAt:''
+        }
       : null;
     applyKsefPaymentState(baseItem,manualPaid||sheetEntry);
     return baseItem;
