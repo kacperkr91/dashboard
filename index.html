@@ -1582,11 +1582,6 @@ function dateKey(d){
   return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function monthKeyFromDateStr(str){
-  const d=parseDateDMY(str);
-  return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'';
-}
-
 const fmt=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 const fmtN=n=>new Intl.NumberFormat('pl-PL',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
 const parseMoneyValue=value=>{
@@ -2818,7 +2813,7 @@ function buildPrevioView(){
   if(!rows.length)return monthNav+`<div class="empty-section"><div class="empty-icon">📋</div><p>Brak danych dla ${activeMonth?.label||monthKey}</p></div>`;
 
   // Filter to only rows whose dataDo belongs to this month
-  const active=rows.filter(r=>!r.cancelled&&monthKeyFromDateStr(r.dataDo)===monthKey);
+  const active=rows.filter(r=>!r.cancelled&&(r.dataDo||'').slice(0,7)===monthKey);
 
   // KPIs
   const totalCena=active.reduce((s,r)=>s+r.cena,0);
@@ -2863,9 +2858,9 @@ function buildPrevioView(){
   // Group by dataDo — only show dates belonging to this month
   const byDate={};const dateOrder=[];
   rows.forEach(r=>{
-    const parsed=parseDateDMY(r.dataDo);
-    if(!parsed||monthKeyFromDateStr(r.dataDo)!==monthKey)return;
-    const d=dateKey(parsed);
+    const d=(r.dataDo||'—').slice(0,10);
+    // Only include if dataDo belongs to monthKey (YYYY-MM)
+    if(!d.startsWith(monthKey))return;
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
@@ -7186,4 +7181,7 @@ function generateHKMessage(){
       <button onclick="this.closest('.hk-modal').remove()" style="background:var(--bg);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif">Zamknij</button>
     </div>
   </div>`;
-  document.body.appendChild(mod
+  document.body.appendChild(modal);
+  document.getElementById('hkMsgBox').value=msg;
+  document.getElementById('hkCopyBtn').onclick=function(){
+    navigator.clipboard.writeTe
