@@ -1003,6 +1003,37 @@ let HK_MONTHS=[
 
 const MONTH_NAMES_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
 const MONTH_SHORT_PL=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+const WEATHER_LOCATION={name:'Kraków', latitude:50.0614, longitude:19.9366, timezone:'Europe/Warsaw'};
+const WEATHER_CODE_MAP={
+  0:{label:'Bezchmurnie',icon:'☀️'},
+  1:{label:'Przeważnie słonecznie',icon:'🌤️'},
+  2:{label:'Częściowe zachmurzenie',icon:'⛅'},
+  3:{label:'Pochmurno',icon:'☁️'},
+  45:{label:'Mgła',icon:'🌫️'},
+  48:{label:'Szadź i mgła',icon:'🌫️'},
+  51:{label:'Lekka mżawka',icon:'🌦️'},
+  53:{label:'Mżawka',icon:'🌦️'},
+  55:{label:'Silna mżawka',icon:'🌧️'},
+  56:{label:'Marznąca mżawka',icon:'🌧️'},
+  57:{label:'Silna marznąca mżawka',icon:'🌧️'},
+  61:{label:'Lekki deszcz',icon:'🌦️'},
+  63:{label:'Deszcz',icon:'🌧️'},
+  65:{label:'Ulewa',icon:'🌧️'},
+  66:{label:'Marznący deszcz',icon:'🌧️'},
+  67:{label:'Silny marznący deszcz',icon:'🌧️'},
+  71:{label:'Lekki śnieg',icon:'🌨️'},
+  73:{label:'Śnieg',icon:'🌨️'},
+  75:{label:'Silny śnieg',icon:'❄️'},
+  77:{label:'Śnieg ziarnisty',icon:'❄️'},
+  80:{label:'Przelotny deszcz',icon:'🌦️'},
+  81:{label:'Mocny deszcz',icon:'🌧️'},
+  82:{label:'Bardzo mocny deszcz',icon:'⛈️'},
+  85:{label:'Przelotny śnieg',icon:'🌨️'},
+  86:{label:'Silny śnieg',icon:'❄️'},
+  95:{label:'Burza',icon:'⛈️'},
+  96:{label:'Burza z gradem',icon:'⛈️'},
+  99:{label:'Silna burza z gradem',icon:'⛈️'},
+};
 
 function buildMonthList(sheetNames){
   // Szuka zakładek w formacie YYYY-MM
@@ -1645,6 +1676,7 @@ let _state={
   oblozenieDzien:'dzis',
   oblozenieFiltry:'wszystkie',
   oblozenieTelefony:false,
+  weatherLoading:false,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
   rentalYear:2026,
   rentalMonth:(()=>{
@@ -1657,7 +1689,7 @@ let _state={
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, ksef:null
+    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, ksef:null, weather:null
   }
 };
 let _charts={};
@@ -5500,6 +5532,55 @@ function normalizePhoneNumber(phone){
   return '+'+cleaned;
 }
 
+function getWeatherMeta(code){
+  return WEATHER_CODE_MAP[Number(code)]||{label:'Warunki zmienne',icon:'🌤️'};
+}
+
+async function loadStartWeather(force=false){
+  const cached=_state.data.weather;
+  const freshMs=45*60*1000;
+  if(!force&&cached&&cached.loadedAt&&(Date.now()-cached.loadedAt)<freshMs)return cached;
+  if(_state.weatherLoading)return cached||null;
+  _state.weatherLoading=true;
+  try{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),6000);
+    const params=new URLSearchParams({
+      latitude:String(WEATHER_LOCATION.latitude),
+      longitude:String(WEATHER_LOCATION.longitude),
+      daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      timezone:WEATHER_LOCATION.timezone,
+      forecast_days:'2',
+    });
+    const res=await fetch(`https://api.open-meteo.com/v1/forecast?${params}`,{signal:controller.signal});
+    clearTimeout(timeout);
+    if(!res.ok)throw new Error(`WEATHER_HTTP_${res.status}`);
+    const data=await res.json();
+    const times=data?.daily?.time||[];
+    const codes=data?.daily?.weather_code||[];
+    const maxes=data?.daily?.temperature_2m_max||[];
+    const mins=data?.daily?.temperature_2m_min||[];
+    const rain=data?.daily?.precipitation_probability_max||[];
+    const days=times.slice(0,2).map((date,idx)=>({
+      date,
+      code:Number(codes[idx]??-1),
+      max:Number(maxes[idx]??NaN),
+      min:Number(mins[idx]??NaN),
+      rain:Number(rain[idx]??0),
+      ...getWeatherMeta(codes[idx]),
+    }));
+    _state.data.weather={loadedAt:Date.now(),days,location:WEATHER_LOCATION.name};
+    return _state.data.weather;
+  }catch(err){
+    console.warn('loadStartWeather failed:',err);
+    _state.data.weather={loadedAt:Date.now(),days:[],location:WEATHER_LOCATION.name,error:err?.message||'WEATHER_ERROR'};
+    return _state.data.weather;
+  }finally{
+    _state.weatherLoading=false;
+    if(_state.section==='oblozenie')renderApp();
+  }
+}
+
 function buildGoscieView(){
   // Zbierz dane ze wszystkich miesięcy Previo
   const allRows=[];
@@ -5673,6 +5754,11 @@ function buildOblozenieLive(){
   const todayStr=localDk(today);
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
+  const weatherCache=_state.data.weather;
+  const weatherStale=!weatherCache?.loadedAt||(Date.now()-weatherCache.loadedAt)>45*60*1000;
+  if((!weatherCache||weatherStale)&&!_state.weatherLoading){
+    setTimeout(()=>loadStartWeather(),0);
+  }
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
     ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled && String(r.dataDo||'').slice(0,7)===currentMonthKey)
@@ -5691,6 +5777,39 @@ function buildOblozenieLive(){
   const DOW=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
   const dateLabel=d=>`${d.getDate()} ${MONTHS_PL[d.getMonth()]} (${DOW[d.getDay()]})`;
+  const weatherByDate=Object.fromEntries((weatherCache?.days||[]).map(day=>[day.date,day]));
+  const weatherToday=weatherByDate[todayStr]||weatherCache?.days?.[0]||null;
+  const weatherTomorrow=weatherByDate[tmrStr]||weatherCache?.days?.[1]||null;
+  const weatherCard=(label,day)=>{
+    if(_state.weatherLoading&&!day){
+      return`<div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+        <div style="font-size:16px;font-weight:800;color:var(--text);margin-top:8px">Ładowanie…</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">${WEATHER_LOCATION.name}</div>
+      </div>`;
+    }
+    if(!day){
+      return`<div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+        <div style="font-size:16px;font-weight:800;color:var(--text);margin-top:8px">Brak pogody</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px">${WEATHER_LOCATION.name}</div>
+      </div>`;
+    }
+    const max=Number.isFinite(day.max)?`${Math.round(day.max)}°`:'—';
+    const min=Number.isFinite(day.min)?`${Math.round(day.min)}°`:'—';
+    const rain=Number.isFinite(day.rain)?`${Math.round(day.rain)}% opadów`:'';
+    return`<div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <div style="font-size:24px;line-height:1">${day.icon||'🌤️'}</div>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">${max} / ${min}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${day.label||'Pogoda'}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${rain||WEATHER_LOCATION.name}</div>
+    </div>`;
+  };
 
   // Zbierz wszystkie aktywne rezerwacje z Previo
   const allRows=[];
@@ -5927,6 +6046,8 @@ function buildOblozenieLive(){
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
             <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
           </div>
+          ${weatherCard('Pogoda dziś',weatherToday)}
+          ${weatherCard('Pogoda jutro',weatherTomorrow)}
         </div>
       </div>
     </div>
