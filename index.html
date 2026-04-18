@@ -5549,6 +5549,7 @@ async function loadStartWeather(force=false){
       latitude:String(WEATHER_LOCATION.latitude),
       longitude:String(WEATHER_LOCATION.longitude),
       daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      current:'temperature_2m,weather_code',
       timezone:WEATHER_LOCATION.timezone,
       forecast_days:'2',
     });
@@ -5561,6 +5562,8 @@ async function loadStartWeather(force=false){
     const maxes=data?.daily?.temperature_2m_max||[];
     const mins=data?.daily?.temperature_2m_min||[];
     const rain=data?.daily?.precipitation_probability_max||[];
+    const currentCode=data?.current?.weather_code;
+    const currentMeta=getWeatherMeta(currentCode);
     const days=times.slice(0,2).map((date,idx)=>({
       date,
       code:Number(codes[idx]??-1),
@@ -5569,7 +5572,17 @@ async function loadStartWeather(force=false){
       rain:Number(rain[idx]??0),
       ...getWeatherMeta(codes[idx]),
     }));
-    _state.data.weather={loadedAt:Date.now(),days,location:WEATHER_LOCATION.name};
+    _state.data.weather={
+      loadedAt:Date.now(),
+      days,
+      location:WEATHER_LOCATION.name,
+      current:{
+        temperature:Number(data?.current?.temperature_2m??NaN),
+        code:Number(currentCode??-1),
+        label:currentMeta.label,
+        icon:currentMeta.icon,
+      }
+    };
     return _state.data.weather;
   }catch(err){
     console.warn('loadStartWeather failed:',err);
@@ -5780,7 +5793,7 @@ function buildOblozenieLive(){
   const weatherByDate=Object.fromEntries((weatherCache?.days||[]).map(day=>[day.date,day]));
   const weatherToday=weatherByDate[todayStr]||weatherCache?.days?.[0]||null;
   const weatherTomorrow=weatherByDate[tmrStr]||weatherCache?.days?.[1]||null;
-  const weatherCard=(label,day)=>{
+  const weatherCard=(label,day,mode='daily')=>{
     if(_state.weatherLoading&&!day){
       return`<div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
         <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
@@ -5795,19 +5808,22 @@ function buildOblozenieLive(){
         <div style="font-size:12px;color:var(--text-muted);margin-top:6px">${WEATHER_LOCATION.name}</div>
       </div>`;
     }
-    const max=Number.isFinite(day.max)?`${Math.round(day.max)}°`:'—';
-    const min=Number.isFinite(day.min)?`${Math.round(day.min)}°`:'—';
-    const rain=Number.isFinite(day.rain)?`${Math.round(day.rain)}% opadów`:'';
+    const primary=mode==='current'
+      ? (Number.isFinite(day.temperature)?`${Math.round(day.temperature)}°`:'—')
+      : `${Number.isFinite(day.max)?`${Math.round(day.max)}°`:'—'} / ${Number.isFinite(day.min)?`${Math.round(day.min)}°`:'—'}`;
+    const subline=mode==='current'
+      ? 'Aktualnie w mieście'
+      : (Number.isFinite(day.rain)?`${Math.round(day.rain)}% opadów`:'Prognoza dzienna');
     return`<div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
       <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
         <div style="font-size:24px;line-height:1">${day.icon||'🌤️'}</div>
         <div>
-          <div style="font-size:16px;font-weight:800;color:var(--text)">${max} / ${min}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">${primary}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${day.label||'Pogoda'}</div>
         </div>
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${rain||WEATHER_LOCATION.name}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${subline}</div>
     </div>`;
   };
 
@@ -6046,8 +6062,8 @@ function buildOblozenieLive(){
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
             <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
           </div>
-          ${weatherCard('Pogoda dziś',weatherToday)}
-          ${weatherCard('Pogoda jutro',weatherTomorrow)}
+          ${weatherCard('Teraz w Krakowie',weatherCache?.current||null,'current')}
+          ${weatherCard('Jutro',weatherTomorrow,'daily')}
         </div>
       </div>
     </div>
@@ -7168,23 +7184,4 @@ function generateHKMessage(){
   document.body.appendChild(modal);
   document.getElementById('hkMsgBox').value=msg;
   document.getElementById('hkCopyBtn').onclick=function(){
-    navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
-      setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
-    });
-  };
-}
-
-
-
-
-window.addEventListener('load',()=>{
-  if(typeof Chart==='undefined'){
-    console.warn('Chart.js not available');
-    window.Chart=function(){return{destroy:()=>{},update:()=>{}};};window.Chart.register=()=>{};
-  }
-  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());}else{init();}
-});
-</script>
-</body>
-</html>
+    navigator.clipboard.writeTe
