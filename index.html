@@ -7184,4 +7184,22 @@ function generateHKMessage(){
   document.getElementById('hkMsgBox').value=msg;
   document.getElementById('hkCopyBtn').onclick=function(){
     navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-     
+      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
+      setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
+    });
+  };
+}
+
+
+
+
+window.addEventListener('load',()=>{
+  if(typeof Chart==='undefined'){
+    console.warn('Chart.js not available');
+    window.Chart=function(){return{destroy:()=>{},update:()=>{}};};window.Chart.register=()=>{};
+  }
+  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());}else{init();}
+});
+</script>
+</body>
+</html>
