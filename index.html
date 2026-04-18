@@ -404,7 +404,6 @@
 </head>
 <body>
 <div class="app" id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 /* CONFIG */
 const CONFIG={
@@ -7184,4 +7183,5 @@ function generateHKMessage(){
   document.body.appendChild(modal);
   document.getElementById('hkMsgBox').value=msg;
   document.getElementById('hkCopyBtn').onclick=function(){
-    navigator.clipboard.writeTe
+    navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
+     
