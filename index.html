@@ -573,6 +573,45 @@ async function fetchSheetNames(id,key){
   return d.sheets.map(s=>s.properties.title);
 }
 
+function normalizeSheetTitle(title){
+  return String(title||'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g,'');
+}
+
+function resolvePrevioMonthSheetName(monthKey, sheetNames){
+  const meta=PREVIO_MONTHS.find(m=>m.key===monthKey);
+  const [year,month]=monthKey.split('-');
+  const monthNum=String(parseInt(month,10));
+  const candidates=[
+    monthKey,
+    meta?.label,
+    meta?.short,
+    `${month}.${year}`,
+    `${month}/${year}`,
+    `${month}-${year}`,
+    `${monthNum}.${year}`,
+    `${monthNum}/${year}`,
+    `${monthNum}-${year}`,
+    `${year}-${monthNum}`,
+    `${year}/${month}`,
+    `${year}.${month}`,
+  ].filter(Boolean);
+  const normalizedCandidates=[...new Set(candidates.map(normalizeSheetTitle).filter(Boolean))];
+
+  for(const name of sheetNames){
+    const norm=normalizeSheetTitle(name);
+    if(normalizedCandidates.includes(norm))return name;
+  }
+  for(const name of sheetNames){
+    const norm=normalizeSheetTitle(name);
+    if(normalizedCandidates.some(c=>norm.includes(c)||c.includes(norm)))return name;
+  }
+  return '';
+}
+
 /* DATA LOADERS */
 async function loadMarchData(){
   const{apiKey,spreadsheetId,dayTabRegex}=CONFIG;
@@ -1194,6 +1233,7 @@ async function loadPrevioMonth(monthKey){
   const{previoApiKey,previoSpreadsheetId,previoSheet,previoStartRow,previoEndRow}=CONFIG;
   const apiKey=previoApiKey||CONFIG.apiKey; // fallback to main API key
   if(!apiKey||!previoSpreadsheetId)throw new Error('MISSING_PREVIO_CONFIG');
+  const allSheetNames=await fetchSheetNames(previoSpreadsheetId,apiKey);
 
   const buildPrevioRows=(vr, mode='monthly')=>{
     const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').replace(/^'/,'').trim();
@@ -1240,17 +1280,20 @@ async function loadPrevioMonth(monthKey){
   const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N'];
 
   // First try: dedicated monthly sheet like "2025-03"
-  try{
+  const monthlySheetName=resolvePrevioMonthSheetName(monthKey, allSheetNames);
+  if(monthlySheetName){
+    try{
     const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
-    columns.forEach(c=>params.append('ranges',`'${monthKey}'!${c}${previoStartRow}:${c}`));
+    columns.forEach(c=>params.append('ranges',`'${monthlySheetName}'!${c}${previoStartRow}:${c}`));
     const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
     const rows=buildPrevioRows(data.valueRanges||[], 'monthly');
     if(rows.length){
-      console.log(`Previo ${monthKey}: ${rows.length} records from monthly sheet ${monthKey}`);
+      console.log(`Previo ${monthKey}: ${rows.length} records from monthly sheet ${monthlySheetName}`);
       return rows;
     }
-  }catch(err){
-    console.warn(`Previo monthly sheet ${monthKey} unavailable:`, err?.message||err);
+    }catch(err){
+      console.warn(`Previo monthly sheet ${monthlySheetName} unavailable:`, err?.message||err);
+    }
   }
 
   // Fallback: old combined "Previo" sheet filtered by checkout month
