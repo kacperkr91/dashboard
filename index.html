@@ -1195,13 +1195,68 @@ async function loadPrevioMonth(monthKey){
   const apiKey=previoApiKey||CONFIG.apiKey; // fallback to main API key
   if(!apiKey||!previoSpreadsheetId)throw new Error('MISSING_PREVIO_CONFIG');
 
-  // Cols: A=resId, B=voucher, C=dataRez, D=dataOd, E=dataDo, F=noce, G=apt, H=kanal, I=cena, J=waluta, K=status, L=gosc, M=kraj, N=telefon
-  // Step 1: fetch only dataDo column (E) to find rows for this month
+  const buildPrevioRows=(vr, mode='monthly')=>{
+    const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').replace(/^'/,'').trim();
+    const n=(i,j)=>parseFloat(String(vr[i]?.values?.[j]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const maxLen=Math.max(...vr.map(r=>r.values?.length||0),0);
+    const rows=[];
+    for(let i=0;i<maxLen;i++){
+      const dataDo=v(4,i).replace(/^'/,'').trim();
+      if(!dataDo)continue;
+      const parsedDo=parseDateDMY(dataDo);
+      const dataDoMonth=parsedDo?`${parsedDo.getFullYear()}-${String(parsedDo.getMonth()+1).padStart(2,'0')}`:'';
+      if(mode==='master' && dataDoMonth!==monthKey)continue;
+      const apt=v(6,i);
+      if(!apt)continue;
+      const statusId=v(9,i);
+      const cancelled=statusId==='3'||statusId==='4';
+      rows.push({
+        resId:   v(0,i),
+        voucher: v(1,i),
+        dataRez: v(2,i),
+        dataOd:  v(3,i),
+        dataDo,
+        godzinaOd:  v(3,i).length>10?v(3,i).slice(11,16):'',
+        godzinaDo:  dataDo.length>10?dataDo.slice(11,16):'',
+        noce:    parseInt(v(5,i))||0,
+        apt,
+        kanal:   v(7,i),
+        cena:    (()=>{
+          const kanal=v(7,i);
+          const cenaNetto=n(8,i);
+          return kanal.toLowerCase().includes('airbnb')?Math.round(cenaNetto/0.845*100)/100:cenaNetto;
+        })(),
+        cenaNetto: v(7,i).toLowerCase().includes('airbnb')?n(8,i):null,
+        status:  statusId,
+        gosc:    v(10,i),
+        kraj:    v(11,i),
+        telefon: normalizePhoneNumber(v(12,i)),
+        cancelled,
+      });
+    }
+    return rows;
+  };
+
+  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N'];
+
+  // First try: dedicated monthly sheet like "2025-03"
+  try{
+    const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
+    columns.forEach(c=>params.append('ranges',`'${monthKey}'!${c}${previoStartRow}:${c}`));
+    const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
+    const rows=buildPrevioRows(data.valueRanges||[], 'monthly');
+    if(rows.length){
+      console.log(`Previo ${monthKey}: ${rows.length} records from monthly sheet ${monthKey}`);
+      return rows;
+    }
+  }catch(err){
+    console.warn(`Previo monthly sheet ${monthKey} unavailable:`, err?.message||err);
+  }
+
+  // Fallback: old combined "Previo" sheet filtered by checkout month
   const encE=encodeURIComponent(`'${previoSheet}'!E${previoStartRow}:E`);
   const dateData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values/${encE}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`);
   const dateValsAll=dateData.values||[];
-  
-  // Find row indices for this month
   const matchingRows=[];
   dateValsAll.forEach((row,i)=>{
     const raw=String(row[0]||'').replace(/^'/,'').trim();
@@ -1210,61 +1265,16 @@ async function loadPrevioMonth(monthKey){
     const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if(dk===monthKey)matchingRows.push(i);
   });
-  
   if(!matchingRows.length)throw new Error('NO_PREVIO_DATA');
-  
+
   const firstRow=matchingRows[0]+previoStartRow;
   const lastRow=matchingRows[matchingRows.length-1]+previoStartRow;
-  console.log(`Previo ${monthKey}: rows ${firstRow}-${lastRow} (${matchingRows.length} records)`);
-  
-  // Step 2: fetch only those rows
+  console.log(`Previo ${monthKey}: rows ${firstRow}-${lastRow} (${matchingRows.length} records) from master sheet`);
+
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
-  ['A','B','C','D','E','F','G','H','I','K','L','M','N'].forEach(c=>
-    params.append('ranges',`'${previoSheet}'!${c}${firstRow}:${c}${lastRow}`)
-  );
+  columns.forEach(c=>params.append('ranges',`'${previoSheet}'!${c}${firstRow}:${c}${lastRow}`));
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values:batchGet?${params}`);
-  const vr=data.valueRanges;
-  const v=(i,j)=>String(vr[i]?.values?.[j]?.[0]||'').replace(/^'/,'').trim();
-  const n=(i,j)=>parseFloat(String(vr[i]?.values?.[j]?.[0]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-  const maxLen=Math.max(...vr.map(r=>r.values?.length||0));
-
-  const result=[];
-  for(let i=0;i<maxLen;i++){
-    const dataDo=v(4,i).replace(/^'/,'').trim();  // E=dataDo
-    if(!dataDo)continue;
-
-    const apt=v(6,i);   // G=apartament
-    if(!apt)continue;
-
-    const statusId=v(9,i); // K=status (2=confirmed, 3=cancelled)
-    const cancelled=statusId==='3'||statusId==='4';
-
-    result.push({
-      resId:   v(0,i),
-      voucher: v(1,i),
-      dataRez: v(2,i),
-      dataOd:  v(3,i),   // może zawierać godzinę np. "2026-04-06 16:00"
-      dataDo,            // może zawierać godzinę np. "2026-04-10 10:00"
-      godzinaOd:  v(3,i).length>10?v(3,i).slice(11,16):'',  // HH:MM zameldowania
-      godzinaDo:  (()=>{const s=dataDo;return s.length>10?s.slice(11,16):'';})(),
-      noce:    parseInt(v(5,i))||0,
-      apt,
-      kanal:   v(7,i),   // H=kanal
-      cena:    (()=>{
-        const kanal=v(7,i);
-        const cenaNetto=n(8,i);
-        // Airbnb w Previo pokazuje cenę netto bez prowizji 15.5%
-        // Przeliczamy na brutto: netto / (1 - 0.155)
-        return kanal.toLowerCase().includes('airbnb')?Math.round(cenaNetto/0.845*100)/100:cenaNetto;
-      })(),
-      cenaNetto: v(7,i).toLowerCase().includes('airbnb')?n(8,i):null,
-      status:  statusId,
-      gosc:    v(10,i),   // L=gosc
-      kraj:    v(11,i),   // M=kraj
-      telefon: normalizePhoneNumber(v(12,i)), // N=telefon
-      cancelled,
-    });
-  }
+  const result=buildPrevioRows(data.valueRanges||[], 'master');
   if(!result.length)throw new Error('NO_PREVIO_DATA');
   return result;
 }
@@ -1561,7 +1571,7 @@ function getPolishHolidays(year){
 }
 
 function parseDateDMY(str){
-  // Accepts: "01.03.2026", "1.3.2026", "2026-03-01", "2026-03-01 00:00:00", "01/03/2026"
+  // Accepts: "01.03.2026", "1.3.2026", "2026-03-01", "2026-03-01 00:00:00", "01/03/2026", "3/14/2025"
   if(!str)return null;
   const s=String(str).trim().split(' ')[0]; // strip time part
   // YYYY-MM-DD
@@ -1570,9 +1580,16 @@ function parseDateDMY(str){
   // DD.MM.YYYY or D.M.YYYY
   m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  // DD/MM/YYYY
+  // Slash dates can come as DD/MM/YYYY or MM/DD/YYYY depending on sheet locale.
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+  if(m){
+    const a=parseInt(m[1],10);
+    const b=parseInt(m[2],10);
+    const y=parseInt(m[3],10);
+    if(a>12&&b<=12)return new Date(y,b-1,a); // definitely DD/MM
+    if(b>12&&a<=12)return new Date(y,a-1,b); // definitely MM/DD
+    return new Date(y,a-1,b); // default slash format to MM/DD for imported historical tabs
+  }
   return null;
 }
 
