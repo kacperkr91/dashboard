@@ -442,7 +442,7 @@ const CONFIG={
   previoSpreadsheetId: '1R1QNqx7LWaeTLuy2QXe2q1nAfUcMUSwqBmRa2Fhje68',
   previoSheet:         'Previo',
   previoStartRow:      2,
-  previoEndRow:        10000,
+  previoEndRow:        50000,
 };
 
 /* NAVIGATION STRUCTURE - Easily extendable, add months here as data arrives */
@@ -1197,7 +1197,7 @@ async function loadPrevioMonth(monthKey){
 
   // Cols: A=resId, B=voucher, C=dataRez, D=dataOd, E=dataDo, F=noce, G=apt, H=kanal, I=cena, J=waluta, K=status, L=gosc, M=kraj, N=telefon
   // Step 1: fetch only dataDo column (E) to find rows for this month
-  const encE=encodeURIComponent(`'${previoSheet}'!E${previoStartRow}:E${previoEndRow}`);
+  const encE=encodeURIComponent(`'${previoSheet}'!E${previoStartRow}:E`);
   const dateData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${previoSpreadsheetId}/values/${encE}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`);
   const dateValsAll=dateData.values||[];
   
