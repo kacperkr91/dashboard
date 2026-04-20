@@ -1271,13 +1271,22 @@ async function loadPrevioMonth(monthKey){
         gosc:    v(10,i),
         kraj:    v(11,i),
         telefon: normalizePhoneNumber(v(12,i)),
+        fakturaStatus: v(13,i),
+        firmaFaktura: v(14,i),
+        nipFaktura: v(15,i),
+        zrodloFaktura: v(16,i),
+        wiadomoscFaktura: v(17,i),
+        lozeczko: v(18,i),
+        krzeselko: v(19,i),
+        prosbyZrodlo: v(20,i),
+        prosbyWiadomosc: v(21,i),
         cancelled,
       });
     }
     return rows;
   };
 
-  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N'];
+  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N','Q','R','S','T','U','V','W','X','Y'];
 
   // First try: dedicated monthly sheet like "2025-03"
   const monthlySheetName=resolvePrevioMonthSheetName(monthKey, allSheetNames);
@@ -3006,6 +3015,8 @@ function openPrevioDrawer(date){
         <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}</span>
       </div>
       ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
+      ${renderPrevioInvoiceBadge(r)}
+      ${renderPrevioGuestRequestBadge(r)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
         ${!r.cancelled?`<button onclick="notaFromPrevioId('${r.voucher||r.resId}')" data-gosc="${(r.gosc||'').replace(/"/g,'')}" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
@@ -5591,6 +5602,103 @@ function normalizePhoneNumber(phone){
   return '+'+cleaned;
 }
 
+function escapeHtml(value){
+  return String(value||'').replace(/[&<>"']/g,ch=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;',
+  }[ch]));
+}
+
+function getPrevioInvoiceState(r){
+  const status=String(r?.fakturaStatus||'').trim();
+  const norm=status.toLowerCase();
+  const nip=String(r?.nipFaktura||'').replace(/\D/g,'');
+  const company=String(r?.firmaFaktura||'').trim();
+  const source=String(r?.zrodloFaktura||'').trim();
+  const message=String(r?.wiadomoscFaktura||'').trim();
+  const hasInvoiceInfo=!!(status||nip||company||source||message);
+  if(!hasInvoiceInfo){
+    return {show:false,status:'',label:'',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
+  }
+  if(norm.startsWith('nie')){
+    return {show:true,status,label:'Faktura: NIE',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
+  }
+  if(nip){
+    return {show:true,status,label:'Faktura: TAK',color:'#047857',bg:'#ecfdf5',border:'#a7f3d0',nip};
+  }
+  const needsNip=norm.includes('brak')||norm.includes('wymaga')||company||source||message;
+  return {show:true,status,label:needsNip?'Faktura: brak NIP':'Faktura: TAK',color:'#b45309',bg:'#fffbeb',border:'#fde68a',nip};
+}
+
+function renderPrevioInvoiceBadge(r,compact=false){
+  const inv=getPrevioInvoiceState(r);
+  if(!inv.show)return'';
+  const company=escapeHtml(r?.firmaFaktura||'');
+  const source=escapeHtml(r?.zrodloFaktura||'');
+  const nip=inv.nip;
+  return`<div style="margin-top:${compact?'6px':'8px'};background:${inv.bg};border:1px solid ${inv.border};border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;background:#fff;color:${inv.color};border:1px solid ${inv.border};font-size:${compact?'9px':'10px'};font-weight:800;padding:2px 7px;border-radius:999px">${inv.label}</span>
+      ${nip?`<button onclick="copyTextToClipboard('${nip}',this)" title="Kopiuj NIP" style="border:1px solid ${inv.border};background:#fff;color:${inv.color};border-radius:999px;padding:2px 7px;font-size:${compact?'9px':'10px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">NIP ${nip} · kopiuj</button>`:''}
+    </div>
+    ${company||source?`<div style="font-size:${compact?'10px':'11px'};color:var(--text-muted);margin-top:4px;line-height:1.35">${company?`<strong style="color:var(--text-mid)">${company}</strong>`:''}${company&&source?' · ':''}${source}</div>`:''}
+  </div>`;
+}
+
+function getPrevioGuestRequests(r){
+  const norm=value=>String(value||'').trim().toUpperCase();
+  const crib=norm(r?.lozeczko)==='TAK';
+  const chair=norm(r?.krzeselko)==='TAK';
+  return{
+    show:crib||chair,
+    crib,
+    chair,
+    source:String(r?.prosbyZrodlo||'').trim(),
+    message:String(r?.prosbyWiadomosc||'').trim(),
+  };
+}
+
+function renderPrevioGuestRequestBadge(r,compact=false){
+  const req=getPrevioGuestRequests(r);
+  if(!req.show)return'';
+  const source=escapeHtml(req.source);
+  const message=escapeHtml(req.message);
+  const chips=[
+    req.crib?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Łóżeczko</span>':'',
+    req.chair?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Krzesełko</span>':'',
+  ].filter(Boolean).join('');
+  return`<div style="margin-top:${compact?'6px':'8px'};background:#f0f9ff;border:1px solid #bae6fd;border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:${compact?'10px':'11px'};font-weight:800;color:#0369a1">Prośba gościa</span>
+      ${chips}
+    </div>
+    ${message?`<div title="${message}" style="font-size:${compact?'10px':'11px'};color:var(--text-mid);margin-top:4px;line-height:1.35;max-height:${compact?'42px':'56px'};overflow:hidden">${message}</div>`:''}
+    ${source?`<div style="font-size:${compact?'9px':'10px'};color:var(--text-muted);margin-top:4px;line-height:1.25">${source}</div>`:''}
+  </div>`;
+}
+
+function copyTextToClipboard(text,btn){
+  const value=String(text||'').trim();
+  if(!value)return;
+  const done=()=>{
+    if(btn){
+      const old=btn.textContent;
+      btn.textContent='Skopiowano';
+      setTimeout(()=>{btn.textContent=old;},1200);
+    }
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(value).then(done).catch(()=>{
+      window.prompt('Skopiuj:',value);
+    });
+  }else{
+    window.prompt('Skopiuj:',value);
+  }
+}
+
 function getWeatherMeta(code){
   return WEATHER_CODE_MAP[Number(code)]||{label:'Warunki zmienne',icon:'🌤️'};
 }
@@ -6016,6 +6124,8 @@ function buildOblozenieLive(){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
+      ${renderPrevioInvoiceBadge(r,true)}
+      ${renderPrevioGuestRequestBadge(r,true)}
       <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
         <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy</span>
