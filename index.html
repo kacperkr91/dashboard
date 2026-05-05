@@ -918,34 +918,6 @@ function getPolishHolidays(year){
   return new Set([...fixed,...movable]);
 }
 
-function getPolishHolidayMap(year){
-  const easter=easterDate(year);
-  const addDays=(d,n)=>new Date(d.getTime()+n*86400000);
-  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  return{
-    [`${year}-01-01`]:'Nowy Rok',
-    [`${year}-01-06`]:'Trzech Króli',
-    [`${year}-05-01`]:'Święto Pracy',
-    [`${year}-05-03`]:'Święto Konstytucji 3 Maja',
-    [`${year}-08-15`]:'Wniebowzięcie NMP',
-    [`${year}-11-01`]:'Wszystkich Świętych',
-    [`${year}-11-11`]:'Święto Niepodległości',
-    [`${year}-12-25`]:'Boże Narodzenie',
-    [`${year}-12-26`]:'Boże Narodzenie (2. dzień)',
-    [key(easter)]:'Wielkanoc',
-    [key(addDays(easter,1))]:'Poniedziałek Wielkanocny',
-    [key(addDays(easter,49))]:'Zielone Świątki',
-    [key(addDays(easter,60))]:'Boże Ciało',
-  };
-}
-
-function getHolidayNameForDate(dateStr){
-  const dateObj=parseDateDMY(dateStr);
-  if(!dateObj||isNaN(dateObj))return'';
-  const holidays=getPolishHolidayMap(dateObj.getFullYear());
-  return holidays[dateKey(dateObj)]||'';
-}
-
 
 function parseDatePL(str){
   // handles formats: DD.MM.YYYY, D.M.YYYY, YYYY-MM-DD
@@ -1299,23 +1271,13 @@ async function loadPrevioMonth(monthKey){
         gosc:    v(10,i),
         kraj:    v(11,i),
         telefon: normalizePhoneNumber(v(12,i)),
-        fakturaStatus: v(13,i),
-        firmaFaktura: v(14,i),
-        nipFaktura: v(15,i),
-        zrodloFaktura: v(16,i),
-        wiadomoscFaktura: v(17,i),
-        lozeczko: v(18,i),
-        krzeselko: v(19,i),
-        prosbyZrodlo: v(20,i),
-        prosbyWiadomosc: v(21,i),
-        osoby: parseInt(v(22,i),10)||0,
         cancelled,
       });
     }
     return rows;
   };
 
-  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N','Q','R','S','T','U','V','W','X','Y','Z'];
+  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N'];
 
   // First try: dedicated monthly sheet like "2025-03"
   const monthlySheetName=resolvePrevioMonthSheetName(monthKey, allSheetNames);
@@ -3041,11 +3003,9 @@ function openPrevioDrawer(date){
         ${badge}
         ${r.cancelled?'<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px">ANULOWANA</span>':''}
         <span style="font-size:11px;color:var(--text-muted)">${r.dataOd} → ${r.dataDo}</span>
-        <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}${r.osoby?` · ${r.osoby} os.`:''}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}</span>
       </div>
       ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
-      ${renderPrevioInvoiceBadge(r)}
-      ${renderPrevioGuestRequestBadge(r)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
         ${!r.cancelled?`<button onclick="notaFromPrevioId('${r.voucher||r.resId}')" data-gosc="${(r.gosc||'').replace(/"/g,'')}" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
@@ -3185,7 +3145,6 @@ function buildPayoutView(){
 
 function buildBookingPayoutView(){
   const state=_state;
-  ensurePrevioWindowLoaded(new Date());
   // Collect all Booking.com reservations from all loaded Previo months
   const allBooking=[];
   Object.values(state.data.previo).forEach(rows=>{
@@ -4031,6 +3990,11 @@ function exportHkPdf(monthKey, monthLabel){
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
+  // precompute holidays for PDF
+  const pdfYears=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
+  const pdfHols={};
+  pdfYears.forEach(y=>Object.assign(pdfHols,getPolishHolidays(y)));
+
   const allCleanRows=dateOrder.map(date=>{
     const dayRows=byDate[date];
     const dayActive=dayRows.filter(r=>!r.cancelled);
@@ -4039,7 +4003,7 @@ function exportHkPdf(monthKey, monthLabel){
     const dk=dateObj?dateKey(dateObj):'';
     const dow=dateObj?dateObj.getDay():-1;
     const isSun=dow===0;
-    const holName=getHolidayNameForDate(date);
+    const holName=pdfHols[dk]||'';
     const isRed=isSun||!!holName;
     const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
     const rowBg=isRed?'#fff1f2':'';
@@ -5627,103 +5591,6 @@ function normalizePhoneNumber(phone){
   return '+'+cleaned;
 }
 
-function escapeHtml(value){
-  return String(value||'').replace(/[&<>"']/g,ch=>({
-    '&':'&amp;',
-    '<':'&lt;',
-    '>':'&gt;',
-    '"':'&quot;',
-    "'":'&#39;',
-  }[ch]));
-}
-
-function getPrevioInvoiceState(r){
-  const status=String(r?.fakturaStatus||'').trim();
-  const norm=status.toLowerCase();
-  const nip=String(r?.nipFaktura||'').replace(/\D/g,'');
-  const company=String(r?.firmaFaktura||'').trim();
-  const source=String(r?.zrodloFaktura||'').trim();
-  const message=String(r?.wiadomoscFaktura||'').trim();
-  const hasInvoiceInfo=!!(status||nip||company||source||message);
-  if(!hasInvoiceInfo){
-    return {show:false,status:'',label:'',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
-  }
-  if(norm.startsWith('nie')){
-    return {show:true,status,label:'Faktura: NIE',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
-  }
-  if(nip){
-    return {show:true,status,label:'Faktura: TAK',color:'#047857',bg:'#ecfdf5',border:'#a7f3d0',nip};
-  }
-  const needsNip=norm.includes('brak')||norm.includes('wymaga')||company||source||message;
-  return {show:true,status,label:needsNip?'Faktura: brak NIP':'Faktura: TAK',color:'#b45309',bg:'#fffbeb',border:'#fde68a',nip};
-}
-
-function renderPrevioInvoiceBadge(r,compact=false){
-  const inv=getPrevioInvoiceState(r);
-  if(!inv.show)return'';
-  const company=escapeHtml(r?.firmaFaktura||'');
-  const source=escapeHtml(r?.zrodloFaktura||'');
-  const nip=inv.nip;
-  return`<div style="margin-top:${compact?'6px':'8px'};background:${inv.bg};border:1px solid ${inv.border};border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;background:#fff;color:${inv.color};border:1px solid ${inv.border};font-size:${compact?'9px':'10px'};font-weight:800;padding:2px 7px;border-radius:999px">${inv.label}</span>
-      ${nip?`<button onclick="copyTextToClipboard('${nip}',this)" title="Kopiuj NIP" style="border:1px solid ${inv.border};background:#fff;color:${inv.color};border-radius:999px;padding:2px 7px;font-size:${compact?'9px':'10px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">NIP ${nip} · kopiuj</button>`:''}
-    </div>
-    ${company||source?`<div style="font-size:${compact?'10px':'11px'};color:var(--text-muted);margin-top:4px;line-height:1.35">${company?`<strong style="color:var(--text-mid)">${company}</strong>`:''}${company&&source?' · ':''}${source}</div>`:''}
-  </div>`;
-}
-
-function getPrevioGuestRequests(r){
-  const norm=value=>String(value||'').trim().toUpperCase();
-  const crib=norm(r?.lozeczko)==='TAK';
-  const chair=norm(r?.krzeselko)==='TAK';
-  return{
-    show:crib||chair,
-    crib,
-    chair,
-    source:String(r?.prosbyZrodlo||'').trim(),
-    message:String(r?.prosbyWiadomosc||'').trim(),
-  };
-}
-
-function renderPrevioGuestRequestBadge(r,compact=false){
-  const req=getPrevioGuestRequests(r);
-  if(!req.show)return'';
-  const source=escapeHtml(req.source);
-  const message=escapeHtml(req.message);
-  const chips=[
-    req.crib?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Łóżeczko</span>':'',
-    req.chair?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Krzesełko</span>':'',
-  ].filter(Boolean).join('');
-  return`<div style="margin-top:${compact?'6px':'8px'};background:#f0f9ff;border:1px solid #bae6fd;border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <span style="font-size:${compact?'10px':'11px'};font-weight:800;color:#0369a1">Prośba gościa</span>
-      ${chips}
-    </div>
-    ${message?`<div title="${message}" style="font-size:${compact?'10px':'11px'};color:var(--text-mid);margin-top:4px;line-height:1.35;max-height:${compact?'42px':'56px'};overflow:hidden">${message}</div>`:''}
-    ${source?`<div style="font-size:${compact?'9px':'10px'};color:var(--text-muted);margin-top:4px;line-height:1.25">${source}</div>`:''}
-  </div>`;
-}
-
-function copyTextToClipboard(text,btn){
-  const value=String(text||'').trim();
-  if(!value)return;
-  const done=()=>{
-    if(btn){
-      const old=btn.textContent;
-      btn.textContent='Skopiowano';
-      setTimeout(()=>{btn.textContent=old;},1200);
-    }
-  };
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(value).then(done).catch(()=>{
-      window.prompt('Skopiuj:',value);
-    });
-  }else{
-    window.prompt('Skopiuj:',value);
-  }
-}
-
 function getWeatherMeta(code){
   return WEATHER_CODE_MAP[Number(code)]||{label:'Warunki zmienne',icon:'🌤️'};
 }
@@ -5954,13 +5821,8 @@ const WYLACZONE_APT=['Orzeszkowej']; // apartamenty których już nie wynajmujem
 const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bronowicka','Plac Szczepański B41','Plac Szczepański C41']; // nie-OTV
 
 function buildOblozenieLive(){
-  ensurePrevioWindowLoaded(new Date());
   const today=new Date();today.setHours(0,0,0,0);
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const normalizePrevioDate=value=>{
-    const parsed=parseDateDMY(String(value||'').trim());
-    return parsed?dateKey(parsed):String(value||'').slice(0,10);
-  };
   const todayStr=localDk(today);
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
@@ -5971,11 +5833,7 @@ function buildOblozenieLive(){
   }
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
-    ? _state.data.previo[currentMonthKey].filter(r=>{
-        if(r.cancelled)return false;
-        const checkout=normalizePrevioDate(r.dataDo||'');
-        return checkout.slice(0,7)===currentMonthKey;
-      })
+    ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled && String(r.dataDo||'').slice(0,7)===currentMonthKey)
     : [];
   const currentMonthEarned=currentMonthRows.reduce((sum,row)=>{
     const checkout=parseDateDMY(row.dataDo||'');
@@ -6056,8 +5914,8 @@ function buildOblozenieLive(){
 
   allRows.forEach(r=>{
     if(!r.dataOd||!r.dataDo)return;
-    const od=normalizePrevioDate(r.dataOd);
-    const doD=normalizePrevioDate(r.dataDo);
+    const od=r.dataOd.slice(0,10);
+    const doD=r.dataDo.slice(0,10);
     // Klonuj obiekt żeby uniknąć mutacji między renderami
     if(doD===targetStr) wymeldowania.push({...r});
     else if(od===targetStr) zameldowania.push({...r});
@@ -6158,11 +6016,9 @@ function buildOblozenieLive(){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
-      ${renderPrevioInvoiceBadge(r,true)}
-      ${renderPrevioGuestRequestBadge(r,true)}
       <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
-        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy${r.osoby?` · ${r.osoby} os.`:''}</span>
+        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy</span>
       </div>
     </div>`;
   };
@@ -6754,6 +6610,11 @@ function exportHkPdf(monthKey, monthLabel){
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
+  // precompute holidays for PDF
+  const pdfYears=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
+  const pdfHols={};
+  pdfYears.forEach(y=>Object.assign(pdfHols,getPolishHolidays(y)));
+
   const allCleanRows=dateOrder.map(date=>{
     const dayRows=byDate[date];
     const dayActive=dayRows.filter(r=>!r.cancelled);
@@ -6762,7 +6623,7 @@ function exportHkPdf(monthKey, monthLabel){
     const dk=dateObj?dateKey(dateObj):'';
     const dow=dateObj?dateObj.getDay():-1;
     const isSun=dow===0;
-    const holName=getHolidayNameForDate(date);
+    const holName=pdfHols[dk]||'';
     const isRed=isSun||!!holName;
     const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
     const rowBg=isRed?'#fff1f2':'';
@@ -6871,38 +6732,6 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function safeLoad(fn){try{return{status:'fulfilled',value:await fn()};}catch(e){return{status:'rejected',reason:e};}}
 async function refresh(){await init();}
 
-function shiftMonthKey(monthKey, delta){
-  if(!monthKey||!/^(\d{4})-(\d{2})$/.test(monthKey))return'';
-  const [,yearStr,monthStr]=monthKey.match(/^(\d{4})-(\d{2})$/);
-  const d=new Date(parseInt(yearStr,10),parseInt(monthStr,10)-1+delta,1);
-  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-}
-
-function loadPrevioMonthIntoState(monthKey){
-  if(!monthKey)return Promise.resolve();
-  const existing=_state.data.previo?.[monthKey];
-  if(existing!==undefined&&existing!==null)return Promise.resolve(existing);
-  if(existing===null)return Promise.resolve(null);
-  _state.data.previo[monthKey]=null;
-  return loadPrevioMonth(monthKey).then(rows=>{
-    _state.data.previo[monthKey]=rows;
-    return rows;
-  }).catch(e=>{
-    _state.data.previo[monthKey]={error:e.message||'Błąd'};
-    return _state.data.previo[monthKey];
-  });
-}
-
-function ensurePrevioWindowLoaded(centerDate=new Date()){
-  const centerKey=`${centerDate.getFullYear()}-${String(centerDate.getMonth()+1).padStart(2,'0')}`;
-  const keys=[shiftMonthKey(centerKey,-1),centerKey,shiftMonthKey(centerKey,1)].filter(Boolean);
-  const missing=keys.filter(key=>_state.data.previo?.[key]===undefined);
-  if(!missing.length)return;
-  Promise.allSettled(missing.map(key=>loadPrevioMonthIntoState(key))).then(()=>{
-    if(_state.section==='oblozenie'||_state.section==='booking-payout')renderApp();
-  });
-}
-
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null,ksef:null};
@@ -6937,21 +6766,15 @@ async function init(){
   const initPrevioKey=_state.previoMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
-  const prevPrevioKey=shiftMonthKey(initPrevioKey,-1);
-  const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Ładowanie bieżącego miesiąca…');
-  const [apr,previor,previoPrevR,previoNextR,parkingr]=await Promise.allSettled([
+  const [apr,previor,parkingr]=await Promise.allSettled([
     loadAprilData(),
     loadPrevioMonth(initPrevioKey),
-    loadPrevioMonth(prevPrevioKey),
-    loadPrevioMonth(nextPrevioKey),
     loadParkingData(),
   ]);
   _state.data.apr2026=apr.status==='fulfilled'?apr.value:{error:apr.reason?.message||'Błąd'};
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
-  if(prevPrevioKey)_state.data.previo[prevPrevioKey]=previoPrevR.status==='fulfilled'?previoPrevR.value:{error:previoPrevR.reason?.message||'Błąd'};
-  if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
   _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   await delay(2000);
