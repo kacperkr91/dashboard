@@ -1994,8 +1994,8 @@ function buildArturPaymentsView(rows){
     })
     .slice(0,3);
   const manualRows=[
-    {key:'kacper',label:'Kacper Mieszkania',kind:'manual',data:manualMonth.kacper||{}},
-    {key:'kajetan',label:'Kajetan Mieszkania',kind:'manual',data:manualMonth.kajetan||{}},
+    {key:'kacper',label:'Kacper Mieszkania',kind:'manual',defaultAmount:'1830',data:manualMonth.kacper||{}},
+    {key:'kajetan',label:'Kajetan Mieszkania',kind:'manual',defaultAmount:'7253.58',data:manualMonth.kajetan||{}},
   ];
   const namedArturInvoices=[...arturInvoices].sort((a,b)=>(b.bruttoValue||0)-(a.bruttoValue||0)).map((item,idx)=>{
     const labels=['Artur Mieszkania','Artur Prowizja','Artur Transport'];
@@ -2009,7 +2009,7 @@ function buildArturPaymentsView(rows){
 
   const monthButtons=options.map(m=>`<button class="artur-month-btn ${m.key===monthKey?'active':''}" onclick="setArturPaymentsMonth('${m.key}')">${m.short}</button>`).join('');
   const manualHtml=manualRows.map(row=>{
-    const amount=String(row.data.amount||'');
+    const amount=String(row.data.amount ?? row.defaultAmount ?? '');
     const paidDate=String(row.data.paidDate||'');
     const isDone=parseMoneyValue(amount)>0&&!!paidDate;
     return`<tr>
