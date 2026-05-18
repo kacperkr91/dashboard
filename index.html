@@ -2007,18 +2007,17 @@ function buildArturPaymentsView(rows){
       if(ad!==bd)return ad.localeCompare(bd);
       return (a.bruttoValue||0)-(b.bruttoValue||0);
     })
-    .slice(0,3);
   const manualRows=[
     {key:'kacper',label:'Kacper Mieszkania',kind:'manual',defaultAmount:'1830',data:manualMonth.kacper||{}},
     {key:'kajetan',label:'Kajetan Mieszkania',kind:'manual',defaultAmount:'7253.58',data:manualMonth.kajetan||{}},
   ];
   const namedArturInvoices=[...arturInvoices].sort((a,b)=>(b.bruttoValue||0)-(a.bruttoValue||0)).map((item,idx)=>{
     const labels=['Artur Mieszkania','Artur Prowizja','Artur Transport'];
-    const fallback=['Artur faktura 1','Artur faktura 2','Artur faktura 3'];
-    let label=labels[idx]||fallback[idx]||`Artur faktura ${idx+1}`;
+    let label=labels[idx]||`Artur faktura ${idx+1}`;
     if(item&&item.bruttoValue>=70000)label='Artur Mieszkania';
     else if(item&&item.bruttoValue>=20000)label='Artur Prowizja';
     else if(item)label='Artur Transport';
+    if(idx>=3 && item)label=`Artur faktura ${idx+1}`;
     return{...item,arturLabel:label};
   });
 
@@ -2056,8 +2055,7 @@ function buildArturPaymentsView(rows){
     </tr>`;
   }).join('');
 
-  const ksefHtml=[0,1,2].map(idx=>{
-    const m=namedArturInvoices[idx]||null;
+  const ksefHtml=(namedArturInvoices.length?namedArturInvoices:[null]).map((m,idx)=>{
     const statusClass=!m?'missing':m.status==='paid'?'paid':m.status==='partial'?'partial':'open';
     const statusLabel=!m?'Brak faktury':m.status==='paid'?'Opłacona':m.status==='partial'?'Częściowo opłacona':'Do opłacenia';
     const totalAmount=m?fmt(m.bruttoValue||0):'—';
@@ -2065,6 +2063,7 @@ function buildArturPaymentsView(rows){
     const details=!m
       ?`Brak faktury z NIP ${ARTUR_PAYMENT_NIP} w ${formatMonthKeyLabel(monthKey)}`
       :`${m.seller}${m.nip?` · NIP ${m.nip}`:''}`;
+    const dateLabel=!m?'—':(m.latestPaidDate||m.manualPaidDate||'—');
     return`<tr>
       <td><span class="artur-kind ksef">KSeF</span></td>
       <td>
@@ -2081,7 +2080,7 @@ function buildArturPaymentsView(rows){
           </div>
         `:'—'}
       </td>
-      <td>${m?.latestPaidDate||m?.dueDate||'—'}</td>
+      <td>${dateLabel}</td>
       <td><span class="artur-status ${statusClass}">${statusLabel}</span></td>
       <td class="artur-small">${details}</td>
     </tr>`;
@@ -2092,7 +2091,7 @@ function buildArturPaymentsView(rows){
       <div class="line-chart-label">
         <div>
           <div class="card-title">Płatności Artur</div>
-          <div class="card-subtitle">Miesięczny widok 5 pozycji: 2 ręczne i 3 pobierane z KSeF.</div>
+          <div class="card-subtitle">Miesięczny widok: 2 pozycje ręczne i wszystkie pasujące faktury Artura z KSeF.</div>
         </div>
       </div>
       <div class="artur-month-nav">${monthButtons}</div>
@@ -2101,7 +2100,7 @@ function buildArturPaymentsView(rows){
     <div class="artur-grid">
       <div class="grid-card">
         <div class="card-title">Pozycje miesięczne</div>
-        <div class="card-subtitle">Dwie ręczne płatności i trzy pozycje automatycznie dopasowane z KSeF.</div>
+        <div class="card-subtitle">Dwie ręczne płatności i wszystkie pozycje z KSeF dla NIP Artura w wybranym miesiącu.</div>
         <div class="artur-table-wrap">
           <table class="artur-table">
             <thead>
@@ -2109,7 +2108,7 @@ function buildArturPaymentsView(rows){
                 <th>Typ</th>
                 <th>Pozycja</th>
                 <th>Kwota</th>
-                <th>Data / termin</th>
+                <th>Data opłacenia</th>
                 <th>Status</th>
                 <th>Szczegóły</th>
               </tr>
@@ -2124,7 +2123,7 @@ function buildArturPaymentsView(rows){
 
       <div class="grid-card">
         <div class="card-title">Źródło danych</div>
-        <div class="card-subtitle">Trzy faktury Artura są pobierane automatycznie z KSeF po NIP i miesiącu wystawienia.</div>
+        <div class="card-subtitle">Faktury Artura są pobierane automatycznie z KSeF po NIP i miesiącu wystawienia.</div>
         <div class="empty-section" style="min-height:140px">
           <div class="empty-icon">🧾</div>
           <p>NIP Artura: <strong>${ARTUR_PAYMENT_NIP}</strong><br>Zakres: tylko faktury z datą wystawienia w wybranym miesiącu.</p>
@@ -4821,8 +4820,18 @@ async function syncPull(){
       _ksefPaidCache=ksefPaidData.paidMap;
       localStorage.setItem('ksef_paid_map',JSON.stringify(_ksefPaidCache));
     }
-    if(arturPaymentsData?.payments){
-      _arturPaymentsCache=arturPaymentsData.payments;
+    if(arturPaymentsData&&typeof arturPaymentsData.payments==='object'&&arturPaymentsData.payments!==null){
+      let localArtur={};
+      try{
+        localArtur=JSON.parse(localStorage.getItem('artur_manual_payments')||'{}')||{};
+      }catch(e){localArtur={};}
+      const remoteArtur=arturPaymentsData.payments;
+      const hasRemoteData=Object.keys(remoteArtur).length>0;
+      const hasLocalData=Object.keys(localArtur).length>0;
+      _arturPaymentsCache=hasRemoteData ? {...localArtur,...remoteArtur} : localArtur;
+      if(!hasRemoteData&&hasLocalData){
+        syncPushArturPayments(localArtur);
+      }
       localStorage.setItem('artur_manual_payments',JSON.stringify(_arturPaymentsCache));
     }
   }catch(e){console.warn('syncPull failed:',e);}
@@ -4917,7 +4926,8 @@ async function syncPushArturPayments(payments){
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveArturPayments',payments}),
     });
   }catch(e){console.warn('syncPushArturPayments failed:',e);}
