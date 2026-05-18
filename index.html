@@ -7636,10 +7636,10 @@ function ensureKsefLoaded(){
   renderApp();
   loadKsefData().then(rows=>{
     _state.data.ksef=rows;
-    if(_state.section==='ksef')renderApp();
+    if(_state.section==='ksef'||_state.section==='artur-payments')renderApp();
   }).catch(e=>{
     _state.data.ksef={error:e.message||'Błąd'};
-    if(_state.section==='ksef')renderApp();
+    if(_state.section==='ksef'||_state.section==='artur-payments')renderApp();
   });
 }
 
