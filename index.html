@@ -374,6 +374,29 @@
     .ksef-table tbody tr.paid{background:#f7fff8;}
     .ksef-muted{color:var(--text-muted);}
     @media(max-width:980px){.ksef-section-grid{grid-template-columns:1fr;}}
+    .artur-shell{display:flex;flex-direction:column;gap:20px;}
+    .artur-month-nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;}
+    .artur-month-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--white);color:var(--text-muted);cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;}
+    .artur-month-btn:hover{background:var(--bg);color:var(--text);}
+    .artur-month-btn.active{background:#334155;color:#fff;border-color:#334155;}
+    .artur-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;}
+    .artur-table-wrap{overflow:auto;}
+    .artur-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .artur-table th{background:var(--bg);padding:10px 12px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);white-space:nowrap;}
+    .artur-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+    .artur-table tr:hover{background:#f8fafc;}
+    .artur-kind{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+    .artur-kind.manual{background:#dcfce7;color:#166534;}
+    .artur-kind.ksef{background:#dbeafe;color:#1d4ed8;}
+    .artur-status{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;}
+    .artur-status.paid{background:#dcfce7;color:#15803d;}
+    .artur-status.partial{background:#fef3c7;color:#b45309;}
+    .artur-status.open{background:#fee2e2;color:#b91c1c;}
+    .artur-status.missing{background:#e2e8f0;color:#475569;}
+    .artur-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 10px;border-radius:8px;outline:none;}
+    .artur-input:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,0.1);}
+    .artur-small{font-size:11px;color:var(--text-muted);}
+    @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
 
     /* ── PRINT / PDF ── */
     @media print {
@@ -489,6 +512,61 @@ const NAV={
   },
   media:{label:'Media — Prąd',icon:'⚡'}
 };
+
+const RENTAL_MONTH_PREFIXES=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const RENTAL_MONTH_META=[
+  {prefix:'jan',label:'Styczeń',short:'Sty'},
+  {prefix:'feb',label:'Luty',short:'Lut'},
+  {prefix:'mar',label:'Marzec',short:'Mar'},
+  {prefix:'apr',label:'Kwiecień',short:'Kwi'},
+  {prefix:'may',label:'Maj',short:'Maj'},
+  {prefix:'jun',label:'Czerwiec',short:'Cze'},
+  {prefix:'jul',label:'Lipiec',short:'Lip'},
+  {prefix:'aug',label:'Sierpień',short:'Sie'},
+  {prefix:'sep',label:'Wrzesień',short:'Wrz'},
+  {prefix:'oct',label:'Październik',short:'Paź'},
+  {prefix:'nov',label:'Listopad',short:'Lis'},
+  {prefix:'dec',label:'Grudzień',short:'Gru'},
+];
+
+function getRentalMonthKeyFromDate(dateObj=new Date()){
+  return `${RENTAL_MONTH_PREFIXES[dateObj.getMonth()]}${dateObj.getFullYear()}`;
+}
+
+function parseRentalMonthKey(key){
+  const match=String(key||'').match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(\d{4})$/);
+  if(!match)return null;
+  const prefix=match[1];
+  const year=parseInt(match[2],10);
+  const monthIndex=RENTAL_MONTH_PREFIXES.indexOf(prefix);
+  if(monthIndex<0)return null;
+  return{prefix,year,monthIndex,month:monthIndex+1,key};
+}
+
+function ensureRentalMonthEnabled(key){
+  const parsed=parseRentalMonthKey(key);
+  if(!parsed)return null;
+  if(!NAV.rental.years[parsed.year]){
+    NAV.rental.years[parsed.year]={
+      label:String(parsed.year),
+      months:RENTAL_MONTH_META.map(meta=>({
+        key:`${meta.prefix}${parsed.year}`,
+        label:meta.label,
+        short:meta.short,
+        hasData:false,
+      })),
+    };
+  }
+  const months=NAV.rental.years[parsed.year].months||[];
+  let monthMeta=months.find(m=>m.key===key);
+  if(!monthMeta){
+    const meta=RENTAL_MONTH_META[parsed.monthIndex];
+    monthMeta={key,label:meta.label,short:meta.short,hasData:false};
+    months.splice(parsed.monthIndex,0,monthMeta);
+  }
+  monthMeta.hasData=true;
+  return monthMeta;
+}
 
 /* DATE HELPERS */
 const DOW_PL=['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
@@ -700,6 +778,67 @@ async function loadAprilData(){
   return results;
 }
 
+async function loadDayTabMonthData(monthNumber){
+  const{apiKey,spreadsheetId,dayTabRegex}=CONFIG;
+  const moStr=String(monthNumber).padStart(2,'0');
+  const all=await fetchSheetNames(spreadsheetId,apiKey);
+  const day=all.filter(n=>dayTabRegex.test(n)&&n.endsWith(`.${moStr}`)).sort((a,b)=>{
+    const[ad]=a.split('.').map(Number),[bd]=b.split('.').map(Number);
+    return ad-bd;
+  });
+  if(!day.length)throw new Error('NO_DAY_TABS');
+
+  const CHUNK=40;
+  const results=[];
+  for(let ci=0;ci<day.length;ci+=CHUNK){
+    const chunk=day.slice(ci,ci+CHUNK);
+    const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+    chunk.forEach(n=>{
+      params.append('ranges',`'${n}'!H3:H33`);
+      params.append('ranges',`'${n}'!J3:J33`);
+      params.append('ranges',`'${n}'!K3:K33`);
+    });
+    const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+    chunk.forEach((name,i)=>{
+      const chanVals=data.valueRanges[i*3]?.values||[];
+      const aptVals =data.valueRanges[i*3+1]?.values||[];
+      const amtVals =data.valueRanges[i*3+2]?.values||[];
+      const aptMap={};const chanMap={};
+      for(let r=0;r<amtVals.length;r++){
+        const amt=parseFloat(amtVals[r]?.[0]);
+        if(isNaN(amt)||amt===0)continue;
+        const aptName=String(aptVals[r]?.[0]||'').trim()||'Inny';
+        aptMap[aptName]=(aptMap[aptName]||0)+amt;
+        const raw=String(chanVals[r]?.[0]||'').trim().toLowerCase();
+        const chan=raw.includes('booking')?'Booking.com':raw.includes('airbnb')?'Airbnb':raw.includes('profitroom')?'Profitroom':'Własna';
+        chanMap[chan]=(chanMap[chan]||0)+amt;
+      }
+      const dayTotal=Object.values(aptMap).reduce((s,v)=>s+v,0);
+      results.push({name,value:dayTotal||null,aptBreakdown:aptMap,chanBreakdown:chanMap});
+    });
+  }
+  return results;
+}
+
+async function loadRentalMonthDataByKey(key){
+  const parsed=parseRentalMonthKey(key);
+  if(!parsed)throw new Error('UNKNOWN_RENTAL_MONTH');
+  switch(key){
+    case 'dec2025':
+      return loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12');
+    case 'jan2026':
+      return loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01');
+    case 'feb2026':
+      return loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02');
+    case 'mar2026':
+      return loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03');
+    case 'apr2026':
+      return loadAprilData();
+    default:
+      return loadDayTabMonthData(parsed.month);
+  }
+}
+
 async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
   const{apiKey,spreadsheetId}=CONFIG;
   // Fetch C=date, H=channel, J=apt, M=amount
@@ -864,10 +1003,14 @@ async function loadKsefData(){
       paymentState:'none',
       autoPaidAtPurchase,
     };
-    const sheetEntry=(!manualPaid && (sheetPaid || sheetPartial || sheetPaidAmount>0 || sheetPaidDate || sheetRemainingAmount>0))
+    const hasCredibleSheetPaymentEvidence=
+      (!!sheetPaidDate && sheetPaidAmount>0) ||
+      (sheetPartial && sheetPaidAmount>0) ||
+      (sheetPaid && sheetPaidAmount>0 && (sheetRemainingAmount<=0.009 || sheetRemainingAmount<brutto));
+    const sheetEntry=(!manualPaid && hasCredibleSheetPaymentEvidence)
       ? {
           paidDate:sheetPaidDate,
-          paidAmount:sheetPaidAmount || (sheetPartial ? Math.max(brutto-sheetRemainingAmount,0) : (sheetPaid ? brutto : Math.max(brutto-sheetRemainingAmount,0))),
+          paidAmount:sheetPaidAmount || (sheetPartial ? Math.max(brutto-sheetRemainingAmount,0) : (sheetPaid ? brutto : 0)),
           updatedAt:''
         }
       : null;
@@ -916,6 +1059,34 @@ function getPolishHolidays(year){
     key(addDays(easter,60)),        // Boże Ciało
   ];
   return new Set([...fixed,...movable]);
+}
+
+function getPolishHolidayMap(year){
+  const easter=easterDate(year);
+  const addDays=(d,n)=>new Date(d.getTime()+n*86400000);
+  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return{
+    [`${year}-01-01`]:'Nowy Rok',
+    [`${year}-01-06`]:'Trzech Króli',
+    [`${year}-05-01`]:'Święto Pracy',
+    [`${year}-05-03`]:'Święto Konstytucji 3 Maja',
+    [`${year}-08-15`]:'Wniebowzięcie NMP',
+    [`${year}-11-01`]:'Wszystkich Świętych',
+    [`${year}-11-11`]:'Święto Niepodległości',
+    [`${year}-12-25`]:'Boże Narodzenie',
+    [`${year}-12-26`]:'Boże Narodzenie (2. dzień)',
+    [key(easter)]:'Wielkanoc',
+    [key(addDays(easter,1))]:'Poniedziałek Wielkanocny',
+    [key(addDays(easter,49))]:'Zielone Świątki',
+    [key(addDays(easter,60))]:'Boże Ciało',
+  };
+}
+
+function getHolidayNameForDate(dateStr){
+  const dateObj=parseDateDMY(dateStr);
+  if(!dateObj||isNaN(dateObj))return'';
+  const holidays=getPolishHolidayMap(dateObj.getFullYear());
+  return holidays[dateKey(dateObj)]||'';
 }
 
 
@@ -1041,6 +1212,11 @@ let HK_MONTHS=[
 
 const MONTH_NAMES_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
 const MONTH_SHORT_PL=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+const ARTUR_PAYMENT_DEFAULT_MATCHERS=[
+  {id:'artur_1',label:'Artur faktura 1',query:''},
+  {id:'artur_2',label:'Artur faktura 2',query:''},
+  {id:'artur_3',label:'Artur faktura 3',query:''},
+];
 const WEATHER_LOCATION={name:'Kraków', latitude:50.0614, longitude:19.9366, timezone:'Europe/Warsaw'};
 const WEATHER_CODE_MAP={
   0:{label:'Bezchmurnie',icon:'☀️'},
@@ -1090,6 +1266,34 @@ function buildMonthList(sheetNames){
       };
     })
     .sort((a,b)=>a.sortKey.localeCompare(b.sortKey));
+}
+
+function getMonthKeyFromDate(dateObj){
+  if(!(dateObj instanceof Date)||isNaN(dateObj))return'';
+  return`${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
+}
+
+function formatMonthKeyLabel(monthKey){
+  const m=String(monthKey||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m)return monthKey||'—';
+  const year=m[1];
+  const monthIdx=parseInt(m[2],10)-1;
+  return `${MONTH_NAMES_PL[monthIdx]} ${year}`;
+}
+
+function formatMonthKeyShort(monthKey){
+  const m=String(monthKey||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m)return monthKey||'—';
+  const year=m[1].slice(2);
+  const monthIdx=parseInt(m[2],10)-1;
+  return `${MONTH_SHORT_PL[monthIdx]} ${year}`;
+}
+
+function shiftMonthKey(monthKey, delta){
+  const m=String(monthKey||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m)return'';
+  const d=new Date(parseInt(m[1],10),parseInt(m[2],10)-1+delta,1);
+  return getMonthKeyFromDate(d);
 }
 
 let _hkMonthsDetected=false;
@@ -1271,13 +1475,23 @@ async function loadPrevioMonth(monthKey){
         gosc:    v(10,i),
         kraj:    v(11,i),
         telefon: normalizePhoneNumber(v(12,i)),
+        fakturaStatus: v(13,i),
+        firmaFaktura: v(14,i),
+        nipFaktura: v(15,i),
+        zrodloFaktura: v(16,i),
+        wiadomoscFaktura: v(17,i),
+        lozeczko: v(18,i),
+        krzeselko: v(19,i),
+        prosbyZrodlo: v(20,i),
+        prosbyWiadomosc: v(21,i),
+        osoby: parseInt(v(22,i),10)||0,
         cancelled,
       });
     }
     return rows;
   };
 
-  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N'];
+  const columns=['A','B','C','D','E','F','G','H','I','K','L','M','N','Q','R','S','T','U','V','W','X','Y','Z'];
 
   // First try: dedicated monthly sheet like "2025-03"
   const monthlySheetName=resolvePrevioMonthSheetName(monthKey, allSheetNames);
@@ -1715,6 +1929,213 @@ function getKsefOutstandingValue(item){
   return item?.bruttoValue||0;
 }
 
+function getArturPaymentMatchers(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem('artur_payment_matchers')||'[]');
+    if(Array.isArray(parsed)&&parsed.length){
+      return ARTUR_PAYMENT_DEFAULT_MATCHERS.map((base,idx)=>({
+        ...base,
+        ...(parsed[idx]&&typeof parsed[idx]==='object'?parsed[idx]:{}),
+      }));
+    }
+  }catch(e){}
+  return ARTUR_PAYMENT_DEFAULT_MATCHERS.map(item=>({...item}));
+}
+
+function saveArturPaymentMatchers(list){
+  const safe=(Array.isArray(list)?list:ARTUR_PAYMENT_DEFAULT_MATCHERS).map((item,idx)=>({
+    id:item?.id||ARTUR_PAYMENT_DEFAULT_MATCHERS[idx]?.id||`artur_${idx+1}`,
+    label:item?.label||ARTUR_PAYMENT_DEFAULT_MATCHERS[idx]?.label||`Artur faktura ${idx+1}`,
+    query:String(item?.query||'').trim(),
+  }));
+  localStorage.setItem('artur_payment_matchers',JSON.stringify(safe));
+}
+
+function updateArturPaymentMatcher(index, field, value){
+  const list=getArturPaymentMatchers();
+  if(!list[index])return;
+  list[index][field]=value;
+  saveArturPaymentMatchers(list);
+  if(_state.section==='artur-payments')renderApp();
+}
+
+function getArturManualPayments(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem('artur_manual_payments')||'{}');
+    return parsed&&typeof parsed==='object'?parsed:{};
+  }catch(e){return{};}
+}
+
+function saveArturManualPayments(map){
+  localStorage.setItem('artur_manual_payments',JSON.stringify(map||{}));
+}
+
+function getArturManualMonth(monthKey){
+  const all=getArturManualPayments();
+  return all[monthKey]&&typeof all[monthKey]==='object'?all[monthKey]:{};
+}
+
+function setArturManualField(personKey, field, value){
+  const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
+  const all=getArturManualPayments();
+  if(!all[monthKey]||typeof all[monthKey]!=='object')all[monthKey]={};
+  if(!all[monthKey][personKey]||typeof all[monthKey][personKey]!=='object')all[monthKey][personKey]={};
+  all[monthKey][personKey][field]=value;
+  saveArturManualPayments(all);
+  if(_state.section==='artur-payments')renderApp();
+}
+
+function getArturPaymentMonthOptions(ksefRows){
+  const keys=new Set();
+  const today=new Date();
+  for(let i=-6;i<=6;i++)keys.add(shiftMonthKey(getMonthKeyFromDate(today),i));
+  Object.keys(getArturManualPayments()).forEach(k=>{if(k)keys.add(k);});
+  if(Array.isArray(ksefRows)){
+    ksefRows.forEach(row=>{
+      const d=parseDateDMY(row?.issueDate)||parseDatePL(row?.issueDate)||parseHKDate(row?.issueDate);
+      const key=getMonthKeyFromDate(d);
+      if(key)keys.add(key);
+    });
+  }
+  return [...keys]
+    .filter(Boolean)
+    .sort((a,b)=>b.localeCompare(a))
+    .map(key=>({key,label:formatMonthKeyLabel(key),short:formatMonthKeyShort(key)}));
+}
+
+function buildArturPaymentsView(rows){
+  if(!rows)return renderLoading('Ładowanie płatności Artura…');
+  if(rows.error)return renderError(rows.error);
+
+  const options=getArturPaymentMonthOptions(rows);
+  if(!_state.arturPaymentsMonth||!options.find(m=>m.key===_state.arturPaymentsMonth)){
+    _state.arturPaymentsMonth=options[0]?.key||getMonthKeyFromDate(new Date());
+  }
+  const monthKey=_state.arturPaymentsMonth;
+  const manualMonth=getArturManualMonth(monthKey);
+  const matchers=getArturPaymentMatchers();
+  const monthRows=(rows||[]).filter(item=>getMonthKeyFromDate(parseDateDMY(item.issueDate)||parseDatePL(item.issueDate)||parseHKDate(item.issueDate))===monthKey);
+
+  const resolveArturInvoice=(matcher)=>{
+    const query=String(matcher?.query||'').trim().toLowerCase();
+    if(!query)return{matcher,match:null,matches:[]};
+    const matches=monthRows.filter(item=>
+      [item.seller,item.nip,item.ksefNumber].join(' ').toLowerCase().includes(query)
+    ).sort((a,b)=>{
+      const ad=(a.issueDate||'').slice(0,10);
+      const bd=(b.issueDate||'').slice(0,10);
+      if(ad!==bd)return bd.localeCompare(ad);
+      return (b.bruttoValue||0)-(a.bruttoValue||0);
+    });
+    return{matcher,match:matches[0]||null,matches};
+  };
+
+  const arturInvoices=matchers.map(resolveArturInvoice);
+  const manualRows=[
+    {key:'kacper',label:'Kacper Mieszkania',kind:'manual',data:manualMonth.kacper||{}},
+    {key:'kajetan',label:'Kajetan Mieszkania',kind:'manual',data:manualMonth.kajetan||{}},
+  ];
+  const totalManual=manualRows.reduce((sum,row)=>sum+parseMoneyValue(row.data.amount||0),0);
+  const totalArtur=arturInvoices.reduce((sum,row)=>sum+(row.match?getKsefOutstandingValue(row.match):0),0);
+  const openArturCount=arturInvoices.filter(r=>r.match&&r.match.status!=='paid').length;
+
+  const monthButtons=options.map(m=>`<button class="artur-month-btn ${m.key===monthKey?'active':''}" onclick="setArturPaymentsMonth('${m.key}')">${m.short}</button>`).join('');
+  const manualHtml=manualRows.map(row=>{
+    const amount=String(row.data.amount||'');
+    const paidDate=String(row.data.paidDate||'');
+    const isDone=parseMoneyValue(amount)>0&&!!paidDate;
+    return`<tr>
+      <td><span class="artur-kind manual">Ręczne</span></td>
+      <td style="font-weight:700">${row.label}</td>
+      <td><input class="artur-input" type="number" min="0" step="0.01" value="${amount}" placeholder="Kwota" oninput="setArturManualField('${row.key}','amount',this.value)"></td>
+      <td><input class="artur-input" type="date" value="${paidDate}" oninput="setArturManualField('${row.key}','paidDate',this.value)"></td>
+      <td><span class="artur-status ${isDone?'paid':'missing'}">${isDone?'Uzupełnione':'Do wpisania'}</span></td>
+      <td class="artur-small">${isDone?`Wpisane ręcznie · ${fmt(parseMoneyValue(amount))} zł`:'Czeka na ręczne uzupełnienie'}</td>
+    </tr>`;
+  }).join('');
+
+  const ksefHtml=arturInvoices.map((row,idx)=>{
+    const m=row.match;
+    const statusClass=!m?'missing':m.status==='paid'?'paid':m.status==='partial'?'partial':'open';
+    const statusLabel=!m?'Brak dopasowania':m.status==='paid'?'Opłacona':m.status==='partial'?'Częściowo opłacona':'Do opłacenia';
+    const amountLabel=m?fmt(getKsefOutstandingValue(m)):'—';
+    const details=!m
+      ?'Ustaw filtr sprzedawcy lub NIP poniżej.'
+      :`${m.seller}${m.nip?` · NIP ${m.nip}`:''}${row.matches.length>1?` · dopasowań: ${row.matches.length}`:''}`;
+    return`<tr>
+      <td><span class="artur-kind ksef">KSeF</span></td>
+      <td>
+        <div style="font-weight:700">${row.matcher.label}</div>
+        <div class="artur-small">${m?.ksefNumber||'Brak numeru KSeF'}</div>
+      </td>
+      <td style="font-weight:700">${amountLabel}${m?' zł':''}</td>
+      <td>${m?.latestPaidDate||m?.dueDate||'—'}</td>
+      <td><span class="artur-status ${statusClass}">${statusLabel}</span></td>
+      <td class="artur-small">${details}</td>
+    </tr>`;
+  }).join('');
+
+  const matcherHtml=matchers.map((matcher,idx)=>`
+    <div class="field" style="margin-bottom:12px">
+      <label>${matcher.label} — filtr (sprzedawca lub NIP)</label>
+      <input class="artur-input" type="text" value="${String(matcher.query||'').replace(/"/g,'&quot;')}" placeholder="Np. Artur / nazwa firmy / NIP" oninput="updateArturPaymentMatcher(${idx},'query',this.value)">
+    </div>
+  `).join('');
+
+  return `<div class="artur-shell">
+    <div class="grid-card">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title">Płatności Artur</div>
+          <div class="card-subtitle">Miesięczny widok 5 pozycji: 2 ręczne i 3 pobierane z KSeF.</div>
+        </div>
+      </div>
+      <div class="artur-month-nav">${monthButtons}</div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card c-blue"><div class="label">Wybrany miesiąc</div><div class="value" style="font-size:22px">${formatMonthKeyShort(monthKey)}</div><div class="sub">${formatMonthKeyLabel(monthKey)}</div></div>
+      <div class="kpi-card c-green"><div class="label">Ręczne kwoty</div><div class="value"><span class="sym">zł</span>${fmt(totalManual)}</div><div class="sub">Kacper + Kajetan</div></div>
+      <div class="kpi-card c-red"><div class="label">Artur z KSeF</div><div class="value"><span class="sym">zł</span>${fmt(totalArtur)}</div><div class="sub">${openArturCount} otwarte pozycje</div></div>
+    </div>
+
+    <div class="artur-grid">
+      <div class="grid-card">
+        <div class="card-title">Pozycje miesięczne</div>
+        <div class="card-subtitle">Dwie ręczne płatności i trzy pozycje automatycznie dopasowane z KSeF.</div>
+        <div class="artur-table-wrap">
+          <table class="artur-table">
+            <thead>
+              <tr>
+                <th>Typ</th>
+                <th>Pozycja</th>
+                <th>Kwota</th>
+                <th>Data / termin</th>
+                <th>Status</th>
+                <th>Szczegóły</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${manualHtml}
+              ${ksefHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-card">
+        <div class="card-title">Konfiguracja 3 faktur Artura</div>
+        <div class="card-subtitle">Wpisz fragment nazwy sprzedawcy albo NIP. Dashboard wyszuka dopasowanie w KSeF dla wybranego miesiąca.</div>
+        ${matcherHtml}
+        <div class="empty-section" style="min-height:140px">
+          <div class="empty-icon">🔎</div>
+          <p>Przykład: wpisz nazwę firmy lub NIP Artura, a pozycje będą powtarzać się co miesiąc automatycznie.</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* STATE */
 let _state={
   section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
@@ -1724,6 +2145,7 @@ let _state={
   hkAptSort:'default',
   otvMonth:'2026-04',
   previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
+  arturPaymentsMonth:getMonthKeyFromDate(new Date()),
   bookingPeriodKey:null,
   payoutTab:'booking',
   airbnbPayoutKey:null,
@@ -1737,14 +2159,8 @@ let _state={
   oblozenieTelefony:false,
   weatherLoading:false,
   aptsFilterSearch:'', aptsFilterOwner:'', aptsFilterType:'',
-  rentalYear:2026,
-  rentalMonth:(()=>{
-    const now=new Date();
-    const y=now.getFullYear();
-    const m=now.getMonth(); // 0-based
-    const keys=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-    return keys[m]+y;
-  })(),   // auto-detect current month
+  rentalYear:new Date().getFullYear(),
+  rentalMonth:getRentalMonthKeyFromDate(),
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
@@ -3003,9 +3419,11 @@ function openPrevioDrawer(date){
         ${badge}
         ${r.cancelled?'<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px">ANULOWANA</span>':''}
         <span style="font-size:11px;color:var(--text-muted)">${r.dataOd} → ${r.dataDo}</span>
-        <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${r.noce} ${r.noce===1?'noc':'nocy'}${r.osoby?` · ${r.osoby} os.`:''}</span>
       </div>
       ${r.cenaNetto?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">Netto Airbnb: <strong>${fmt(r.cenaNetto)} zł</strong> + prowizja 15.5% = <strong style="color:var(--blue)">${fmt(r.cena)} zł</strong></div>`:''}
+      ${renderPrevioInvoiceBadge(r)}
+      ${renderPrevioGuestRequestBadge(r)}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div style="font-size:11px;color:var(--text-muted)">${r.gosc||''}${r.kraj?' · '+r.kraj:''} · #${r.voucher}</div>
         ${!r.cancelled?`<button onclick="notaFromPrevioId('${r.voucher||r.resId}')" data-gosc="${(r.gosc||'').replace(/"/g,'')}" style="background:#475569;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🧾 Nota</button>`:''}
@@ -3145,6 +3563,7 @@ function buildPayoutView(){
 
 function buildBookingPayoutView(){
   const state=_state;
+  ensurePrevioWindowLoaded(new Date());
   // Collect all Booking.com reservations from all loaded Previo months
   const allBooking=[];
   Object.values(state.data.previo).forEach(rows=>{
@@ -3990,11 +4409,6 @@ function exportHkPdf(monthKey, monthLabel){
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
-  // precompute holidays for PDF
-  const pdfYears=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
-  const pdfHols={};
-  pdfYears.forEach(y=>Object.assign(pdfHols,getPolishHolidays(y)));
-
   const allCleanRows=dateOrder.map(date=>{
     const dayRows=byDate[date];
     const dayActive=dayRows.filter(r=>!r.cancelled);
@@ -4003,7 +4417,7 @@ function exportHkPdf(monthKey, monthLabel){
     const dk=dateObj?dateKey(dateObj):'';
     const dow=dateObj?dateObj.getDay():-1;
     const isSun=dow===0;
-    const holName=pdfHols[dk]||'';
+    const holName=getHolidayNameForDate(date);
     const isRed=isSun||!!holName;
     const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
     const rowBg=isRed?'#fff1f2':'';
@@ -5591,6 +6005,103 @@ function normalizePhoneNumber(phone){
   return '+'+cleaned;
 }
 
+function escapeHtml(value){
+  return String(value||'').replace(/[&<>"']/g,ch=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;',
+  }[ch]));
+}
+
+function getPrevioInvoiceState(r){
+  const status=String(r?.fakturaStatus||'').trim();
+  const norm=status.toLowerCase();
+  const nip=String(r?.nipFaktura||'').replace(/\D/g,'');
+  const company=String(r?.firmaFaktura||'').trim();
+  const source=String(r?.zrodloFaktura||'').trim();
+  const message=String(r?.wiadomoscFaktura||'').trim();
+  const hasInvoiceInfo=!!(status||nip||company||source||message);
+  if(!hasInvoiceInfo){
+    return {show:false,status:'',label:'',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
+  }
+  if(norm.startsWith('nie')){
+    return {show:true,status,label:'Faktura: NIE',color:'#64748b',bg:'#f8fafc',border:'#e2e8f0',nip};
+  }
+  if(nip){
+    return {show:true,status,label:'Faktura: TAK',color:'#047857',bg:'#ecfdf5',border:'#a7f3d0',nip};
+  }
+  const needsNip=norm.includes('brak')||norm.includes('wymaga')||company||source||message;
+  return {show:true,status,label:needsNip?'Faktura: brak NIP':'Faktura: TAK',color:'#b45309',bg:'#fffbeb',border:'#fde68a',nip};
+}
+
+function renderPrevioInvoiceBadge(r,compact=false){
+  const inv=getPrevioInvoiceState(r);
+  if(!inv.show)return'';
+  const company=escapeHtml(r?.firmaFaktura||'');
+  const source=escapeHtml(r?.zrodloFaktura||'');
+  const nip=inv.nip;
+  return`<div style="margin-top:${compact?'6px':'8px'};background:${inv.bg};border:1px solid ${inv.border};border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;background:#fff;color:${inv.color};border:1px solid ${inv.border};font-size:${compact?'9px':'10px'};font-weight:800;padding:2px 7px;border-radius:999px">${inv.label}</span>
+      ${nip?`<button onclick="copyTextToClipboard('${nip}',this)" title="Kopiuj NIP" style="border:1px solid ${inv.border};background:#fff;color:${inv.color};border-radius:999px;padding:2px 7px;font-size:${compact?'9px':'10px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">NIP ${nip} · kopiuj</button>`:''}
+    </div>
+    ${company||source?`<div style="font-size:${compact?'10px':'11px'};color:var(--text-muted);margin-top:4px;line-height:1.35">${company?`<strong style="color:var(--text-mid)">${company}</strong>`:''}${company&&source?' · ':''}${source}</div>`:''}
+  </div>`;
+}
+
+function getPrevioGuestRequests(r){
+  const norm=value=>String(value||'').trim().toUpperCase();
+  const crib=norm(r?.lozeczko)==='TAK';
+  const chair=norm(r?.krzeselko)==='TAK';
+  return{
+    show:crib||chair,
+    crib,
+    chair,
+    source:String(r?.prosbyZrodlo||'').trim(),
+    message:String(r?.prosbyWiadomosc||'').trim(),
+  };
+}
+
+function renderPrevioGuestRequestBadge(r,compact=false){
+  const req=getPrevioGuestRequests(r);
+  if(!req.show)return'';
+  const source=escapeHtml(req.source);
+  const message=escapeHtml(req.message);
+  const chips=[
+    req.crib?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Łóżeczko</span>':'',
+    req.chair?'<span style="display:inline-flex;align-items:center;background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:'+(compact?'9px':'10px')+';font-weight:800;padding:2px 7px;border-radius:999px">Krzesełko</span>':'',
+  ].filter(Boolean).join('');
+  return`<div style="margin-top:${compact?'6px':'8px'};background:#f0f9ff;border:1px solid #bae6fd;border-radius:${compact?'8px':'10px'};padding:${compact?'5px 7px':'8px 10px'}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:${compact?'10px':'11px'};font-weight:800;color:#0369a1">Prośba gościa</span>
+      ${chips}
+    </div>
+    ${message?`<div title="${message}" style="font-size:${compact?'10px':'11px'};color:var(--text-mid);margin-top:4px;line-height:1.35;max-height:${compact?'42px':'56px'};overflow:hidden">${message}</div>`:''}
+    ${source?`<div style="font-size:${compact?'9px':'10px'};color:var(--text-muted);margin-top:4px;line-height:1.25">${source}</div>`:''}
+  </div>`;
+}
+
+function copyTextToClipboard(text,btn){
+  const value=String(text||'').trim();
+  if(!value)return;
+  const done=()=>{
+    if(btn){
+      const old=btn.textContent;
+      btn.textContent='Skopiowano';
+      setTimeout(()=>{btn.textContent=old;},1200);
+    }
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(value).then(done).catch(()=>{
+      window.prompt('Skopiuj:',value);
+    });
+  }else{
+    window.prompt('Skopiuj:',value);
+  }
+}
+
 function getWeatherMeta(code){
   return WEATHER_CODE_MAP[Number(code)]||{label:'Warunki zmienne',icon:'🌤️'};
 }
@@ -5821,8 +6332,13 @@ const WYLACZONE_APT=['Orzeszkowej']; // apartamenty których już nie wynajmujem
 const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bronowicka','Plac Szczepański B41','Plac Szczepański C41']; // nie-OTV
 
 function buildOblozenieLive(){
+  ensurePrevioWindowLoaded(new Date());
   const today=new Date();today.setHours(0,0,0,0);
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const normalizePrevioDate=value=>{
+    const parsed=parseDateDMY(String(value||'').trim());
+    return parsed?dateKey(parsed):String(value||'').slice(0,10);
+  };
   const todayStr=localDk(today);
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
@@ -5833,7 +6349,11 @@ function buildOblozenieLive(){
   }
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
-    ? _state.data.previo[currentMonthKey].filter(r=>!r.cancelled && String(r.dataDo||'').slice(0,7)===currentMonthKey)
+    ? _state.data.previo[currentMonthKey].filter(r=>{
+        if(r.cancelled)return false;
+        const checkout=normalizePrevioDate(r.dataDo||'');
+        return checkout.slice(0,7)===currentMonthKey;
+      })
     : [];
   const currentMonthEarned=currentMonthRows.reduce((sum,row)=>{
     const checkout=parseDateDMY(row.dataDo||'');
@@ -5914,8 +6434,8 @@ function buildOblozenieLive(){
 
   allRows.forEach(r=>{
     if(!r.dataOd||!r.dataDo)return;
-    const od=r.dataOd.slice(0,10);
-    const doD=r.dataDo.slice(0,10);
+    const od=normalizePrevioDate(r.dataOd);
+    const doD=normalizePrevioDate(r.dataDo);
     // Klonuj obiekt żeby uniknąć mutacji między renderami
     if(doD===targetStr) wymeldowania.push({...r});
     else if(od===targetStr) zameldowania.push({...r});
@@ -6016,9 +6536,11 @@ function buildOblozenieLive(){
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
+      ${renderPrevioInvoiceBadge(r,true)}
+      ${renderPrevioGuestRequestBadge(r,true)}
       <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
-        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy</span>
+        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy${r.osoby?` · ${r.osoby} os.`:''}</span>
       </div>
     </div>`;
   };
@@ -6610,11 +7132,6 @@ function exportHkPdf(monthKey, monthLabel){
     if(!byDate[d]){byDate[d]=[];dateOrder.push(d);}
     byDate[d].push(r);
   });
-  // precompute holidays for PDF
-  const pdfYears=[...new Set(rows.map(r=>{const d=parseDateDMY(r.date);return d?d.getFullYear():null}).filter(Boolean))];
-  const pdfHols={};
-  pdfYears.forEach(y=>Object.assign(pdfHols,getPolishHolidays(y)));
-
   const allCleanRows=dateOrder.map(date=>{
     const dayRows=byDate[date];
     const dayActive=dayRows.filter(r=>!r.cancelled);
@@ -6623,7 +7140,7 @@ function exportHkPdf(monthKey, monthLabel){
     const dk=dateObj?dateKey(dateObj):'';
     const dow=dateObj?dateObj.getDay():-1;
     const isSun=dow===0;
-    const holName=pdfHols[dk]||'';
+    const holName=getHolidayNameForDate(date);
     const isRed=isSun||!!holName;
     const dowLabel=dateObj?DOW_PL_SHORT[dow]:'';
     const rowBg=isRed?'#fff1f2':'';
@@ -6732,8 +7249,43 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function safeLoad(fn){try{return{status:'fulfilled',value:await fn()};}catch(e){return{status:'rejected',reason:e};}}
 async function refresh(){await init();}
 
+function shiftMonthKey(monthKey, delta){
+  if(!monthKey||!/^(\d{4})-(\d{2})$/.test(monthKey))return'';
+  const [,yearStr,monthStr]=monthKey.match(/^(\d{4})-(\d{2})$/);
+  const d=new Date(parseInt(yearStr,10),parseInt(monthStr,10)-1+delta,1);
+  return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function loadPrevioMonthIntoState(monthKey){
+  if(!monthKey)return Promise.resolve();
+  const existing=_state.data.previo?.[monthKey];
+  if(existing!==undefined&&existing!==null)return Promise.resolve(existing);
+  if(existing===null)return Promise.resolve(null);
+  _state.data.previo[monthKey]=null;
+  return loadPrevioMonth(monthKey).then(rows=>{
+    _state.data.previo[monthKey]=rows;
+    return rows;
+  }).catch(e=>{
+    _state.data.previo[monthKey]={error:e.message||'Błąd'};
+    return _state.data.previo[monthKey];
+  });
+}
+
+function ensurePrevioWindowLoaded(centerDate=new Date()){
+  const centerKey=`${centerDate.getFullYear()}-${String(centerDate.getMonth()+1).padStart(2,'0')}`;
+  const keys=[shiftMonthKey(centerKey,-1),centerKey,shiftMonthKey(centerKey,1)].filter(Boolean);
+  const missing=keys.filter(key=>_state.data.previo?.[key]===undefined);
+  if(!missing.length)return;
+  Promise.allSettled(missing.map(key=>loadPrevioMonthIntoState(key))).then(()=>{
+    if(_state.section==='oblozenie'||_state.section==='booking-payout')renderApp();
+  });
+}
+
 async function init(){
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
+  _state.rentalMonth=getRentalMonthKeyFromDate();
+  _state.rentalYear=new Date().getFullYear();
+  ensureRentalMonthEnabled(_state.rentalMonth);
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;
 
@@ -6764,17 +7316,24 @@ async function init(){
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
   const initPrevioKey=_state.previoMonth;
+  const initRentalKey=_state.rentalMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
+  const prevPrevioKey=shiftMonthKey(initPrevioKey,-1);
+  const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Ładowanie bieżącego miesiąca…');
-  const [apr,previor,parkingr]=await Promise.allSettled([
-    loadAprilData(),
+  const [rentalCurrentR,previor,previoPrevR,previoNextR,parkingr]=await Promise.allSettled([
+    loadRentalMonthDataByKey(initRentalKey),
     loadPrevioMonth(initPrevioKey),
+    loadPrevioMonth(prevPrevioKey),
+    loadPrevioMonth(nextPrevioKey),
     loadParkingData(),
   ]);
-  _state.data.apr2026=apr.status==='fulfilled'?apr.value:{error:apr.reason?.message||'Błąd'};
+  _state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
   _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
+  if(prevPrevioKey)_state.data.previo[prevPrevioKey]=previoPrevR.status==='fulfilled'?previoPrevR.value:{error:previoPrevR.reason?.message||'Błąd'};
+  if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
   _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   await delay(2000);
@@ -6909,6 +7468,7 @@ function renderApp(){
     <button class="nav-l1-btn ${section==='housekeeping'?'active':''}" style="${section==='housekeeping'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('housekeeping')"><span class="icon">🧹</span> Housekeeping</button>
     <button class="nav-l1-btn ${section==='otv'?'active':''}" style="${section==='otv'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('otv')"><span class="icon">📋</span> Rezerwacje OTV</button>
     <button class="nav-l1-btn ${section==='previo'?'active':''}" style="${section==='previo'?'background:#059669;border-color:#059669':''}" onclick="setSection('previo')"><span class="icon">🏨</span> Previo</button>
+    <button class="nav-l1-btn ${section==='artur-payments'?'active':''}" style="${section==='artur-payments'?'background:#334155;border-color:#334155':''}" onclick="setSection('artur-payments')"><span class="icon">💳</span> Płatności Artur</button>
     <button class="nav-l1-btn ${section==='booking-payout'?'active':''}" style="${section==='booking-payout'?'background:#003580;border-color:#003580':''}" onclick="setSection('booking-payout')"><span class="icon">💰</span> Wypłaty</button>
     <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')"><span class="icon">📅</span> Dyżury</button>
     <button class="nav-l1-btn ${section==='kalendarz'?'active':''}" style="${section==='kalendarz'?'background:#0369a1;border-color:#0369a1':''}" onclick="setSection('kalendarz')"><span class="icon">📆</span> Kalendarz</button>
@@ -6935,6 +7495,7 @@ function renderApp(){
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
 
   if(section==='rental'){
+    ensureRentalMonthEnabled(rentalMonth);
     const years=Object.keys(NAV.rental.years).sort((a,b)=>b-a);
     const yearBtns=years.map(y=>`<button class="nav-l2-year ${rentalYear==y?'active':''}" onclick="setRentalYear(${y})">${y}</button>`).join('');
     const activeMths=NAV.rental.years[rentalYear]?.months||[];
@@ -6976,6 +7537,8 @@ function renderApp(){
     content=buildOtvView();
   } else if(section==='previo'){
     content=buildPrevioView();
+  } else if(section==='artur-payments'){
+    content=buildArturPaymentsView(data.ksef);
   } else if(section==='booking-payout'){
     content=buildPayoutView();
   } else if(section==='parking'){
@@ -7055,7 +7618,7 @@ function ensureKsefLoaded(){
 
 function setSection(s){
   _state.section=s;
-  if(s==='ksef'){
+  if(s==='ksef'||s==='artur-payments'){
     ensureKsefLoaded();
     return;
   }
@@ -7100,10 +7663,29 @@ function setRentalYear(y){
   if(first)_state.rentalMonth=first.key;
   renderApp();
 }
-function setRentalMonth(key){_state.rentalMonth=key;renderApp();}
+function setRentalMonth(key){
+  _state.rentalMonth=key;
+  const parsed=parseRentalMonthKey(key);
+  if(parsed)_state.rentalYear=parsed.year;
+  ensureRentalMonthEnabled(key);
+  if(_state.data[key]===undefined || _state.data[key]===null){
+    _state.data[key]=null;
+    renderApp();
+    loadRentalMonthDataByKey(key).then(rows=>{
+      _state.data[key]=rows;
+      if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data[key]={error:e.message||'Błąd'};
+      if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
+    });
+    return;
+  }
+  renderApp();
+}
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
 function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
 function setBookingPeriod(key){_state.bookingPeriodKey=key;renderApp();}
+function setArturPaymentsMonth(key){_state.arturPaymentsMonth=key;renderApp();}
 
 function setPrevioMonth(key){
   _state.previoMonth=key;
