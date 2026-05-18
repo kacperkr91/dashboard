@@ -1997,9 +1997,15 @@ function buildArturPaymentsView(rows){
     {key:'kacper',label:'Kacper Mieszkania',kind:'manual',data:manualMonth.kacper||{}},
     {key:'kajetan',label:'Kajetan Mieszkania',kind:'manual',data:manualMonth.kajetan||{}},
   ];
-  const totalManual=manualRows.reduce((sum,row)=>sum+parseMoneyValue(row.data.amount||0),0);
-  const totalArtur=arturInvoices.reduce((sum,row)=>sum+getKsefOutstandingValue(row),0);
-  const openArturCount=arturInvoices.filter(r=>r.status!=='paid').length;
+  const namedArturInvoices=[...arturInvoices].sort((a,b)=>(b.bruttoValue||0)-(a.bruttoValue||0)).map((item,idx)=>{
+    const labels=['Artur Mieszkania','Artur Prowizja','Artur Transport'];
+    const fallback=['Artur faktura 1','Artur faktura 2','Artur faktura 3'];
+    let label=labels[idx]||fallback[idx]||`Artur faktura ${idx+1}`;
+    if(item&&item.bruttoValue>=70000)label='Artur Mieszkania';
+    else if(item&&item.bruttoValue>=20000)label='Artur Prowizja';
+    else if(item)label='Artur Transport';
+    return{...item,arturLabel:label};
+  });
 
   const monthButtons=options.map(m=>`<button class="artur-month-btn ${m.key===monthKey?'active':''}" onclick="setArturPaymentsMonth('${m.key}')">${m.short}</button>`).join('');
   const manualHtml=manualRows.map(row=>{
@@ -2017,20 +2023,30 @@ function buildArturPaymentsView(rows){
   }).join('');
 
   const ksefHtml=[0,1,2].map(idx=>{
-    const m=arturInvoices[idx]||null;
+    const m=namedArturInvoices[idx]||null;
     const statusClass=!m?'missing':m.status==='paid'?'paid':m.status==='partial'?'partial':'open';
     const statusLabel=!m?'Brak faktury':m.status==='paid'?'Opłacona':m.status==='partial'?'Częściowo opłacona':'Do opłacenia';
-    const amountLabel=m?fmt(getKsefOutstandingValue(m)):'—';
+    const totalAmount=m?fmt(m.bruttoValue||0):'—';
+    const remainingAmount=m?fmt(getKsefOutstandingValue(m)):'—';
     const details=!m
       ?`Brak faktury z NIP ${ARTUR_PAYMENT_NIP} w ${formatMonthKeyLabel(monthKey)}`
       :`${m.seller}${m.nip?` · NIP ${m.nip}`:''}`;
     return`<tr>
       <td><span class="artur-kind ksef">KSeF</span></td>
       <td>
-        <div style="font-weight:700">Artur faktura ${idx+1}</div>
+        <div style="font-weight:700">${m?.arturLabel||`Artur faktura ${idx+1}`}</div>
         <div class="artur-small">${m?.ksefNumber||'Brak numeru KSeF'}</div>
       </td>
-      <td style="font-weight:700">${amountLabel}${m?' zł':''}</td>
+      <td>
+        ${m?`
+          <div style="font-weight:700">${totalAmount} zł</div>
+          <div class="artur-small" style="margin-top:4px">
+            <span style="display:inline-flex;align-items:center;gap:6px;background:${getKsefOutstandingValue(m)>0?'#fff7ed':'#f0fdf4'};color:${getKsefOutstandingValue(m)>0?'#c2410c':'#15803d'};padding:4px 8px;border-radius:999px;font-weight:700">
+              Zostało: ${remainingAmount} zł
+            </span>
+          </div>
+        `:'—'}
+      </td>
       <td>${m?.latestPaidDate||m?.dueDate||'—'}</td>
       <td><span class="artur-status ${statusClass}">${statusLabel}</span></td>
       <td class="artur-small">${details}</td>
@@ -2046,12 +2062,6 @@ function buildArturPaymentsView(rows){
         </div>
       </div>
       <div class="artur-month-nav">${monthButtons}</div>
-    </div>
-
-    <div class="kpi-row">
-      <div class="kpi-card c-blue"><div class="label">Wybrany miesiąc</div><div class="value" style="font-size:22px">${formatMonthKeyShort(monthKey)}</div><div class="sub">${formatMonthKeyLabel(monthKey)}</div></div>
-      <div class="kpi-card c-green"><div class="label">Ręczne kwoty</div><div class="value"><span class="sym">zł</span>${fmt(totalManual)}</div><div class="sub">Kacper + Kajetan</div></div>
-      <div class="kpi-card c-red"><div class="label">Artur z KSeF</div><div class="value"><span class="sym">zł</span>${fmt(totalArtur)}</div><div class="sub">${openArturCount} otwarte pozycje</div></div>
     </div>
 
     <div class="artur-grid">
