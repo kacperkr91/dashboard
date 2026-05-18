@@ -192,6 +192,8 @@
     .btn-primary:hover{background:#1d4ed8;}
     .divider{border:none;border-top:1px solid var(--border);margin:20px 0;}
     .section-label{font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em;}
+    .auth-user-chip{display:inline-flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);padding:7px 12px;border-radius:999px;font-size:12px;color:var(--text-mid);}
+    .auth-role-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:var(--blue-light);color:var(--blue);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;}
 
 
     /* ── APARTMENTS ── */
@@ -1946,6 +1948,7 @@ function getArturManualMonth(monthKey){
 }
 
 function setArturManualField(personKey, field, value){
+  if(!canEditArturPayments())return;
   const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
   const all=getArturManualPayments();
   if(!all[monthKey]||typeof all[monthKey]!=='object')all[monthKey]={};
@@ -1962,6 +1965,7 @@ function isArturManualEditing(personKey){
 }
 
 function setArturManualEditing(personKey, editing){
+  if(!canEditArturPayments())return;
   const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
   if(!_state.arturManualEditMap)_state.arturManualEditMap={};
   const key=`${monthKey}__${personKey}`;
@@ -2026,7 +2030,8 @@ function buildArturPaymentsView(rows){
     const amount=String(row.data.amount ?? row.defaultAmount ?? '');
     const paidDate=String(row.data.paidDate||'');
     const isDone=parseMoneyValue(amount)>0&&!!paidDate;
-    const isEditing=isArturManualEditing(row.key)||!isDone;
+    const editable=canEditArturPayments();
+    const isEditing=editable&&(isArturManualEditing(row.key)||!isDone);
     const displayAmount=parseMoneyValue(amount);
     return`<tr>
       <td><span class="artur-kind manual">Ręczne</span></td>
@@ -2047,9 +2052,9 @@ function buildArturPaymentsView(rows){
           isDone
             ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                  <span>Opłacona ręcznie · ${fmt(displayAmount)} zł</span>
-                 <button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>
+                 ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>`:''}
                </div>`
-            : 'Czeka na ręczne uzupełnienie'
+            : (editable?'Czeka na ręczne uzupełnienie':'Brak ręcznie wpisanej płatności')
         }
       </td>
     </tr>`;
@@ -2136,6 +2141,10 @@ function buildArturPaymentsView(rows){
 /* STATE */
 let _state={
   section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
+  authUser:null,
+  authToken:localStorage.getItem('dashboard_session_token')||'',
+  authReady:false,
+  authError:'',
   ksefFilter:'all',
   ksefSearch:'',
   hkMonth:'2026-04',
@@ -2170,6 +2179,64 @@ let _charts={};
 /* RENDER HELPERS */
 function renderLoading(msg='Pobieranie danych…'){
   return`<div class="state-screen"><div class="spinner"></div><p>${msg}</p></div>`;
+}
+function getModuleOrder(){
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+}
+function hasModuleAccess(section){
+  const user=_state.authUser;
+  if(!user)return false;
+  const modules=Array.isArray(user.modules)?user.modules:[];
+  return modules.includes('*')||modules.includes(section);
+}
+function canConfig(){
+  return !!(_state.authUser?.permissions?.canConfig);
+}
+function canEditArturPayments(){
+  return !!(_state.authUser?.permissions?.canEditArturPayments);
+}
+function ensureAllowedSection(){
+  if(hasModuleAccess(_state.section))return;
+  const fallback=getModuleOrder().find(hasModuleAccess);
+  _state.section=fallback||'oblozenie';
+}
+async function sha256Hex(str){
+  const data=new TextEncoder().encode(String(str||''));
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function fetchSyncJson(url){
+  const resp=await fetch(url);
+  return resp.json();
+}
+function setAuthSession(data){
+  _state.authUser=data?.user||null;
+  _state.authToken=data?.token||'';
+  _state.authReady=!!_state.authUser;
+  _state.authError='';
+  if(_state.authToken)localStorage.setItem('dashboard_session_token',_state.authToken);
+  else localStorage.removeItem('dashboard_session_token');
+  if(_state.authUser)localStorage.setItem('dashboard_user',JSON.stringify(_state.authUser));
+  else localStorage.removeItem('dashboard_user');
+}
+function clearAuthSession(){
+  _state.authUser=null;
+  _state.authToken='';
+  _state.authReady=false;
+  localStorage.removeItem('dashboard_session_token');
+  localStorage.removeItem('dashboard_user');
+}
+function renderLogin(msg=''){
+  return`<div class="state-screen"><div class="config-panel">
+    <h2>Logowanie do dashboardu</h2>
+    <p class="hint">Zaloguj się swoim kontem. Zakres widocznych modułów zależy od przypisanej roli.</p>
+    <div class="field"><label>Login</label><input id="auth-login" type="text" placeholder="np. admin" autocomplete="username"/></div>
+    <div class="field"><label>PIN</label><input id="auth-pin" type="password" placeholder="••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginDashboard()"/></div>
+    ${msg?`<div class="error-box" style="margin-top:8px"><div class="err-title">Logowanie</div><div class="err-msg">${msg}</div></div>`:''}
+    <button class="btn-primary" onclick="loginDashboard()">Zaloguj</button>
+    <hr class="divider"/>
+    <p class="hint" style="margin-bottom:0">Jeśli dopiero wdrażasz role, domyślnie utworzą się konta: <strong>admin / 2468</strong> oraz <strong>pracownik / 1357</strong>. Zmień je potem w backendzie Apps Script.</p>
+  </div></div>`;
 }
 function renderError(msg){
   const map={
@@ -2218,6 +2285,74 @@ function renderConfig(){
     <div class="field"><label>URL wdrożenia Apps Script (kalendarz + parking)</label><input id="inp-syncurl" type="text" placeholder="https://script.google.com/macros/s/..." value="${CONFIG.syncUrl}"/></div>
     <button class="btn-primary" onclick="saveConfig()">Zapisz i załaduj dane</button>
   </div></div>`;
+}
+
+async function tryRestoreDashboardSession(){
+  if(!CONFIG.syncUrl)return false;
+  const token=_state.authToken||localStorage.getItem('dashboard_session_token')||'';
+  if(!token)return false;
+  try{
+    const data=await fetchSyncJson(`${CONFIG.syncUrl}?action=getDashboardSession&token=${encodeURIComponent(token)}`);
+    if(data?.ok&&data.user){
+      setAuthSession(data);
+      return true;
+    }
+  }catch(e){
+    console.warn('restore session failed',e);
+  }
+  clearAuthSession();
+  return false;
+}
+
+async function loginDashboard(){
+  const login=(document.getElementById('auth-login')?.value||'').trim();
+  const pin=(document.getElementById('auth-pin')?.value||'').trim();
+  if(!login||!pin){
+    mount(renderLogin('Podaj login i PIN.'));
+    return;
+  }
+  if(!CONFIG.syncUrl){
+    mount(renderConfig());
+    return;
+  }
+  mount(renderLoading('Logowanie…'));
+  try{
+    const pinHash=await sha256Hex(pin);
+    const data=await fetchSyncJson(`${CONFIG.syncUrl}?action=loginDashboard&login=${encodeURIComponent(login)}&pinHash=${encodeURIComponent(pinHash)}`);
+    if(!data?.ok||!data.user){
+      clearAuthSession();
+      mount(renderLogin(data?.error||'Nie udało się zalogować.'));
+      return;
+    }
+    setAuthSession(data);
+    await init();
+  }catch(e){
+    clearAuthSession();
+    mount(renderLogin('Nie udało się połączyć z backendem logowania.'));
+  }
+}
+
+async function logoutDashboard(){
+  const token=_state.authToken;
+  clearAuthSession();
+  if(CONFIG.syncUrl&&token){
+    try{await fetchSyncJson(`${CONFIG.syncUrl}?action=logoutDashboard&token=${encodeURIComponent(token)}`);}catch(e){}
+  }
+  mount(renderLogin());
+}
+
+async function bootDashboard(){
+  if(!CONFIG.apiKey||!CONFIG.spreadsheetId||!CONFIG.syncUrl){
+    mount(renderConfig());
+    return;
+  }
+  mount(renderLoading('Sprawdzanie sesji…'));
+  const restored=await tryRestoreDashboardSession();
+  if(restored){
+    await init();
+    return;
+  }
+  mount(renderLogin());
 }
 
 /* RENTAL MONTH VIEW */
@@ -4790,14 +4925,15 @@ let _ksefPaidCache=null;
 let _arturPaymentsCache=null;
 
 async function syncPull(){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
+    const tokenParam=`&token=${encodeURIComponent(_state.authToken)}`;
     const results=await Promise.allSettled([
-      fetch(`${CONFIG.syncUrl}?action=getKalendar`).then(r=>r.json()),
-      fetch(`${CONFIG.syncUrl}?action=getParkingPaid`).then(r=>r.json()),
-      fetch(`${CONFIG.syncUrl}?action=getDone`).then(r=>r.json()),
-      fetch(`${CONFIG.syncUrl}?action=getKsefPaid`).then(r=>r.json()),
-      fetch(`${CONFIG.syncUrl}?action=getArturPayments`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getKalendar${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getParkingPaid${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getDone${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getKsefPaid${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getArturPayments${tokenParam}`).then(r=>r.json()),
     ]);
     const kalData=results[0].status==='fulfilled'?results[0].value:null;
     const paidData=results[1].status==='fulfilled'?results[1].value:null;
@@ -4838,25 +4974,25 @@ async function syncPull(){
 }
 
 async function syncPushKal(events){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveKalendar',events}),
+      body:JSON.stringify({action:'saveKalendar',token:_state.authToken,events}),
     });
   }catch(e){console.warn('syncPushKal failed:',e);}
 }
 
 async function syncPushDone(done){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveDone',done}),
+      body:JSON.stringify({action:'saveDone',token:_state.authToken,done}),
     });
   }catch(e){console.warn('syncPushDone failed:',e);}
 }
@@ -4886,49 +5022,49 @@ function isEventDone(dateKey,evId){
 }
 
 async function syncPushPaid(paidDates){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveParkingPaid',paidDates}),
+      body:JSON.stringify({action:'saveParkingPaid',token:_state.authToken,paidDates}),
     });
   }catch(e){console.warn('syncPushPaid failed:',e);}
 }
 
 async function syncPushKsefPaid(paidMap){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveKsefPaid',paidMap}),
+      body:JSON.stringify({action:'saveKsefPaid',token:_state.authToken,paidMap}),
     });
   }catch(e){console.warn('syncPushKsefPaid failed:',e);}
 }
 
 async function syncPushKsefPaidEntry(payload){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveKsefPaidEntry',...payload}),
+      body:JSON.stringify({action:'saveKsefPaidEntry',token:_state.authToken,...payload}),
     });
   }catch(e){console.warn('syncPushKsefPaidEntry failed:',e);}
 }
 
 async function syncPushArturPayments(payments){
-  if(!CONFIG.syncUrl)return;
+  if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveArturPayments',payments}),
+      body:JSON.stringify({action:'saveArturPayments',token:_state.authToken,payments}),
     });
   }catch(e){console.warn('syncPushArturPayments failed:',e);}
 }
@@ -7309,6 +7445,10 @@ function ensurePrevioWindowLoaded(centerDate=new Date()){
 }
 
 async function init(){
+  if(!_state.authUser){
+    mount(renderLogin());
+    return;
+  }
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
@@ -7473,6 +7613,7 @@ function getTodayBanner(){
 const mount=html=>{document.getElementById('app').innerHTML=html;};
 
 function renderApp(){
+  ensureAllowedSection();
   const{section,rentalYear,rentalMonth,data}=_state;
   destroyCharts();
 
@@ -7482,27 +7623,34 @@ function renderApp(){
       <div><div class="brand-name">Old Town Vistula Premium Apartments</div><div class="brand-sub">Dashboard zarządzania najmem i mediami</div></div>
     </div>
     <div class="header-right">
+      ${_state.authUser?`<div class="auth-user-chip"><span>${_state.authUser.displayName||_state.authUser.login}</span><span class="auth-role-badge">${_state.authUser.role||'user'}</span></div>`:''}
       <button class="btn-icon" onclick="refresh()">↻ Odśwież</button>
-      <button class="btn-icon" onclick="showConfig()">⚙ Konfiguracja</button>
+      ${canConfig()?`<button class="btn-icon" onclick="showConfig()">⚙ Konfiguracja</button>`:''}
+      <button class="btn-icon" onclick="logoutDashboard()">Wyloguj</button>
     </div>
   </header>`;
 
+  const navButton=(key,label,icon,activeStyle='',extraClass='')=>{
+    if(!hasModuleAccess(key))return'';
+    return`<button class="nav-l1-btn ${extraClass} ${section===key?'active':''}" style="${section===key?activeStyle:''}" onclick="setSection('${key}')"><span class="icon">${icon}</span> ${label}</button>`;
+  };
   const navL1=`<div class="nav-l1">
-    <button class="nav-l1-btn ${section==='rental'?'active':''}" onclick="setSection('rental')"><span class="icon">🏠</span> Przychody</button>
-    <button class="nav-l1-btn media ${section==='media'?'active media':''}" onclick="setSection('media')"><span class="icon">⚡</span> Media — Prąd</button>
-    <button class="nav-l1-btn ${section==='ksef'?'active':''}" style="${section==='ksef'?'background:#1d4ed8;border-color:#1d4ed8':''}" onclick="setSection('ksef')"><span class="icon">🧾</span> KSeF</button>
-    <button class="nav-l1-btn ${section==='apartments'?'active':''}" style="${section==='apartments'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('apartments')"><span class="icon">🏠</span> Apartamenty</button>
-    <button class="nav-l1-btn ${section==='housekeeping'?'active':''}" style="${section==='housekeeping'?'background:#0d9488;border-color:#0d9488':''}" onclick="setSection('housekeeping')"><span class="icon">🧹</span> Housekeeping</button>
-    <button class="nav-l1-btn ${section==='otv'?'active':''}" style="${section==='otv'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('otv')"><span class="icon">📋</span> Rezerwacje OTV</button>
-    <button class="nav-l1-btn ${section==='previo'?'active':''}" style="${section==='previo'?'background:#059669;border-color:#059669':''}" onclick="setSection('previo')"><span class="icon">🏨</span> Previo</button>
-    <button class="nav-l1-btn ${section==='artur-payments'?'active':''}" style="${section==='artur-payments'?'background:#334155;border-color:#334155':''}" onclick="setSection('artur-payments')"><span class="icon">💳</span> Płatności Artur</button>
-    <button class="nav-l1-btn ${section==='booking-payout'?'active':''}" style="${section==='booking-payout'?'background:#003580;border-color:#003580':''}" onclick="setSection('booking-payout')"><span class="icon">💰</span> Wypłaty</button>
-    <button class="nav-l1-btn ${section==='dyzury'?'active':''}" style="${section==='dyzury'?'background:#7c3aed;border-color:#7c3aed':''}" onclick="setSection('dyzury')"><span class="icon">📅</span> Dyżury</button>
-    <button class="nav-l1-btn ${section==='kalendarz'?'active':''}" style="${section==='kalendarz'?'background:#0369a1;border-color:#0369a1':''}" onclick="setSection('kalendarz')"><span class="icon">📆</span> Kalendarz</button>
-    <button class="nav-l1-btn ${section==='noty'?'active':''}" style="${section==='noty'?'background:#475569;border-color:#475569':''}" onclick="setSection('noty')"><span class="icon">🧾</span> Noty</button>
-    <button class="nav-l1-btn ${section==='goscie'?'active':''}" style="${section==='goscie'?'background:#0e7490;border-color:#0e7490':''}" onclick="setSection('goscie')"><span class="icon">🌍</span> Goście</button>
-    <button class="nav-l1-btn ${section==='oblozenie'?'active':''}" style="${section==='oblozenie'?'background:#0f766e;border-color:#0f766e':''}" onclick="setSection('oblozenie')"><span class="icon">🏠</span> Start</button>
+    ${navButton('rental','Przychody','🏠')}
+    ${navButton('media','Media — Prąd','⚡',section==='media'?'background:var(--orange);border-color:var(--orange);color:#fff':'','media')}
+    ${navButton('ksef','KSeF','🧾','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
+    ${navButton('apartments','Apartamenty','🏠','background:#0d9488;border-color:#0d9488;color:#fff')}
+    ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
+    ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
+    ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
+    ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
+    ${navButton('booking-payout','Wypłaty','💰','background:#003580;border-color:#003580;color:#fff')}
+    ${navButton('dyzury','Dyżury','📅','background:#7c3aed;border-color:#7c3aed;color:#fff')}
+    ${navButton('kalendarz','Kalendarz','📆','background:#0369a1;border-color:#0369a1;color:#fff')}
+    ${navButton('noty','Noty','🧾','background:#475569;border-color:#475569;color:#fff')}
+    ${navButton('goscie','Goście','🌍','background:#0e7490;border-color:#0e7490;color:#fff')}
+    ${navButton('oblozenie','Start','🏠','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${(()=>{
+      if(!hasModuleAccess('parking'))return'';
       let parkingAlert=false;
       let alertCount=0;
       if(_state.data.parking?.dateOrder?.length){
@@ -7592,7 +7740,10 @@ function renderApp(){
 }
 
 /* CONTROLLER */
-function showConfig(){mount(renderConfig());}
+function showConfig(){
+  if(!canConfig())return;
+  mount(renderConfig());
+}
 
 function saveConfig(){
   const k=document.getElementById('inp-apikey').value.trim();
@@ -7624,7 +7775,7 @@ function saveConfig(){
   const os=document.getElementById('inp-otvsheetid')?.value.trim()||'';
   CONFIG.otvApiKey=ok;CONFIG.otvSpreadsheetId=os;
   localStorage.setItem('gs_otv_api_key',ok);localStorage.setItem('gs_otv_spreadsheet_id',os);
-  init();
+  bootDashboard();
 }
 
 function ensureKsefLoaded(){
@@ -7644,6 +7795,7 @@ function ensureKsefLoaded(){
 }
 
 function setSection(s){
+  if(!hasModuleAccess(s))return;
   _state.section=s;
   if(s==='ksef'||s==='artur-payments'){
     ensureKsefLoaded();
@@ -7867,7 +8019,7 @@ window.addEventListener('load',()=>{
     console.warn('Chart.js not available');
     window.Chart=function(){return{destroy:()=>{},update:()=>{}};};window.Chart.register=()=>{};
   }
-  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());}else{init();}
+  bootDashboard();
 });
 </script>
 </body>
