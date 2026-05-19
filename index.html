@@ -1988,8 +1988,19 @@ function getArturNoteColor(seed=''){
   return palette[hash%palette.length];
 }
 
+function canWriteArturNotes(){
+  return hasModuleAccess('artur-payments');
+}
+
+function canDeleteArturNote(note){
+  if(_state.authUser?.role==='admin')return true;
+  const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  const authorLogin=String(note?.authorLogin||'').trim().toLowerCase();
+  return !!login && login===authorLogin;
+}
+
 function addArturMonthNoteFromInput(){
-  if(!canEditArturPayments())return;
+  if(!canWriteArturNotes())return;
   const input=document.getElementById('artur-month-note-input');
   const text=String(input?.value||'').trim();
   if(!text)return;
@@ -2012,11 +2023,13 @@ function addArturMonthNoteFromInput(){
 }
 
 function deleteArturMonthNote(noteId){
-  if(!canEditArturPayments()||!noteId)return;
+  if(!canWriteArturNotes()||!noteId)return;
   const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
   const all=getArturManualPayments();
   if(!all[monthKey]||typeof all[monthKey]!=='object'||!Array.isArray(all[monthKey].__notes))return;
-  all[monthKey].__notes=all[monthKey].__notes.filter(note=>String(note?.id||'')!==String(noteId));
+  const note=all[monthKey].__notes.find(item=>String(item?.id||'')===String(noteId));
+  if(!canDeleteArturNote(note))return;
+  all[monthKey].__notes=all[monthKey].__notes.filter(item=>String(item?.id||'')!==String(noteId));
   saveArturManualPayments(all);
   if(_state.section==='artur-payments')renderApp();
 }
@@ -2115,7 +2128,7 @@ function buildArturPaymentsView(rows){
               <strong style="font-size:12px;color:var(--text)">${escapeHtml(note.author||'Użytkownik')}</strong>
               ${createdLabel?`<span style="font-size:11px;color:var(--text-muted)">${createdLabel}</span>`:''}
             </div>
-            ${canEditArturPayments()?`<button class="ksef-action-btn" onclick="deleteArturMonthNote('${String(note.id||'').replace(/'/g,"\\'")}')">Usuń</button>`:''}
+            ${canDeleteArturNote(note)?`<button class="ksef-action-btn" onclick="deleteArturMonthNote('${String(note.id||'').replace(/'/g,"\\'")}')">Usuń</button>`:''}
           </div>
           <div style="font-size:13px;color:var(--text);line-height:1.55;margin-top:8px;white-space:pre-wrap">${escapeHtml(note.text||'')}</div>
         </div>`;
@@ -2224,7 +2237,7 @@ function buildArturPaymentsView(rows){
       <div class="grid-card">
         <div class="card-title">Luźne notatki</div>
         <div class="card-subtitle">Wspólne notatki do miesiąca. Są widoczne na każdym komputerze i oznaczone kolorem autora.</div>
-        ${canEditArturPayments()?`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+        ${canWriteArturNotes()?`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
           <textarea id="artur-month-note-input" class="artur-input" rows="4" placeholder="Dodaj notatkę do ${formatMonthKeyLabel(monthKey)}..."></textarea>
           <div style="display:flex;justify-content:flex-end">
             <button class="btn-primary" style="width:auto;padding:10px 16px;margin-top:0" onclick="addArturMonthNoteFromInput()">Dodaj notatkę</button>
