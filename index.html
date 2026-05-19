@@ -2583,8 +2583,7 @@ function buildMonthView(days,opts={}){
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód ${showForecast?'dotychczasowy':'całkowity'}</div><div class="value"><span class="sym">zł</span>${fmt(total)}</div><div class="sub">${withVal.length} dni${fc?' z '+fc.totalDays:''}</div></div>
-    <div class="kpi-card c-purple" style="animation-delay:0.07s"><div class="label">${pf?'Prognoza Previo':'Średnia dzienna'}</div><div class="value"><span class="sym">zł</span>${pf?fmt(pf.forecastTotal):fmt(avg)}</div><div class="sub">${pf?(pf.isPastMonth?'zamknięty miesiąc':`potwierdzone ${fmt(pf.confirmed)} zł${pf.estNewBookings>0?` · est. ${fmt(pf.estNewBookings)} zł`:''}`):'per dzień z danymi'}</div></div>
-    <div class="kpi-card c-orange" style="animation-delay:0.105s"><div class="label">${pf?.lastYearTotal?'Rok temu (Previo)':'Średnia dzienna'}</div><div class="value"><span class="sym">zł</span>${pf?.lastYearTotal?fmt(pf.lastYearTotal):fmt(avg)}</div><div class="sub">${pf?.lastYearTotal?pf.lastYearKey:'per dzień z danymi'}</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia dzienna</div><div class="value"><span class="sym">zł</span>${fmt(avg)}</div><div class="sub">per dzień z danymi</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.14s"><div class="label">Najlepszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(maxVal)}</div><div class="sub">${enriched[maxIdx]?.name||'—'} (${enriched[maxIdx]?DOW_PL[enriched[maxIdx].dow]:''})</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Najsłabszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(minVal)}</div><div class="sub">${enriched[minIdx]?.name||'—'} (${enriched[minIdx]?DOW_PL[enriched[minIdx].dow]:''})</div></div>
     ${otvTotal!==null?`<div class="kpi-card c-purple" style="animation-delay:0.28s"><div class="label">Przychód OTV</div><div class="value"><span class="sym">zł</span>${fmt(otvTotal)}</div><div class="sub">wg arkusza rezerwacji</div></div>`:''}
@@ -2610,6 +2609,32 @@ function buildMonthView(days,opts={}){
       <div class="progress-bar"><div class="progress-fill" style="width:${fc.pctDone}%"></div></div>
     </div>
     <div class="weekend-info">📊 Prognoza uwzględnia wzorzec weekendowy — <strong>soboty i niedziele</strong> prognozowane wyżej.</div>
+  </div>`:'';
+
+  const previoForecast=pf&&showForecast?`<div class="forecast-card" style="border-color:#059669;margin-top:0">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
+    <div class="forecast-top">
+      <div class="fc-main">
+        <div class="fc-label">🏨 Prognoza Previo — booking window model (avg last-7-days: ${pf.avgLast7Pct}% miesięcznego)</div>
+        <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
+        <div class="fc-sub">
+          Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
+          Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
+          ${pf.estNewBookings>0?` · Last-minute est.: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
+        </div>
+        ${pf.lastYearTotal?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · śr. dziennie: <strong>zł ${fmt(pf.earnedPerDay)}</strong>/dzień</div>`:''}
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-label">Zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Potwierdzone</div><div class="fc-stat-val" style="color:#0d9488">zł ${fmt(pf.confirmed)}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Wolne apt.</div><div class="fc-stat-val" style="color:${pf.freeApts>8?'var(--red)':'#059669'}">${pf.freeApts} / ${pf.totalApts}</div></div>
+        <div class="fc-stat"><div class="fc-stat-label">Dni zostało</div><div class="fc-stat-val">${pf.daysLeft}</div></div>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Postęp miesiąca</span><span>${pf.pctDone}%</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pf.pctDone}%;background:#059669"></div></div>
+    </div>
   </div>`:'';
 
   const chart=`<div class="chart-card"><div class="card-title">${showForecast?'Przychody dzienne + prognoza':'Przychody dzienne — '+monthLabel}</div><div class="card-subtitle">${showForecast?'Słupki pełne = dane · Jasne = prognoza':'Sb+Nd wyróżnione fioletowo'}</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>`;
@@ -2714,7 +2739,7 @@ function buildMonthView(days,opts={}){
     <div class="drawer-body" id="drawerBody"></div>
   </div>`;
 
-  return{html:kpis+forecast+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
+  return{html:kpis+forecast+(previoForecast||'')+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
 }
 
 /* MEDIA VIEW */
@@ -6675,6 +6700,7 @@ const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bro
 function buildOblozenieLive(){
   ensurePrevioWindowLoaded(new Date());
   const today=new Date();today.setHours(0,0,0,0);
+  ensurePrevioForecastLoadedForRentalKey(getRentalMonthKeyFromDate(today));
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const normalizePrevioDate=value=>{
     const parsed=parseDateDMY(String(value||'').trim());
@@ -6701,6 +6727,7 @@ function buildOblozenieLive(){
     return checkout && checkout<=today ? sum+(row.cena||0) : sum;
   },0);
   const currentMonthTotal=currentMonthRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthPrevioForecast=calcPrevioForecast(currentMonthKey);
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -6946,7 +6973,7 @@ function buildOblozenieLive(){
 
     <div style="background:linear-gradient(135deg,#ecfeff 0%,#f0fdfa 42%,#f8fafc 100%);border:1px solid #99f6e4;border-radius:18px;padding:24px 26px;margin-bottom:18px;position:relative;overflow:hidden">
       <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap">
-        <div style="max-width:760px">
+        <div style="max-width:860px">
           <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:8px">Centrum Operacyjne</div>
           <div style="font-size:30px;font-weight:800;color:var(--text);line-height:1.05">Dzień pod kontrolą</div>
           <div style="font-size:14px;color:var(--text-mid);margin-top:8px;line-height:1.6">
@@ -6959,34 +6986,46 @@ function buildOblozenieLive(){
             <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #bbf7d0;font-size:12px;font-weight:700;color:#15803d">${wolneApty.length} wolnych</span>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;min-width:290px;max-width:340px;flex:1">
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
-            <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
-          </div>
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Filtr</div>
-            <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${filtry==='otv'?'Tylko OTV':'Wszystkie'}</div>
-          </div>
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">ADR</div>
-            <div style="font-size:18px;font-weight:800;color:#2563eb;margin-top:6px">${adr>0?fmt(adr)+' zł':'—'}</div>
-          </div>
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">RevPAR</div>
-            <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
-          </div>
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Dotychczas w miesiącu</div>
-            <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—'}</div>
-          </div>
-          <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
-            <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
-          </div>
-          ${weatherCard('Teraz w Krakowie',weatherCache?.current||null,'current')}
-          ${weatherCard('Jutro',weatherTomorrow,'daily')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:18px">
+        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
         </div>
+        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Filtr</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${filtry==='otv'?'Tylko OTV':'Wszystkie'}</div>
+        </div>
+        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">ADR</div>
+          <div style="font-size:18px;font-weight:800;color:#2563eb;margin-top:6px">${adr>0?fmt(adr)+' zł':'—'}</div>
+        </div>
+        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">RevPAR</div>
+          <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
+        </div>
+        <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Dotychczas w miesiącu</div>
+          <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#065f46;opacity:.8;margin-top:6px">${currentMonthRows.length?`${currentMonthRows.length} checkoutów w miesiącu`:'Brak danych'}</div>
+        </div>
+        <div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#155e75;text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
+          <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#155e75;opacity:.8;margin-top:6px">Suma wszystkich rezerwacji miesiąca</div>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.06em">Prognoza Previo</div>
+          <div style="font-size:18px;font-weight:800;color:#16a34a;margin-top:6px">${currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#166534;opacity:.85;margin-top:6px">${currentMonthPrevioForecast?`potwierdzone ${fmt(currentMonthPrevioForecast.confirmed)} zł${currentMonthPrevioForecast.estNewBookings>0?` · est. ${fmt(currentMonthPrevioForecast.estNewBookings)} zł`:''}`:'Ładowanie danych Previo'}</div>
+        </div>
+        <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.06em">Rok temu (Previo)</div>
+          <div style="font-size:18px;font-weight:800;color:#4338ca;margin-top:6px">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#3730a3;opacity:.8;margin-top:6px">${currentMonthPrevioForecast?.lastYearKey||'Ładowanie danych archiwalnych'}</div>
+        </div>
+        ${weatherCard('Teraz w Krakowie',weatherCache?.current||null,'current')}
+        ${weatherCard('Jutro',weatherTomorrow,'daily')}
       </div>
     </div>
 
@@ -7629,7 +7668,7 @@ function ensurePrevioForecastLoadedForRentalKey(rentalKey){
   const missing=[monthKey,lastYearKey].filter(key=>key&&_state.data.previo?.[key]===undefined);
   if(!missing.length)return;
   Promise.allSettled(missing.map(key=>loadPrevioMonthIntoState(key))).then(()=>{
-    if(_state.section==='rental')renderApp();
+    if(_state.section==='rental'||_state.section==='oblozenie')renderApp();
   });
 }
 
