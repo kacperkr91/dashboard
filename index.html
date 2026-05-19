@@ -6722,8 +6722,6 @@ function buildOblozenieLive(){
   if((!weatherCache||weatherStale)&&!_state.weatherLoading){
     setTimeout(()=>loadStartWeather(),0);
   }
-  const daysInMonth=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
-  const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
     ? _state.data.previo[currentMonthKey].filter(r=>{
@@ -6748,6 +6746,8 @@ function buildOblozenieLive(){
   const filtry=_state.oblozenieFiltry||'wszystkie';
   const showPhones=!!_state.oblozenieTelefony;
   const targetDate=dzien==='dzis'?today:tmr;
+  const daysInMonth=new Date(targetDate.getFullYear(),targetDate.getMonth()+1,0).getDate();
+  const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
   const targetStr=dzien==='dzis'?todayStr:tmrStr;
   const DOW=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
