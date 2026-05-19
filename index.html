@@ -534,6 +534,11 @@ const RENTAL_MONTH_META=[
 function getRentalMonthKeyFromDate(dateObj=new Date()){
   return `${RENTAL_MONTH_PREFIXES[dateObj.getMonth()]}${dateObj.getFullYear()}`;
 }
+function rentalKeyToPrevioMonthKey(key){
+  const parsed=parseRentalMonthKey(key);
+  if(!parsed)return null;
+  return `${parsed.year}-${String(parsed.month).padStart(2,'0')}`;
+}
 
 function parseRentalMonthKey(key){
   const match=String(key||'').match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(\d{4})$/);
@@ -1610,23 +1615,29 @@ function calcPrevioForecast(monthKey){
   const rows=_state.data.previo[monthKey];
   if(!rows||rows.error||!Array.isArray(rows))return null;
 
-  const today=new Date();today.setHours(0,0,0,0);
   const [yr,mo]=monthKey.split('-').map(Number);
+  const today=new Date();today.setHours(0,0,0,0);
+  const monthStart=new Date(yr,mo-1,1);
+  const monthEnd=new Date(yr,mo,0);
   const daysInMon=new Date(yr,mo,0).getDate();
-  const daysDone=today.getDate();
-  const daysLeft=daysInMon-daysDone;
+  const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  let refDate=today;
+  if(monthKey<currentMonthKey)refDate=monthEnd;
+  else if(monthKey>currentMonthKey)refDate=new Date(yr,mo-1,0);
+  const daysDone=Math.min(Math.max(refDate.getDate(),0),daysInMon);
+  const daysLeft=Math.max(daysInMon-daysDone,0);
   const active=rows.filter(r=>!r.cancelled);
 
-  // Already earned = checkouts up to today
+  // Already earned = checkouts up to reference day within selected month
   const earned=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
-    return d&&d<=today;
+    return d&&d<=refDate;
   }).reduce((s,r)=>s+r.cena,0);
 
-  // Confirmed future = already booked, checkout after today
+  // Confirmed future = already booked, checkout after reference day
   const confirmedRows=active.filter(r=>{
     const d=parseDateDMY(r.dataDo);
-    return d&&d>today;
+    return d&&d>refDate;
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
 
@@ -1662,6 +1673,19 @@ function calcPrevioForecast(monthKey){
   // Estimate last-minute bookings using last year as base
   let estNewBookings=0;
   const earnedPerDay=daysDone>0?earned/daysDone:0;
+
+  if(monthKey<currentMonthKey){
+    return{
+      earned, confirmed:0, estNewBookings:0, forecastTotal:earned,
+      lastYearTotal, lastYearKey,
+      avgLast7Pct:Math.round(avgLast7Pct*100),
+      daysDone:daysInMon, daysLeft:0, daysInMon,
+      pctDone:100,
+      confirmedApts:0, freeApts:29, totalApts:29,
+      earnedPerDay,
+      isPastMonth:true,
+    };
+  }
 
   if(Array.isArray(lastYearRows)&&lastYearRows.length&&lastYearTotal>0){
     const lyActive=lastYearRows.filter(r=>!r.cancelled);
@@ -2541,7 +2565,7 @@ async function bootDashboard(){
 
 /* RENTAL MONTH VIEW */
 function buildMonthView(days,opts={}){
-  const{showForecast=false,monthLabel='',otvMonthKey=null}=opts;
+  const{showForecast=false,monthLabel='',otvMonthKey=null,previoMonthKey=null}=opts;
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
@@ -2551,6 +2575,7 @@ function buildMonthView(days,opts={}){
   const maxIdx=enriched.findIndex(d=>d.value===maxVal&&d.value!==null);
   const minIdx=enriched.findIndex(d=>d.value===minVal&&d.value!==null&&withVal.length>1);
   const fc=showForecast?calcForecast(days):null;
+  const pf=previoMonthKey?calcPrevioForecast(previoMonthKey):null;
 
   // OTV total from OTV reservations data
   const otvRows=otvMonthKey&&_state.data.otv[otvMonthKey];
@@ -2558,7 +2583,8 @@ function buildMonthView(days,opts={}){
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód ${showForecast?'dotychczasowy':'całkowity'}</div><div class="value"><span class="sym">zł</span>${fmt(total)}</div><div class="sub">${withVal.length} dni${fc?' z '+fc.totalDays:''}</div></div>
-    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia dzienna</div><div class="value"><span class="sym">zł</span>${fmt(avg)}</div><div class="sub">per dzień z danymi</div></div>
+    <div class="kpi-card c-purple" style="animation-delay:0.07s"><div class="label">${pf?'Prognoza Previo':'Średnia dzienna'}</div><div class="value"><span class="sym">zł</span>${pf?fmt(pf.forecastTotal):fmt(avg)}</div><div class="sub">${pf?(pf.isPastMonth?'zamknięty miesiąc':`potwierdzone ${fmt(pf.confirmed)} zł${pf.estNewBookings>0?` · est. ${fmt(pf.estNewBookings)} zł`:''}`):'per dzień z danymi'}</div></div>
+    <div class="kpi-card c-orange" style="animation-delay:0.105s"><div class="label">${pf?.lastYearTotal?'Rok temu (Previo)':'Średnia dzienna'}</div><div class="value"><span class="sym">zł</span>${pf?.lastYearTotal?fmt(pf.lastYearTotal):fmt(avg)}</div><div class="sub">${pf?.lastYearTotal?pf.lastYearKey:'per dzień z danymi'}</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.14s"><div class="label">Najlepszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(maxVal)}</div><div class="sub">${enriched[maxIdx]?.name||'—'} (${enriched[maxIdx]?DOW_PL[enriched[maxIdx].dow]:''})</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Najsłabszy dzień</div><div class="value"><span class="sym">zł</span>${fmt(minVal)}</div><div class="sub">${enriched[minIdx]?.name||'—'} (${enriched[minIdx]?DOW_PL[enriched[minIdx].dow]:''})</div></div>
     ${otvTotal!==null?`<div class="kpi-card c-purple" style="animation-delay:0.28s"><div class="label">Przychód OTV</div><div class="value"><span class="sym">zł</span>${fmt(otvTotal)}</div><div class="sub">wg arkusza rezerwacji</div></div>`:''}
@@ -2584,38 +2610,6 @@ function buildMonthView(days,opts={}){
       <div class="progress-bar"><div class="progress-fill" style="width:${fc.pctDone}%"></div></div>
     </div>
     <div class="weekend-info">📊 Prognoza uwzględnia wzorzec weekendowy — <strong>soboty i niedziele</strong> prognozowane wyżej.</div>
-  </div>`:'';
-
-  // Previo forecast
-  // Previo forecast — only for current month
-  const now=new Date();
-  const currentPrevioKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const pfKey=showForecast?currentPrevioKey:null;
-  const pf=pfKey?calcPrevioForecast(pfKey):null;
-  const previoForecast=pf?`<div class="forecast-card" style="border-color:#059669;margin-top:0">
-    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#10b981)"></div>
-    <div class="forecast-top">
-      <div class="fc-main">
-        <div class="fc-label">🏨 Prognoza Previo — booking window model (avg last-7-days: ${pf.avgLast7Pct}% miesięcznego)</div>
-        <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
-        <div class="fc-sub">
-          Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
-          Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
-          ${pf.estNewBookings>0?` · Last-minute est.: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
-        </div>
-        ${pf.lastYearTotal?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · śr. dziennie: <strong>zł ${fmt(pf.earnedPerDay)}</strong>/dzień</div>`:''}
-      </div>
-      <div class="fc-stats">
-        <div class="fc-stat"><div class="fc-stat-label">Zarobione</div><div class="fc-stat-val" style="color:#059669">zł ${fmt(pf.earned)}</div></div>
-        <div class="fc-stat"><div class="fc-stat-label">Potwierdzone</div><div class="fc-stat-val" style="color:#0d9488">zł ${fmt(pf.confirmed)}</div></div>
-        <div class="fc-stat"><div class="fc-stat-label">Wolne apt.</div><div class="fc-stat-val" style="color:${pf.freeApts>8?'var(--red)':'#059669'}">${pf.freeApts} / ${pf.totalApts}</div></div>
-        <div class="fc-stat"><div class="fc-stat-label">Dni zostało</div><div class="fc-stat-val">${pf.daysLeft}</div></div>
-      </div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>Postęp miesiąca</span><span>${pf.pctDone}%</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pf.pctDone}%;background:#059669"></div></div>
-    </div>
   </div>`:'';
 
   const chart=`<div class="chart-card"><div class="card-title">${showForecast?'Przychody dzienne + prognoza':'Przychody dzienne — '+monthLabel}</div><div class="card-subtitle">${showForecast?'Słupki pełne = dane · Jasne = prognoza':'Sb+Nd wyróżnione fioletowo'}</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>`;
@@ -2720,7 +2714,7 @@ function buildMonthView(days,opts={}){
     <div class="drawer-body" id="drawerBody"></div>
   </div>`;
 
-  return{html:kpis+forecast+(previoForecast||'')+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
+  return{html:kpis+forecast+chart+grid+channelSection+monthlySummary+drawer,enriched,fc};
 }
 
 /* MEDIA VIEW */
@@ -7627,6 +7621,17 @@ function ensurePrevioWindowLoaded(centerDate=new Date()){
     if(_state.section==='oblozenie'||_state.section==='booking-payout')renderApp();
   });
 }
+function ensurePrevioForecastLoadedForRentalKey(rentalKey){
+  const monthKey=rentalKeyToPrevioMonthKey(rentalKey);
+  if(!monthKey)return;
+  const [yr,mo]=monthKey.split('-');
+  const lastYearKey=`${parseInt(yr,10)-1}-${mo}`;
+  const missing=[monthKey,lastYearKey].filter(key=>key&&_state.data.previo?.[key]===undefined);
+  if(!missing.length)return;
+  Promise.allSettled(missing.map(key=>loadPrevioMonthIntoState(key))).then(()=>{
+    if(_state.section==='rental')renderApp();
+  });
+}
 
 async function init(){
   if(!_state.authUser){
@@ -7743,6 +7748,8 @@ async function init(){
 /* MAIN RENDER */
 function getTodayBanner(){
   try{
+    const isArturUser=String(_state.authUser?.login||'').trim().toLowerCase()==='artur';
+    if(!isArturUser&&!hasModuleAccess('kalendarz'))return'';
     const events=getKalEvents();
     const today=new Date();
     const dk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
@@ -7855,6 +7862,7 @@ function renderApp(){
   let navL2='', content='', enriched=null, fc=null, mediaView=null;
 
   if(section==='rental'){
+    ensurePrevioForecastLoadedForRentalKey(rentalMonth);
     ensureRentalMonthEnabled(rentalMonth);
     const years=Object.keys(NAV.rental.years).sort((a,b)=>b-a);
     const yearBtns=years.map(y=>`<button class="nav-l2-year ${rentalYear==y?'active':''}" onclick="setRentalYear(${y})">${y}</button>`).join('');
@@ -7876,7 +7884,7 @@ function renderApp(){
       const isCurrent=rentalMonth===currentMonthKey;
       const otvKeyMap={'apr2026':'2026-04','mar2026':'2026-03','feb2026':'2026-02','jan2026':'2026-01','dec2025':'2025-12'};
       const otvMK=otvKeyMap[rentalMonth]||null;
-      const v=buildMonthView(d,{showForecast:isCurrent,monthLabel:activeM?.label+' '+rentalYear,otvMonthKey:otvMK});
+      const v=buildMonthView(d,{showForecast:isCurrent,monthLabel:activeM?.label+' '+rentalYear,otvMonthKey:otvMK,previoMonthKey:rentalKeyToPrevioMonthKey(rentalMonth)});
       content=v.html;enriched=v.enriched;fc=v.fc;
     }
   } else if(section==='media'){
@@ -8038,6 +8046,7 @@ function setRentalMonth(key){
   _state.rentalMonth=key;
   const parsed=parseRentalMonthKey(key);
   if(parsed)_state.rentalYear=parsed.year;
+  ensurePrevioForecastLoadedForRentalKey(key);
   ensureRentalMonthEnabled(key);
   if(_state.data[key]===undefined || _state.data[key]===null){
     _state.data[key]=null;
