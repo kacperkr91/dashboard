@@ -1981,11 +1981,11 @@ function getArturMonthNotes(monthKey){
 }
 
 function getArturNoteColor(seed=''){
-  const palette=['#2563eb','#7c3aed','#dc2626','#0f766e','#d97706','#0891b2','#9333ea','#15803d'];
   const str=String(seed||'user');
   let hash=0;
   for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))>>>0;
-  return palette[hash%palette.length];
+  const hue=hash%360;
+  return `hsl(${hue} 72% 42%)`;
 }
 
 function canWriteArturNotes(){
@@ -2120,7 +2120,7 @@ function buildArturPaymentsView(rows){
         const createdLabel=created&&!Number.isNaN(created.getTime())
           ? `${String(created.getDate()).padStart(2,'0')}.${String(created.getMonth()+1).padStart(2,'0')} ${String(created.getHours()).padStart(2,'0')}:${String(created.getMinutes()).padStart(2,'0')}`
           : '';
-        const color=note.color||getArturNoteColor(note.authorLogin||note.author||'user');
+        const color=getArturNoteColor(note.authorLogin||note.author||'user');
         return `<div style="border:1px solid ${color}33;border-left:5px solid ${color};background:#fff;border-radius:12px;padding:12px 14px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <div style="display:flex;align-items:center;gap:8px;min-width:0">
@@ -2154,15 +2154,17 @@ function buildArturPaymentsView(rows){
           ? `<input class="artur-input" type="date" value="${paidDate}" oninput="setArturManualField('${row.key}','paidDate',this.value)">`
           : `${paidDate||'—'}`
       }</td>
-      <td><span class="artur-status ${isDone?'paid':'missing'}">${isDone?'Opłacona':'Do wpisania'}</span></td>
       <td class="artur-small">
         ${
           isDone
-            ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                 <span>Opłacona ręcznie · ${fmt(displayAmount)} zł</span>
+            ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                 <span class="artur-status paid">Opłacona</span>
                  ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>`:''}
                </div>`
-            : (editable?'Czeka na ręczne uzupełnienie':'Brak ręcznie wpisanej płatności')
+            : `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                 <span class="artur-status missing">Do wpisania</span>
+                 ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',true)">Edytuj</button>`:''}
+               </div>`
         }
       </td>
     </tr>`;
@@ -2173,9 +2175,6 @@ function buildArturPaymentsView(rows){
     const statusLabel=!m?'Brak faktury':m.status==='paid'?'Opłacona':m.status==='partial'?'Częściowo opłacona':'Do opłacenia';
     const totalAmount=m?fmt(m.bruttoValue||0):'—';
     const remainingAmount=m?fmt(getKsefOutstandingValue(m)):'—';
-    const details=!m
-      ?`Brak faktury z NIP ${ARTUR_PAYMENT_NIP} w ${formatMonthKeyLabel(monthKey)}`
-      :`${m.seller}${m.nip?` · NIP ${m.nip}`:''}`;
     const dateLabel=!m?'—':(m.latestPaidDate||m.manualPaidDate||'—');
     return`<tr>
       <td><span class="artur-kind ksef">KSeF</span></td>
@@ -2195,7 +2194,6 @@ function buildArturPaymentsView(rows){
       </td>
       <td>${dateLabel}</td>
       <td><span class="artur-status ${statusClass}">${statusLabel}</span></td>
-      <td class="artur-small">${details}</td>
     </tr>`;
   }).join('');
 
@@ -2223,7 +2221,6 @@ function buildArturPaymentsView(rows){
                 <th>Kwota</th>
                 <th>Data opłacenia</th>
                 <th>Status</th>
-                <th>Szczegóły</th>
               </tr>
             </thead>
             <tbody>
