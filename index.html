@@ -7063,9 +7063,17 @@ function buildOblozenieLive(){
             <div style="height:100%;width:${currentMonthTotal>0?((currentMonthOtvTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#2563eb"></div>
             <div style="height:100%;width:${currentMonthTotal>0?((currentMonthAgataTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#f59e0b"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px">
-            <span style="color:#1d4ed8;font-weight:700">OTV: ${currentMonthOtvRows.length?fmt(currentMonthOtvTotal)+' zł':'—'}</span>
-            <span style="color:#c2410c;font-weight:700">Agata: ${currentMonthAgataRows.length?fmt(currentMonthAgataTotal)+' zł':'—'}</span>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px">
+            <div style="min-width:0;text-align:center;color:#1d4ed8">
+              <div style="font-size:9px;font-weight:700;line-height:1.15">OTV</div>
+              <div style="font-size:10px;font-weight:800;line-height:1.1;margin-top:2px">${currentMonthOtvRows.length?fmt(currentMonthOtvTotal)+' zł':'—'}</div>
+              <div style="font-size:9px;opacity:.8;line-height:1.1;margin-top:2px">${currentMonthTotal>0?Math.round((currentMonthOtvTotal/currentMonthTotal)*100):0}% całości</div>
+            </div>
+            <div style="min-width:0;text-align:center;color:#c2410c">
+              <div style="font-size:9px;font-weight:700;line-height:1.15">Agata</div>
+              <div style="font-size:10px;font-weight:800;line-height:1.1;margin-top:2px">${currentMonthAgataRows.length?fmt(currentMonthAgataTotal)+' zł':'—'}</div>
+              <div style="font-size:9px;opacity:.8;line-height:1.1;margin-top:2px">${currentMonthTotal>0?Math.round((currentMonthAgataTotal/currentMonthTotal)*100):0}% całości</div>
+            </div>
           </div>
           </div>
         </div>
