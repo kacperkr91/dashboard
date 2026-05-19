@@ -7690,6 +7690,7 @@ async function init(){
   const needParking=hasModuleAccess('parking');
   const needKsef=hasAnyModuleAccess(['ksef','artur-payments']);
   const progressDelay=_state.authUser?.role==='admin'?2000:120;
+  const userName=_state.authUser?.displayName||_state.authUser?.login||'Użytkowniku';
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
@@ -7699,11 +7700,11 @@ async function init(){
   mount(`<div class="app"><header>
     <div class="brand"><div class="brand-icon">🏛️</div>
     <div><div class="brand-name">Old Town Vistula Premium Apartments</div>
-    <div class="brand-sub">Ładowanie danych…</div></div></div>
+    <div class="brand-sub">Witaj, ${userName}</div></div></div>
   </header>
   <div class="state-screen">
     <div class="spinner"></div>
-    <p id="loadMsg">Pobieranie danych…</p>
+    <p id="loadMsg">Przygotowuję Twój dashboard…</p>
     <div id="loadBar" style="width:320px;height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden">
       <div id="loadFill" style="height:100%;width:0%;background:var(--blue);border-radius:3px;transition:width 0.4s ease"></div>
     </div>
@@ -7716,7 +7717,7 @@ async function init(){
     if(ml)ml.textContent=msg;
   };
 
-  setProgress(5,'Wykrywanie zakładek…');
+  setProgress(5,'Przygotowuję Twój dashboard…');
   const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
   await Promise.allSettled([
     needHousekeeping?detectHkMonths():Promise.resolve(),
@@ -7732,7 +7733,7 @@ async function init(){
   const prevPrevioKey=shiftMonthKey(initPrevioKey,-1);
   const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
-  setProgress(15,'Ładowanie bieżącego miesiąca…');
+  setProgress(15,'Jeszcze chwila…');
   const [rentalCurrentR,previor,previoPrevR,previoNextR,parkingr]=await Promise.allSettled([
     needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
@@ -7750,7 +7751,7 @@ async function init(){
 
   await delay(progressDelay);
 
-  setProgress(35,'Ładowanie marca i mediów…');
+  setProgress(35,'Sprawdzam najnowsze dane…');
   const [mr,mdr]=await Promise.allSettled([
     needRental?loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'):Promise.resolve(null),
     needMedia?loadMediaData():Promise.resolve(null),
@@ -7760,7 +7761,7 @@ async function init(){
 
   await delay(progressDelay);
 
-  setProgress(52,'Ładowanie lutego i stycznia…');
+  setProgress(52,'Układam widok dla Ciebie…');
   const [fr,jr]=await Promise.allSettled([
     needRental?loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'):Promise.resolve(null),
     needRental?loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'):Promise.resolve(null),
@@ -7770,7 +7771,7 @@ async function init(){
 
   await delay(progressDelay);
 
-  setProgress(67,'Ładowanie grudnia i apartamentów…');
+  setProgress(67,'Dopinamy szczegóły…');
   const [dr,ar]=await Promise.allSettled([
     needRental?loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'):Promise.resolve(null),
     needApartments?loadApartmentsData():Promise.resolve(null),
@@ -7780,7 +7781,7 @@ async function init(){
 
   await delay(progressDelay);
 
-  setProgress(82,'Ładowanie housekeeping i OTV…');
+  setProgress(82,'Prawie gotowe…');
   const [hkr,otvr]=await Promise.allSettled([
     needHousekeeping?loadHousekeepingMonth(initHkKey):Promise.resolve(null),
     needOtv?loadOtvMonth(initOtvKey):Promise.resolve(null),
@@ -7790,14 +7791,14 @@ async function init(){
 
   await delay(progressDelay);
 
-  setProgress(93,'Finalizowanie prognozy…');
+  setProgress(93,'Jeszcze moment…');
   if(needPrevio||needRental){
     const previoLYr=await safeLoad(()=>loadPrevioMonth(lastYearPrevioKey));
     if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
   }
 
   if(needKsef&&_state.data.ksef===null){
-    setProgress(96,'Ładowanie KSeF…');
+    setProgress(96,'Prawie gotowe…');
     const ksefr=await safeLoad(()=>loadKsefData());
     if(ksefr.status==='fulfilled')_state.data.ksef=ksefr.value;
     else _state.data.ksef={error:ksefr.reason?.message||'Błąd'};
