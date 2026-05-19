@@ -6722,6 +6722,8 @@ function buildOblozenieLive(){
   if((!weatherCache||weatherStale)&&!_state.weatherLoading){
     setTimeout(()=>loadStartWeather(),0);
   }
+  const daysInMonth=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
   const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
     ? _state.data.previo[currentMonthKey].filter(r=>{
@@ -7004,6 +7006,10 @@ function buildOblozenieLive(){
         <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
           <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
+          <div style="font-size:11px;color:var(--text-muted);opacity:.85;margin-top:6px">Dzień ${targetDate.getDate()} z ${daysInMonth} miesiąca</div>
+          <div style="margin-top:8px;height:7px;background:#e2e8f0;border-radius:999px;overflow:hidden">
+            <div style="height:100%;width:${monthDayProgress.toFixed(1)}%;background:linear-gradient(90deg,#0f766e,#14b8a6)"></div>
+          </div>
         </div>
         <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Filtr</div>
