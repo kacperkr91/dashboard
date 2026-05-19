@@ -1975,6 +1975,52 @@ function getArturManualMonth(monthKey){
   return all[monthKey]&&typeof all[monthKey]==='object'?all[monthKey]:{};
 }
 
+function getArturMonthNotes(monthKey){
+  const month=getArturManualMonth(monthKey);
+  return Array.isArray(month.__notes)?month.__notes:[];
+}
+
+function getArturNoteColor(seed=''){
+  const palette=['#2563eb','#7c3aed','#dc2626','#0f766e','#d97706','#0891b2','#9333ea','#15803d'];
+  const str=String(seed||'user');
+  let hash=0;
+  for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))>>>0;
+  return palette[hash%palette.length];
+}
+
+function addArturMonthNoteFromInput(){
+  if(!canEditArturPayments())return;
+  const input=document.getElementById('artur-month-note-input');
+  const text=String(input?.value||'').trim();
+  if(!text)return;
+  const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
+  const all=getArturManualPayments();
+  if(!all[monthKey]||typeof all[monthKey]!=='object')all[monthKey]={};
+  if(!Array.isArray(all[monthKey].__notes))all[monthKey].__notes=[];
+  const authorLogin=_state.authUser?.login||'user';
+  all[monthKey].__notes.unshift({
+    id:`note_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    text,
+    author:_state.authUser?.displayName||authorLogin,
+    authorLogin,
+    color:getArturNoteColor(authorLogin),
+    createdAt:new Date().toISOString(),
+  });
+  saveArturManualPayments(all);
+  if(input)input.value='';
+  if(_state.section==='artur-payments')renderApp();
+}
+
+function deleteArturMonthNote(noteId){
+  if(!canEditArturPayments()||!noteId)return;
+  const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
+  const all=getArturManualPayments();
+  if(!all[monthKey]||typeof all[monthKey]!=='object'||!Array.isArray(all[monthKey].__notes))return;
+  all[monthKey].__notes=all[monthKey].__notes.filter(note=>String(note?.id||'')!==String(noteId));
+  saveArturManualPayments(all);
+  if(_state.section==='artur-payments')renderApp();
+}
+
 function setArturManualField(personKey, field, value){
   if(!canEditArturPayments())return;
   const monthKey=_state.arturPaymentsMonth||getMonthKeyFromDate(new Date());
@@ -2030,6 +2076,7 @@ function buildArturPaymentsView(rows){
   }
   const monthKey=_state.arturPaymentsMonth;
   const manualMonth=getArturManualMonth(monthKey);
+  const monthNotes=getArturMonthNotes(monthKey);
   const monthRows=(rows||[]).filter(item=>getMonthKeyFromDate(parseDateDMY(item.issueDate)||parseDatePL(item.issueDate)||parseHKDate(item.issueDate))===monthKey);
   const arturInvoices=monthRows
     .filter(item=>String(item.nip||'').replace(/\D/g,'')===ARTUR_PAYMENT_NIP)
@@ -2054,6 +2101,26 @@ function buildArturPaymentsView(rows){
   });
 
   const monthButtons=options.map(m=>`<button class="artur-month-btn ${m.key===monthKey?'active':''}" onclick="setArturPaymentsMonth('${m.key}')">${m.short}</button>`).join('');
+  const notesHtml=monthNotes.length
+    ? monthNotes.map(note=>{
+        const created=note.createdAt?new Date(note.createdAt):null;
+        const createdLabel=created&&!Number.isNaN(created.getTime())
+          ? `${String(created.getDate()).padStart(2,'0')}.${String(created.getMonth()+1).padStart(2,'0')} ${String(created.getHours()).padStart(2,'0')}:${String(created.getMinutes()).padStart(2,'0')}`
+          : '';
+        const color=note.color||getArturNoteColor(note.authorLogin||note.author||'user');
+        return `<div style="border:1px solid ${color}33;border-left:5px solid ${color};background:#fff;border-radius:12px;padding:12px 14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+              <span style="width:10px;height:10px;border-radius:999px;background:${color};flex-shrink:0"></span>
+              <strong style="font-size:12px;color:var(--text)">${escapeHtml(note.author||'Użytkownik')}</strong>
+              ${createdLabel?`<span style="font-size:11px;color:var(--text-muted)">${createdLabel}</span>`:''}
+            </div>
+            ${canEditArturPayments()?`<button class="ksef-action-btn" onclick="deleteArturMonthNote('${String(note.id||'').replace(/'/g,"\\'")}')">Usuń</button>`:''}
+          </div>
+          <div style="font-size:13px;color:var(--text);line-height:1.55;margin-top:8px;white-space:pre-wrap">${escapeHtml(note.text||'')}</div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-section" style="min-height:140px"><div class="empty-icon">📝</div><p>Brak notatek dla ${formatMonthKeyLabel(monthKey)}.</p></div>`;
   const manualHtml=manualRows.map(row=>{
     const amount=String(row.data.amount ?? row.defaultAmount ?? '');
     const paidDate=String(row.data.paidDate||'');
@@ -2155,11 +2222,16 @@ function buildArturPaymentsView(rows){
       </div>
 
       <div class="grid-card">
-        <div class="card-title">Źródło danych</div>
-        <div class="card-subtitle">Faktury Artura są pobierane automatycznie z KSeF po NIP i miesiącu wystawienia.</div>
-        <div class="empty-section" style="min-height:140px">
-          <div class="empty-icon">🧾</div>
-          <p>NIP Artura: <strong>${ARTUR_PAYMENT_NIP}</strong><br>Zakres: tylko faktury z datą wystawienia w wybranym miesiącu.</p>
+        <div class="card-title">Luźne notatki</div>
+        <div class="card-subtitle">Wspólne notatki do miesiąca. Są widoczne na każdym komputerze i oznaczone kolorem autora.</div>
+        ${canEditArturPayments()?`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+          <textarea id="artur-month-note-input" class="artur-input" rows="4" placeholder="Dodaj notatkę do ${formatMonthKeyLabel(monthKey)}..."></textarea>
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn-primary" style="width:auto;padding:10px 16px;margin-top:0" onclick="addArturMonthNoteFromInput()">Dodaj notatkę</button>
+          </div>
+        </div>`:''}
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${notesHtml}
         </div>
       </div>
     </div>
