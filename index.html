@@ -7029,7 +7029,15 @@ function buildOblozenieLive(){
         <div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:#155e75;text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
           <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
-          <div style="font-size:11px;color:#155e75;opacity:.8;margin-top:6px">Suma wszystkich rezerwacji miesiąca</div>
+          <div style="font-size:11px;color:#155e75;opacity:.8;margin-top:6px">Suma: Previo OTV + Previo Agata</div>
+          <div style="margin-top:8px;height:7px;background:#dbeafe;border-radius:999px;overflow:hidden;display:flex">
+            <div style="height:100%;width:${currentMonthTotal>0?((currentMonthOtvTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#2563eb"></div>
+            <div style="height:100%;width:${currentMonthTotal>0?((currentMonthAgataTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#f59e0b"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px">
+            <span style="color:#1d4ed8;font-weight:700">OTV: ${currentMonthOtvRows.length?fmt(currentMonthOtvTotal)+' zł':'—'}</span>
+            <span style="color:#c2410c;font-weight:700">Agata: ${currentMonthAgataRows.length?fmt(currentMonthAgataTotal)+' zł':'—'}</span>
+          </div>
         </div>
         <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.06em">Previo OTV</div>
