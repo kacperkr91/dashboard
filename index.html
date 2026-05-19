@@ -397,10 +397,12 @@
     .artur-table th:nth-child(2),.artur-table td:nth-child(2){text-align:left;}
     .artur-table td:nth-child(3)>div,.artur-table td:nth-child(4)>div,.artur-table td:nth-child(5)>div{justify-content:center;}
     .artur-table tr:hover{background:#f8fafc;}
+    .artur-pos{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:4px;min-height:44px;}
+    .artur-status-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:44px;}
     .artur-kind{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
     .artur-kind.manual{background:#dcfce7;color:#166534;}
     .artur-kind.ksef{background:#dbeafe;color:#1d4ed8;}
-    .artur-status{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;}
+    .artur-status{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;min-width:112px;text-align:center;}
     .artur-status.paid{background:#dcfce7;color:#15803d;}
     .artur-status.partial{background:#fef3c7;color:#b45309;}
     .artur-status.open{background:#fee2e2;color:#b91c1c;}
@@ -2149,7 +2151,7 @@ function buildArturPaymentsView(rows){
     const displayAmount=parseMoneyValue(amount);
     return`<tr>
       <td><span class="artur-kind manual">Ręczne</span></td>
-      <td style="font-weight:700">${row.label}</td>
+      <td><div class="artur-pos"><div style="font-weight:700">${row.label}</div></div></td>
       <td>${
         isEditing
           ? `<input class="artur-input" type="number" min="0" step="0.01" value="${amount}" placeholder="Kwota" oninput="setArturManualField('${row.key}','amount',this.value)">`
@@ -2163,11 +2165,11 @@ function buildArturPaymentsView(rows){
       <td class="artur-small">
         ${
           isDone
-            ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            ? `<div class="artur-status-cell">
                  <span class="artur-status paid">Opłacona</span>
                  ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>`:''}
                </div>`
-            : `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            : `<div class="artur-status-cell">
                  <span class="artur-status missing">Do wpisania</span>
                  ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',true)">Edytuj</button>`:''}
                </div>`
@@ -2185,8 +2187,10 @@ function buildArturPaymentsView(rows){
     return`<tr>
       <td><span class="artur-kind ksef">KSeF</span></td>
       <td>
-        <div style="font-weight:700">${m?.arturLabel||`Artur faktura ${idx+1}`}</div>
-        <div class="artur-small">${m?.ksefNumber||'Brak numeru KSeF'}</div>
+        <div class="artur-pos">
+          <div style="font-weight:700">${m?.arturLabel||`Artur faktura ${idx+1}`}</div>
+          <div class="artur-small">${m?.ksefNumber||'Brak numeru KSeF'}</div>
+        </div>
       </td>
       <td>
         ${m?`
@@ -2198,8 +2202,8 @@ function buildArturPaymentsView(rows){
           </div>
         `:'—'}
       </td>
-      <td>${dateLabel}</td>
-      <td><span class="artur-status ${statusClass}">${statusLabel}</span></td>
+      <td><div>${dateLabel}</div></td>
+      <td><div class="artur-status-cell"><span class="artur-status ${statusClass}">${statusLabel}</span></div></td>
     </tr>`;
   }).join('');
 
