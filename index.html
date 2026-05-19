@@ -2242,6 +2242,9 @@ function canConfig(){
 function canEditArturPayments(){
   return !!(_state.authUser?.permissions?.canEditArturPayments);
 }
+function hasAnyModuleAccess(list=[]){
+  return list.some(hasModuleAccess);
+}
 function ensureAllowedSection(){
   if(hasModuleAccess(_state.section))return;
   const fallback=getModuleOrder().find(hasModuleAccess);
@@ -7678,6 +7681,15 @@ async function init(){
     return;
   }
   if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
+  const needRental=hasModuleAccess('rental');
+  const needMedia=hasModuleAccess('media');
+  const needApartments=hasModuleAccess('apartments');
+  const needHousekeeping=hasModuleAccess('housekeeping');
+  const needOtv=hasModuleAccess('otv');
+  const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout']);
+  const needParking=hasModuleAccess('parking');
+  const needKsef=hasAnyModuleAccess(['ksef','artur-payments']);
+  const progressDelay=_state.authUser?.role==='admin'?2000:120;
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
@@ -7706,7 +7718,10 @@ async function init(){
 
   setProgress(5,'Wykrywanie zakładek…');
   const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
-  await Promise.allSettled([detectHkMonths(),detectOtvMonths()]);
+  await Promise.allSettled([
+    needHousekeeping?detectHkMonths():Promise.resolve(),
+    needOtv?detectOtvMonths():Promise.resolve(),
+  ]);
 
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
@@ -7719,63 +7734,74 @@ async function init(){
 
   setProgress(15,'Ładowanie bieżącego miesiąca…');
   const [rentalCurrentR,previor,previoPrevR,previoNextR,parkingr]=await Promise.allSettled([
-    loadRentalMonthDataByKey(initRentalKey),
-    loadPrevioMonth(initPrevioKey),
-    loadPrevioMonth(prevPrevioKey),
-    loadPrevioMonth(nextPrevioKey),
-    loadParkingData(),
+    needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
+    needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
+    needPrevio?loadPrevioMonth(prevPrevioKey):Promise.resolve(null),
+    needPrevio?loadPrevioMonth(nextPrevioKey):Promise.resolve(null),
+    needParking?loadParkingData():Promise.resolve(null),
   ]);
-  _state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
-  _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
-  if(prevPrevioKey)_state.data.previo[prevPrevioKey]=previoPrevR.status==='fulfilled'?previoPrevR.value:{error:previoPrevR.reason?.message||'Błąd'};
-  if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
-  _state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
+  if(needRental)_state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
+  if(needPrevio){
+    _state.data.previo[initPrevioKey]=previor.status==='fulfilled'?previor.value:{error:previor.reason?.message||'Błąd'};
+    if(prevPrevioKey)_state.data.previo[prevPrevioKey]=previoPrevR.status==='fulfilled'?previoPrevR.value:{error:previoPrevR.reason?.message||'Błąd'};
+    if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
+  }
+  if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
-  await delay(2000);
+  await delay(progressDelay);
 
   setProgress(35,'Ładowanie marca i mediów…');
   const [mr,mdr]=await Promise.allSettled([
-    loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'),
-    loadMediaData(),
+    needRental?loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'):Promise.resolve(null),
+    needMedia?loadMediaData():Promise.resolve(null),
   ]);
-  _state.data.mar2026=mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
-  _state.data.media=mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
+  if(needRental)_state.data.mar2026=mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
+  if(needMedia)_state.data.media=mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
 
-  await delay(2000);
+  await delay(progressDelay);
 
   setProgress(52,'Ładowanie lutego i stycznia…');
   const [fr,jr]=await Promise.allSettled([
-    loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'),
-    loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'),
+    needRental?loadRawMonth(CONFIG.febSheet,CONFIG.febDateCol,CONFIG.febAmountCol,CONFIG.febStartRow,CONFIG.febEndRow,29,'02'):Promise.resolve(null),
+    needRental?loadRawMonth(CONFIG.janSheet,CONFIG.janDateCol,CONFIG.janAmountCol,CONFIG.janStartRow,CONFIG.janEndRow,31,'01'):Promise.resolve(null),
   ]);
-  _state.data.feb2026=fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
-  _state.data.jan2026=jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
+  if(needRental)_state.data.feb2026=fr.status==='fulfilled'?fr.value:{error:fr.reason?.message||'Błąd'};
+  if(needRental)_state.data.jan2026=jr.status==='fulfilled'?jr.value:{error:jr.reason?.message||'Błąd'};
 
-  await delay(2000);
+  await delay(progressDelay);
 
   setProgress(67,'Ładowanie grudnia i apartamentów…');
   const [dr,ar]=await Promise.allSettled([
-    loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'),
-    loadApartmentsData(),
+    needRental?loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12'):Promise.resolve(null),
+    needApartments?loadApartmentsData():Promise.resolve(null),
   ]);
-  _state.data.dec2025=dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
-  _state.data.apartments=ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
+  if(needRental)_state.data.dec2025=dr.status==='fulfilled'?dr.value:{error:dr.reason?.message||'Błąd'};
+  if(needApartments)_state.data.apartments=ar.status==='fulfilled'?ar.value:{error:ar.reason?.message||'Błąd'};
 
-  await delay(2000);
+  await delay(progressDelay);
 
   setProgress(82,'Ładowanie housekeeping i OTV…');
   const [hkr,otvr]=await Promise.allSettled([
-    loadHousekeepingMonth(initHkKey),
-    loadOtvMonth(initOtvKey),
+    needHousekeeping?loadHousekeepingMonth(initHkKey):Promise.resolve(null),
+    needOtv?loadOtvMonth(initOtvKey):Promise.resolve(null),
   ]);
-  _state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
-  _state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
+  if(needHousekeeping)_state.data.housekeeping[initHkKey]=hkr.status==='fulfilled'?hkr.value:{error:hkr.reason?.message||'Błąd'};
+  if(needOtv)_state.data.otv[initOtvKey]=otvr.status==='fulfilled'?otvr.value:{error:otvr.reason?.message||'Błąd'};
 
-  await delay(2000);
+  await delay(progressDelay);
 
   setProgress(93,'Finalizowanie prognozy…');
-  const previoLYr=await safeLoad(()=>loadPrevioMonth(lastYearPrevioKey));
-  if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
+  if(needPrevio||needRental){
+    const previoLYr=await safeLoad(()=>loadPrevioMonth(lastYearPrevioKey));
+    if(previoLYr.status==='fulfilled')_state.data.previo[lastYearPrevioKey]=previoLYr.value;
+  }
+
+  if(needKsef&&_state.data.ksef===null){
+    setProgress(96,'Ładowanie KSeF…');
+    const ksefr=await safeLoad(()=>loadKsefData());
+    if(ksefr.status==='fulfilled')_state.data.ksef=ksefr.value;
+    else _state.data.ksef={error:ksefr.reason?.message||'Błąd'};
+  }
 
   await syncPromise;
   setProgress(100,'Gotowe!');
