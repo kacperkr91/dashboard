@@ -6736,6 +6736,11 @@ function buildOblozenieLive(){
   },0);
   const currentMonthTotal=currentMonthRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const currentMonthPrevioForecast=calcPrevioForecast(currentMonthKey);
+  const isAgataApartment=apt=>ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
+  const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
+  const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
+  const currentMonthAgataTotal=currentMonthAgataRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthOtvTotal=currentMonthOtvRows.reduce((sum,row)=>sum+(row.cena||0),0);
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -7023,6 +7028,16 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#155e75;text-transform:uppercase;letter-spacing:.06em">Bieżący total</div>
           <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#155e75;opacity:.8;margin-top:6px">Suma wszystkich rezerwacji miesiąca</div>
+        </div>
+        <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Previo Agata</div>
+          <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthAgataRows.length?fmt(currentMonthAgataTotal)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:6px">${currentMonthAgataRows.length?`${currentMonthAgataRows.length} rezerwacji: Bronowicka, Wawel, Wawel II, Plac Szczepański, Zamkowa`:'Brak rezerwacji w miesiącu'}</div>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:14px;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.06em">Previo OTV</div>
+          <div style="font-size:18px;font-weight:800;color:#2563eb;margin-top:6px">${currentMonthOtvRows.length?fmt(currentMonthOtvTotal)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#1d4ed8;opacity:.8;margin-top:6px">${currentMonthOtvRows.length?`${currentMonthOtvRows.length} rezerwacji w pozostałych apartamentach`:'Brak rezerwacji w miesiącu'}</div>
         </div>
         <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.06em">Prognoza Previo</div>
