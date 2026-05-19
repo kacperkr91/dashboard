@@ -7006,10 +7006,12 @@ function buildOblozenieLive(){
         <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">ADR</div>
           <div style="font-size:18px;font-weight:800;color:#2563eb;margin-top:6px">${adr>0?fmt(adr)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#2563eb;opacity:.78;margin-top:6px">Średnia cena za zajęty apartament</div>
         </div>
         <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">RevPAR</div>
           <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
+          <div style="font-size:11px;color:#7c3aed;opacity:.78;margin-top:6px">Przychód na każdy dostępny apartament</div>
         </div>
         <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Dotychczas w miesiącu</div>
@@ -7704,7 +7706,7 @@ async function init(){
   mount(`<div class="app"><header>
     <div class="brand"><div class="brand-icon">🏛️</div>
     <div><div class="brand-name">Old Town Vistula Premium Apartments</div>
-    <div class="brand-sub">Dashboard zarządzania najmem i mediami</div></div></div>
+    <div class="brand-sub">Dashboard zarządzania najmem</div></div></div>
   </header>
   <div class="state-screen">
     <div style="font-size:28px;font-weight:800;color:var(--text);line-height:1.1">Witaj, ${userName}</div>
@@ -7882,7 +7884,7 @@ function renderApp(){
   const header=`<header>
     <div class="brand">
       <div class="brand-icon">🏛️</div>
-      <div><div class="brand-name">Old Town Vistula Premium Apartments</div><div class="brand-sub">Dashboard zarządzania najmem i mediami</div></div>
+      <div><div class="brand-name">Old Town Vistula Premium Apartments</div><div class="brand-sub">Dashboard zarządzania najmem</div></div>
     </div>
     <div class="header-right">
       ${_state.authUser?`<div class="auth-user-chip"><span>${_state.authUser.displayName||_state.authUser.login}</span><span class="auth-role-badge">${getRoleLabel(_state.authUser.role)}</span></div>`:''}
