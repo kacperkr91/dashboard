@@ -2245,6 +2245,10 @@ function canEditArturPayments(){
 function hasAnyModuleAccess(list=[]){
   return list.some(hasModuleAccess);
 }
+function shouldShowTodayBanner(){
+  const modules=Array.isArray(_state.authUser?.modules)?_state.authUser.modules:[];
+  return modules.includes('*')||modules.includes('kalendarz');
+}
 function ensureAllowedSection(){
   if(hasModuleAccess(_state.section))return;
   const fallback=getModuleOrder().find(hasModuleAccess);
@@ -6978,9 +6982,9 @@ function buildOblozenieLive(){
       <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap">
         <div style="max-width:860px">
           <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:8px">Centrum Operacyjne</div>
-          <div style="font-size:30px;font-weight:800;color:var(--text);line-height:1.05">Dzień pod kontrolą</div>
+          <div style="font-size:30px;font-weight:800;color:var(--text);line-height:1.05">Cześć, ${_state.authUser?.displayName||_state.authUser?.login||'Użytkowniku'}</div>
           <div style="font-size:14px;color:var(--text-mid);margin-top:8px;line-height:1.6">
-            Główny ekran operacyjny dla ${dzien==='dzis'?'dzisiejszych':'jutrzejszych'} ruchów gości, wolnych apartamentów i szybkich priorytetów zespołu.
+            Tutaj znajdziesz najważniejsze informacje operacyjne na dziś: ruch gości, wolne apartamenty, prognozy i bieżące priorytety.
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
             <span style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:#ffffffcc;border:1px solid #bfdbfe;font-size:12px;font-weight:700;color:#1d4ed8">Obłożenie ${pctObl}%</span>
@@ -7816,8 +7820,7 @@ async function init(){
 /* MAIN RENDER */
 function getTodayBanner(){
   try{
-    const isArturUser=String(_state.authUser?.login||'').trim().toLowerCase()==='artur';
-    if(!isArturUser&&!hasModuleAccess('kalendarz'))return'';
+    if(!shouldShowTodayBanner())return'';
     const events=getKalEvents();
     const today=new Date();
     const dk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
@@ -7993,7 +7996,7 @@ function renderApp(){
     content=buildDyzuryView();
   }
 
-  const todayBanner=getTodayBanner();
+  const todayBanner=shouldShowTodayBanner()?getTodayBanner():'';
   mount(header+navL1+(todayBanner?todayBanner:'')+navL2+content);
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
