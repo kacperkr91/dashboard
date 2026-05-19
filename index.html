@@ -2270,7 +2270,7 @@ function setAdminUserField(login,field,value){
     if(field==='active')next.active=!!value;
     return next;
   });
-  if(_state.section==='users-admin')renderApp();
+  if(_state.section==='users-admin'&&(field==='role'||field==='active'))renderApp();
 }
 function toggleAdminUserModule(login,moduleKey){
   _state.adminUsers=getAdminEditableUsers().map(user=>{
