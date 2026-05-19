@@ -2182,6 +2182,9 @@ let _charts={};
 function renderLoading(msg='Pobieranie danych…'){
   return`<div class="state-screen"><div class="spinner"></div><p>${msg}</p></div>`;
 }
+function getRoleLabel(role){
+  return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
+}
 function getModuleOrder(){
   return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
@@ -2234,9 +2237,10 @@ function getAdminEditableUsers(){
 }
 function normalizeAdminUserForUi(user){
   return{
+    originalLogin:String(user?.login||'').trim().toLowerCase(),
     login:String(user?.login||'').trim().toLowerCase(),
     displayName:String(user?.displayName||'').trim(),
-    role:String(user?.role||'limited').trim(),
+    role:String(user?.role||'user').trim(),
     modules:Array.isArray(user?.modules)?[...user.modules]:[],
     permissions:{
       canConfig:!!user?.permissions?.canConfig,
@@ -2264,8 +2268,9 @@ async function loadDashboardUsers(){
 }
 function setAdminUserField(login,field,value){
   _state.adminUsers=getAdminEditableUsers().map(user=>{
-    if(user.login!==login)return user;
+    if(user.originalLogin!==login&&user.login!==login)return user;
     const next={...user};
+    if(field==='login')next.login=String(value||'').trim().toLowerCase().replace(/\s+/g,'-');
     if(field==='displayName'||field==='role'||field==='newPin')next[field]=value;
     if(field==='active')next.active=!!value;
     return next;
@@ -2274,7 +2279,7 @@ function setAdminUserField(login,field,value){
 }
 function toggleAdminUserModule(login,moduleKey){
   _state.adminUsers=getAdminEditableUsers().map(user=>{
-    if(user.login!==login)return user;
+    if(user.originalLogin!==login&&user.login!==login)return user;
     const modules=new Set(Array.isArray(user.modules)?user.modules:[]);
     if(modules.has('*'))modules.delete('*');
     if(modules.has(moduleKey))modules.delete(moduleKey);
@@ -2285,7 +2290,7 @@ function toggleAdminUserModule(login,moduleKey){
 }
 function toggleAdminUserPermission(login,key){
   _state.adminUsers=getAdminEditableUsers().map(user=>{
-    if(user.login!==login)return user;
+    if(user.originalLogin!==login&&user.login!==login)return user;
     return{...user,permissions:{...user.permissions,[key]:!user.permissions?.[key]}};
   });
   if(_state.section==='users-admin')renderApp();
@@ -2294,8 +2299,9 @@ async function saveDashboardUsers(){
   if(!canConfig()||!CONFIG.syncUrl||!_state.authToken)return;
   const users=getAdminEditableUsers().map(user=>({
     login:user.login,
+    originalLogin:user.originalLogin||user.login,
     displayName:user.displayName||user.login,
-    role:user.role||'limited',
+    role:user.role||'user',
     modules:Array.isArray(user.modules)&&user.modules.length?user.modules:['oblozenie'],
     permissions:{
       canConfig:!!user.permissions?.canConfig,
@@ -2306,7 +2312,7 @@ async function saveDashboardUsers(){
     newPinHash:user.newPin?null:null
   }));
   for(const user of users){
-    const source=getAdminEditableUsers().find(x=>x.login===user.login);
+    const source=getAdminEditableUsers().find(x=>(x.originalLogin||x.login)===(user.originalLogin||user.login));
     if(source?.newPin){
       user.newPinHash=await sha256Hex(source.newPin);
     }else{
@@ -2413,7 +2419,7 @@ function buildDashboardUsersView(){
     const modules=getModuleOrder().map(key=>{
       const checked=(user.modules||[]).includes('*')||(user.modules||[]).includes(key);
       return `<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0">
-        <input type="checkbox" ${checked?'checked':''} onchange="toggleAdminUserModule('${user.login}','${key}')">
+        <input type="checkbox" ${checked?'checked':''} onchange="toggleAdminUserModule('${user.originalLogin||user.login}','${key}')">
         <span>${DASHBOARD_MODULE_LABELS[key]||key}</span>
       </label>`;
     }).join('');
@@ -2423,19 +2429,20 @@ function buildDashboardUsersView(){
           <div class="card-title">${user.displayName||user.login}</div>
           <div class="card-subtitle">Login: ${user.login}</div>
         </div>
-        <div class="apt-chip">${user.role||'limited'}</div>
+        <div class="apt-chip">${getRoleLabel(user.role)}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
         <div>
+          <div class="field"><label>Login</label><input class="filter-search" type="text" value="${user.login||''}" oninput="setAdminUserField('${user.originalLogin||user.login}','login',this.value)"></div>
           <div class="field"><label>Nazwa wyświetlana</label><input class="filter-search" type="text" value="${user.displayName||''}" oninput="setAdminUserField('${user.login}','displayName',this.value)"></div>
           <div class="field"><label>Rola</label>
-            <select class="filter-select" onchange="setAdminUserField('${user.login}','role',this.value)">
+            <select class="filter-select" onchange="setAdminUserField('${user.originalLogin||user.login}','role',this.value)">
               <option value="admin" ${user.role==='admin'?'selected':''}>admin</option>
-              <option value="limited" ${user.role!=='admin'?'selected':''}>limited</option>
+              <option value="user" ${user.role!=='admin'?'selected':''}>użytkownik</option>
             </select>
           </div>
-          <div class="field"><label>Nowy PIN</label><input class="filter-search" type="password" value="${user.newPin||''}" placeholder="zostaw puste bez zmiany" oninput="setAdminUserField('${user.login}','newPin',this.value)"></div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:6px"><input type="checkbox" ${user.active!==false?'checked':''} onchange="setAdminUserField('${user.login}','active',this.checked)"> Aktywny użytkownik</label>
+          <div class="field"><label>Nowy PIN</label><input class="filter-search" type="password" value="${user.newPin||''}" placeholder="zostaw puste bez zmiany" oninput="setAdminUserField('${user.originalLogin||user.login}','newPin',this.value)"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:6px"><input type="checkbox" ${user.active!==false?'checked':''} onchange="setAdminUserField('${user.originalLogin||user.login}','active',this.checked)"> Aktywny użytkownik</label>
         </div>
         <div>
           <div class="section-label" style="margin-bottom:8px">Moduły</div>
@@ -2443,9 +2450,9 @@ function buildDashboardUsersView(){
         </div>
         <div>
           <div class="section-label" style="margin-bottom:8px">Dodatkowe uprawnienia</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canConfig?'checked':''} onchange="toggleAdminUserPermission('${user.login}','canConfig')"> Konfiguracja i panel użytkowników</label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canEditKsef?'checked':''} onchange="toggleAdminUserPermission('${user.login}','canEditKsef')"> Edycja płatności KSeF</label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canEditArturPayments!==false?'checked':''} onchange="toggleAdminUserPermission('${user.login}','canEditArturPayments')"> Edycja płatności Artur</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canConfig?'checked':''} onchange="toggleAdminUserPermission('${user.originalLogin||user.login}','canConfig')"> Konfiguracja i panel użytkowników</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canEditKsef?'checked':''} onchange="toggleAdminUserPermission('${user.originalLogin||user.login}','canEditKsef')"> Edycja płatności KSeF</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0"><input type="checkbox" ${user.permissions?.canEditArturPayments!==false?'checked':''} onchange="toggleAdminUserPermission('${user.originalLogin||user.login}','canEditArturPayments')"> Edycja płatności Artur</label>
         </div>
       </div>
     </div>`;
@@ -7800,7 +7807,7 @@ function renderApp(){
       <div><div class="brand-name">Old Town Vistula Premium Apartments</div><div class="brand-sub">Dashboard zarządzania najmem i mediami</div></div>
     </div>
     <div class="header-right">
-      ${_state.authUser?`<div class="auth-user-chip"><span>${_state.authUser.displayName||_state.authUser.login}</span><span class="auth-role-badge">${_state.authUser.role||'user'}</span></div>`:''}
+      ${_state.authUser?`<div class="auth-user-chip"><span>${_state.authUser.displayName||_state.authUser.login}</span><span class="auth-role-badge">${getRoleLabel(_state.authUser.role)}</span></div>`:''}
       <button class="btn-icon" onclick="refresh()">↻ Odśwież</button>
       ${canConfig()?`<button class="btn-icon" onclick="showConfig()">⚙ Konfiguracja</button>`:''}
       <button class="btn-icon" onclick="logoutDashboard()">Wyloguj</button>
@@ -7812,6 +7819,7 @@ function renderApp(){
     return`<button class="nav-l1-btn ${extraClass} ${section===key?'active':''}" style="${section===key?activeStyle:''}" onclick="setSection('${key}')"><span class="icon">${icon}</span> ${label}</button>`;
   };
   const navL1=`<div class="nav-l1">
+    ${navButton('oblozenie','Start','🏠','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('rental','Przychody','🏠')}
     ${navButton('media','Media — Prąd','⚡',section==='media'?'background:var(--orange);border-color:var(--orange);color:#fff':'','media')}
     ${navButton('ksef','KSeF','🧾','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
@@ -7825,7 +7833,6 @@ function renderApp(){
     ${navButton('kalendarz','Kalendarz','📆','background:#0369a1;border-color:#0369a1;color:#fff')}
     ${navButton('noty','Noty','🧾','background:#475569;border-color:#475569;color:#fff')}
     ${navButton('goscie','Goście','🌍','background:#0e7490;border-color:#0e7490;color:#fff')}
-    ${navButton('oblozenie','Start','🏠','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${canConfig()?`<button class="nav-l1-btn ${section==='users-admin'?'active':''}" style="${section==='users-admin'?'background:#111827;border-color:#111827;color:#fff':''}" onclick="setSection('users-admin')"><span class="icon">👤</span> Użytkownicy</button>`:''}
     ${(()=>{
       if(!hasModuleAccess('parking'))return'';
