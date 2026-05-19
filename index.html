@@ -7051,7 +7051,7 @@ function buildOblozenieLive(){
           <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—'}</div>
           <div style="font-size:11px;color:#065f46;opacity:.8;margin-top:6px">Przychód już zrealizowany w tym miesiącu</div>
           ${realizedChannelItems.length?`<div style="margin-top:8px;height:7px;background:#dcfce7;border-radius:999px;overflow:hidden;display:flex">${realizedChannelItems.map(item=>`<div style="height:100%;width:${item.pct.toFixed(1)}%;background:${item.color}"></div>`).join('')}</div>`:''}
-          ${realizedChannelItems.length?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px">${realizedChannelItems.map(item=>`<span style="color:${item.color};font-weight:700">${item.name.replace('Booking.com','Booking').replace('Profitroom','Direct')}: ${Math.round(item.pct)}%</span>`).join('')}</div>`:''}
+          ${realizedChannelItems.length?`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px;font-size:11px">${realizedChannelItems.map(item=>`<span style="color:${item.color};font-weight:700;white-space:nowrap;text-align:center">${item.name.replace('Booking.com','Booking')}: ${Math.round(item.pct)}%</span>`).join('')}</div>`:''}
           </div>
         </div>
         <div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:14px;padding:14px 16px">
