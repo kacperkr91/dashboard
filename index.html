@@ -443,6 +443,8 @@
 <div class="app" id="app"></div>
 <script>
 /* CONFIG */
+const DEFAULT_SYNC_URL='https://script.google.com/macros/s/AKfycbzmlBcI8iGrPWgV391bzA1pEG6KLOuF4udEdDojs65cvKKTk5epuG6WCLuKZp0NMomd9A/exec';
+
 const CONFIG={
   apiKey:             localStorage.getItem('gs_api_key')||'',
   spreadsheetId:      localStorage.getItem('gs_spreadsheet_id')||'',
@@ -475,7 +477,7 @@ const CONFIG={
   // Apartments to EXCLUDE from OTV view
   otvExclude:['Wawel','Wawel II no. 14','Wawel II no.15','Wawel II no. 15','Zamkowa','Plac Szczepański B41','Plac Szczepański C41','Bronowicka'],
   previoApiKey:        localStorage.getItem('gs_previo_api_key')||'',
-  syncUrl:             localStorage.getItem('sync_url')||'',
+  syncUrl:             localStorage.getItem('sync_url')||DEFAULT_SYNC_URL,
   previoSpreadsheetId: '1R1QNqx7LWaeTLuy2QXe2q1nAfUcMUSwqBmRa2Fhje68',
   previoSheet:         'Previo',
   previoStartRow:      2,
