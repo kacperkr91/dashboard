@@ -2146,11 +2146,16 @@ function buildArturPaymentsView(rows){
     : `<div class="empty-section" style="min-height:140px"><div class="empty-icon">📝</div><p>Brak notatek dla ${formatMonthKeyLabel(monthKey)}.</p></div>`;
   const manualHtml=manualRows.map(row=>{
     const amount=String(row.data.amount ?? row.defaultAmount ?? '');
+    const sentDate=String(row.data.sentDate||'');
     const paidDate=String(row.data.paidDate||'');
+    const isKajetan=row.key==='kajetan';
     const isDone=parseMoneyValue(amount)>0&&!!paidDate;
+    const isSent=parseMoneyValue(amount)>0&&!!sentDate;
     const editable=canEditArturPayments();
     const isEditing=editable&&(isArturManualEditing(row.key)||!isDone);
     const displayAmount=parseMoneyValue(amount);
+    const statusLabel=isDone?'Opłacona':(isKajetan&&isSent?'Wysłano do Kajetana':'Do wpisania');
+    const statusClass=isDone?'paid':(isKajetan&&isSent?'partial':'missing');
     return`<tr>
       <td><span class="artur-kind manual">Ręczne</span></td>
       <td><div class="artur-pos"><div style="font-weight:700">${row.label}</div></div></td>
@@ -2160,21 +2165,23 @@ function buildArturPaymentsView(rows){
           : `<div style="font-weight:700">${fmt(displayAmount)} zł</div>`
       }</td>
       <td>${
+        isKajetan
+          ? (isEditing
+              ? `<input class="artur-input" type="date" value="${sentDate}" oninput="setArturManualField('${row.key}','sentDate',this.value)">`
+              : `${sentDate||'—'}`)
+          : '—'
+      }</td>
+      <td>${
         isEditing
           ? `<input class="artur-input" type="date" value="${paidDate}" oninput="setArturManualField('${row.key}','paidDate',this.value)">`
           : `${paidDate||'—'}`
       }</td>
       <td class="artur-small">
         ${
-          isDone
-            ? `<div class="artur-status-cell">
-                 <span class="artur-status paid">Opłacona</span>
-                 ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>`:''}
-               </div>`
-            : `<div class="artur-status-cell">
-                 <span class="artur-status missing">Do wpisania</span>
-                 ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',true)">Edytuj</button>`:''}
-               </div>`
+          `<div class="artur-status-cell">
+             <span class="artur-status ${statusClass}">${statusLabel}</span>
+             ${editable?`<button class="ksef-action-btn" onclick="setArturManualEditing('${row.key}',${isEditing?'false':'true'})">${isEditing?'Zamknij':'Edytuj'}</button>`:''}
+           </div>`
         }
       </td>
     </tr>`;
@@ -2204,6 +2211,7 @@ function buildArturPaymentsView(rows){
           </div>
         `:'—'}
       </td>
+      <td>—</td>
       <td><div>${dateLabel}</div></td>
       <td><div class="artur-status-cell"><span class="artur-status ${statusClass}">${statusLabel}</span></div></td>
     </tr>`;
@@ -2231,6 +2239,7 @@ function buildArturPaymentsView(rows){
                 <th>Typ</th>
                 <th>Pozycja</th>
                 <th>Kwota</th>
+                <th>Data wysłania</th>
                 <th>Data opłacenia</th>
                 <th>Status</th>
               </tr>
