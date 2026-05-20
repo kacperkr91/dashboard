@@ -1326,8 +1326,9 @@ async function detectHkMonths(){
     if(months.length>0){
       HK_MONTHS=months;
       _hkMonthsDetected=true;
-      const lastKey=months[months.length-1].key;
-      if(!months.find(m=>m.key===_state.hkMonth))_state.hkMonth=lastKey;
+      const currentKey=getMonthKeyFromDate(new Date());
+      const preferredKey=months.find(m=>m.key===currentKey)?currentKey:months[months.length-1].key;
+      if(!months.find(m=>m.key===_state.hkMonth) || _state.hkMonth!==preferredKey)_state.hkMonth=preferredKey;
     }
   }catch(e){console.warn('detectHkMonths failed:',e);}
 }
@@ -2280,7 +2281,7 @@ let _state={
   adminUsersLoading:false,
   ksefFilter:'all',
   ksefSearch:'',
-  hkMonth:'2026-04',
+  hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
   previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
