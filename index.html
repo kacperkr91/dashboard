@@ -1901,6 +1901,54 @@ const parseMoneyValue=value=>{
   const num=parseFloat(raw);
   return Number.isFinite(num)?num:0;
 };
+const CYRILLIC_TO_LATIN_MAP={
+  а:'a',б:'b',в:'v',г:'h',ґ:'g',д:'d',е:'e',є:'e',ё:'e',ж:'zh',з:'z',и:'y',і:'i',ї:'i',й:'i',к:'k',л:'l',м:'m',
+  н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ў:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',
+  э:'e',ю:'yu',я:'ya'
+};
+function transliterateCyrillicToLatin(value){
+  return String(value||'').split('').map(ch=>{
+    const lower=ch.toLowerCase();
+    const mapped=CYRILLIC_TO_LATIN_MAP[lower];
+    if(mapped===undefined)return ch;
+    return ch===lower?mapped:(mapped.charAt(0).toUpperCase()+mapped.slice(1));
+  }).join('');
+}
+function simplifyGuestNameLatin(value){
+  return String(value||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/['’`]/g,'')
+    .replace(/shch/g,'sc')
+    .replace(/zh/g,'z')
+    .replace(/kh/g,'h')
+    .replace(/ts/g,'c')
+    .replace(/ch/g,'c')
+    .replace(/sh/g,'s')
+    .replace(/yu|iu/g,'u')
+    .replace(/ya|ia/g,'a')
+    .replace(/ye|ie|ei|yo/g,'e')
+    .replace(/yi|iy/g,'i')
+    .replace(/w/g,'v')
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+    .replace(/\s+/g,' ');
+}
+function normalizeGuestNameComparable(value){
+  return simplifyGuestNameLatin(transliterateCyrillicToLatin(value));
+}
+function guestNamesLikelyMatch(a,b){
+  const na=normalizeGuestNameComparable(a);
+  const nb=normalizeGuestNameComparable(b);
+  if(!na||!nb)return false;
+  if(na===nb)return true;
+  const ta=na.split(' ').filter(Boolean);
+  const tb=nb.split(' ').filter(Boolean);
+  if(!ta.length||!tb.length)return false;
+  if(ta.join(' ')===tb.join(' '))return true;
+  if(ta.slice().sort().join(' ')===tb.slice().sort().join(' '))return true;
+  return false;
+}
 function normalizeKsefPaymentEntry(entry, bruttoValue=0){
   if(!entry||typeof entry!=='object')return{payments:[],paidAmount:0,remainingAmount:Math.max(bruttoValue,0),latestPaidDate:'',updatedAt:''};
   const updatedAt=String(entry.updatedAt||'').trim();
@@ -6950,13 +6998,11 @@ function buildOblozenieLive(){
   // ── Wykryj przeprowadzki i przedłużenia ──
   // Tylko gdy gość MA zameldowanie tego samego dnia (dataOd = targetStr)
   // NIE oznaczaj jeśli gość po prostu wyjeżdża po wcześniejszej przeprowadzce
-  const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
-    const g=normGosc(wym.gosc);
-    if(!g)return;
+    if(!normalizeGuestNameComparable(wym.gosc))return;
     // Szukaj tego samego gościa w zameldowaniach — upewnij się że dataOd = dziś
     const match=zameldowania.find(zam=>{
-      if(normGosc(zam.gosc)!==g)return false;
+      if(!guestNamesLikelyMatch(zam.gosc,wym.gosc))return false;
       // dataOd musi być dokładnie targetStr (zameldowanie dziś, nie wcześniej)
       return zam.dataOd?.slice(0,10)===targetStr;
     });
@@ -8379,10 +8425,9 @@ function generateHKMessage(){
     else if(od===todayStr)zameldowania.push({...r});
   });
 
-  const normGosc=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
   wymeldowania.forEach(wym=>{
-    const g=normGosc(wym.gosc);if(!g)return;
-    const match=zameldowania.find(zam=>normGosc(zam.gosc)===g&&zam.dataOd?.slice(0,10)===todayStr);
+    if(!normalizeGuestNameComparable(wym.gosc))return;
+    const match=zameldowania.find(zam=>guestNamesLikelyMatch(zam.gosc,wym.gosc)&&zam.dataOd?.slice(0,10)===todayStr);
     if(match){
       if(match.apt===wym.apt){wym._typ='przedluzenie';match._typ='przedluzenie';}
       else{wym._typ='przeprowadzka';match._typ='przeprowadzka';wym._paraApt=match.apt;match._paraApt=wym.apt;}
