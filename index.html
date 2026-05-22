@@ -417,7 +417,8 @@
     .agata-table{font-size:11px;table-layout:auto;}
     .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;padding:8px 8px;}
     .agata-table td{padding:7px 8px;}
-    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:18px 10px 12px;position:relative;z-index:0;line-height:1.25;}
+    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:10px 10px 12px;position:relative;z-index:0;line-height:1.25;}
+    .agata-table tr.agata-day-row.first-visible td{padding-top:54px;}
     .agata-table tr.agata-booking{background:rgba(0,53,128,0.03);}
     .agata-table tr.agata-airbnb{background:rgba(255,90,95,0.04);}
     .agata-table tr.agata-profitroom{background:rgba(99,102,241,0.04);}
@@ -479,7 +480,7 @@
       line-height:1.05;
       white-space:nowrap;
     }
-    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:92px;z-index:8;background:#f8fafc;}
+    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:74px;z-index:8;background:#f8fafc;}
     @media(max-width:700px){
       .agata-table thead tr.agata-sum-row th{position:static;}
       .agata-table thead tr:not(.agata-sum-row) th{position:static;}
@@ -4239,6 +4240,7 @@ function buildAgataFakturaView(){
     return aa.localeCompare(ba,'pl');
   });
   let lastGroupDate='';
+  let firstGroupRendered=false;
   const reservationRows=reservationRowsData.map(r=>{
     const rowClass=`agata-${partnerClass(r.partner)}`;
     const cells={
@@ -4257,8 +4259,9 @@ function buildAgataFakturaView(){
       cenaCalkowita:`<td class="col-money ta-r" style="font-weight:700">${fmt(r.cenaCalkowita||0)} zł</td>`,
     };
     const separator=lastGroupDate!==r.dataDo
-      ? `<tr class="agata-day-row"><td colspan="${visibleColumns.length}">Wymeldowanie: ${escapeHtml(fmtDateLabel(r.dataDo))}</td></tr>`
+      ? `<tr class="agata-day-row ${!firstGroupRendered?'first-visible':''}"><td colspan="${visibleColumns.length}">Wymeldowanie: ${escapeHtml(fmtDateLabel(r.dataDo))}</td></tr>`
       : '';
+    if(lastGroupDate!==r.dataDo)firstGroupRendered=true;
     lastGroupDate=r.dataDo;
     return `${separator}<tr class="${rowClass}">${visibleColumns.map(col=>cells[col.key]||'').join('')}</tr>`;
   }).join('');
