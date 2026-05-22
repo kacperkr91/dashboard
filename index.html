@@ -445,14 +445,46 @@
     .agata-faktura-line.netto{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;}
     .agata-faktura-line.vat{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
     .agata-faktura-line.brutto{background:#f5f3ff;border:1px solid #ddd6fe;color:#6d28d9;}
-    .agata-totals-sticky{position:sticky;top:12px;z-index:8;}
-    .agata-totals-bar{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;}
-    .agata-total-box{background:linear-gradient(180deg,#fde68a 0%,#fcd34d 100%);border:1px solid #f59e0b;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(245,158,11,0.14);}
-    .agata-total-box .label{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#92400e;margin-bottom:6px;}
-    .agata-total-box .value{font-size:20px;font-weight:800;color:#451a03;line-height:1.05;}
     @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
-    @media(max-width:1200px){.agata-totals-bar{grid-template-columns:repeat(3,minmax(120px,1fr));}}
-    @media(max-width:700px){.agata-totals-bar{grid-template-columns:repeat(2,minmax(120px,1fr));}.agata-totals-sticky{position:static;}}
+    .agata-table thead tr.agata-sum-row th{
+      position:sticky;top:12px;z-index:9;
+      background:linear-gradient(180deg,#fde68a 0%,#fcd34d 100%);
+      border-bottom:2px solid #f59e0b;
+      color:#451a03;
+      padding:10px 10px 8px;
+      vertical-align:bottom;
+    }
+    .agata-table thead tr.agata-sum-row th.agata-sum-empty{
+      background:#fff7ed;
+      color:transparent;
+      border-bottom:2px solid #fde68a;
+      box-shadow:none;
+    }
+    .agata-table thead tr.agata-sum-row th .sum-label{
+      display:block;
+      font-size:9px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      color:#92400e;
+      margin-bottom:4px;
+      white-space:normal;
+      line-height:1.15;
+    }
+    .agata-table thead tr.agata-sum-row th .sum-value{
+      display:block;
+      font-size:15px;
+      font-weight:800;
+      color:#451a03;
+      line-height:1.05;
+      white-space:nowrap;
+    }
+    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:64px;z-index:8;background:#f8fafc;}
+    @media(max-width:700px){
+      .agata-table thead tr.agata-sum-row th{position:static;}
+      .agata-table thead tr:not(.agata-sum-row) th{position:static;}
+      .agata-table thead tr.agata-sum-row th .sum-value{font-size:13px;}
+    }
 
     /* ── PRINT / PDF ── */
     @media print {
@@ -4182,18 +4214,19 @@ function buildAgataFakturaView(){
     </div>
   </div>`;
 
-  const totalsBar=`<div class="grid-card agata-totals-sticky" style="margin-bottom:24px">
-    <div class="card-title">Kwoty z miesiąca</div>
-    <div class="card-subtitle">Przypięte sumy z górnego wiersza arkusza Agaty.</div>
-    <div class="agata-totals-bar">
-      <div class="agata-total-box"><div class="label">Transakcja</div><div class="value">${fmt(t.transakcja||0)} zł</div></div>
-      <div class="agata-total-box"><div class="label">Prowizja</div><div class="value">${fmt(t.prowizja||0)} zł</div></div>
-      <div class="agata-total-box"><div class="label">Goła cena</div><div class="value">${fmt(t.golaCena||0)} zł</div></div>
-      <div class="agata-total-box"><div class="label">Cena z systemu</div><div class="value">${fmt(t.cenaSystem||0)} zł</div></div>
-      <div class="agata-total-box"><div class="label">Dopłata</div><div class="value">${fmt(t.doplata||0)} zł</div></div>
-      <div class="agata-total-box"><div class="label">Cena całkowita</div><div class="value">${fmt(t.cenaCalkowita||0)} zł</div></div>
-    </div>
-  </div>`;
+  const sumByColumn={
+    transakcja:{label:'Transakcja',value:t.transakcja||0},
+    prowizja:{label:'Prowizja',value:t.prowizja||0},
+    golaCena:{label:'Goła cena',value:t.golaCena||0},
+    cenaSystem:{label:'Cena z systemu',value:t.cenaSystem||0},
+    doplata:{label:'Dopłata',value:t.doplata||0},
+    cenaCalkowita:{label:'Cena całkowita',value:t.cenaCalkowita||0},
+  };
+  const sumHeaderCells=visibleColumns.map(col=>{
+    const sumCell=sumByColumn[col.key];
+    if(!sumCell)return `<th class="${col.className} agata-sum-empty" aria-hidden="true"></th>`;
+    return `<th class="${col.className}"><span class="sum-label">${sumCell.label}</span><span class="sum-value">${fmt(sumCell.value)} zł</span></th>`;
+  }).join('');
 
   const reservationRowsData=[...(data.reservations||[])].sort((a,b)=>{
     const ad=String(a.dataDo||'');
@@ -4246,11 +4279,14 @@ function buildAgataFakturaView(){
   const tables=`<div class="artur-grid">
     <div class="grid-card">
       <div class="card-title">Rezerwacje miesiąca</div>
-      <div class="card-subtitle">Pełna tabela rezerwacji w układzie zbliżonym do arkusza Agaty, z grupowaniem po dacie wymeldowania i kolorami kanałów.</div>
+      <div class="card-subtitle">Pełna tabela rezerwacji w układzie zbliżonym do arkusza Agaty, z przypiętymi sumami nad kolumnami kwotowymi.</div>
       ${columnControls}
       <div class="artur-table-wrap">
         <table class="artur-table agata-table">
-          <thead><tr>${visibleColumns.map(col=>`<th class="${col.className}">${col.label}</th>`).join('')}</tr></thead>
+          <thead>
+            <tr class="agata-sum-row">${sumHeaderCells}</tr>
+            <tr>${visibleColumns.map(col=>`<th class="${col.className}">${col.label}</th>`).join('')}</tr>
+          </thead>
           <tbody>${reservationRows||`<tr><td colspan="${visibleColumns.length}" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>`}</tbody>
         </table>
       </div>
@@ -4267,7 +4303,7 @@ function buildAgataFakturaView(){
     </div>
   </div>`;
 
-  return monthNav+kpis+totalsBar+summary+tables;
+  return monthNav+kpis+summary+tables;
 }
 
 function openPrevioDrawer(date){
