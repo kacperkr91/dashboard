@@ -414,12 +414,17 @@
     .agata-controls{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
     .agata-col-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid var(--border);background:var(--white);font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;user-select:none;}
     .agata-col-chip.active{background:#ecfeff;border-color:#67e8f9;color:#0f766e;}
-    .agata-table{font-size:11px;}
-    .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;}
-    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:9px 12px;}
+    .agata-table{font-size:11px;table-layout:auto;}
+    .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;padding:8px 8px;}
+    .agata-table td{padding:7px 8px;}
+    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:8px 10px;}
     .agata-table tr.agata-booking{background:rgba(0,53,128,0.03);}
     .agata-table tr.agata-airbnb{background:rgba(255,90,95,0.04);}
     .agata-table tr.agata-profitroom{background:rgba(99,102,241,0.04);}
+    .agata-table tr td{border-bottom:1px solid #e5e7eb;}
+    .agata-table .ta-c{text-align:center;}
+    .agata-table .ta-r{text-align:right;}
+    .agata-table .ta-l{text-align:left;}
     .agata-partner-badge,.agata-status-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;line-height:1;white-space:nowrap;}
     .agata-partner-badge.booking{background:#003580;color:#fff;}
     .agata-partner-badge.airbnb{background:#FF5A5F;color:#fff;}
@@ -430,11 +435,6 @@
     .agata-status-badge.s{background:#fee2e2;color:#b91c1c;}
     .agata-guest{display:flex;flex-direction:column;gap:2px;}
     .agata-guest .meta{font-size:10px;color:var(--text-muted);}
-    .agata-table th:nth-child(1),.agata-table td:nth-child(1),
-    .agata-table th:nth-child(2),.agata-table td:nth-child(2),
-    .agata-table th:nth-child(3),.agata-table td:nth-child(3),
-    .agata-table th:nth-child(5),.agata-table td:nth-child(5),
-    .agata-table th:nth-child(6),.agata-table td:nth-child(6){text-align:center;}
     .agata-faktura-stack{display:grid;grid-template-columns:1fr;gap:10px;}
     .agata-faktura-line{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-radius:12px;}
     .agata-faktura-line .name{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;}
@@ -4195,19 +4195,19 @@ function buildAgataFakturaView(){
   const reservationRows=reservationRowsData.map(r=>{
     const rowClass=`agata-${partnerClass(r.partner)}`;
     const cells={
-      dataOd:`<td>${escapeHtml(r.dataOd||'—')}</td>`,
-      dataDo:`<td>${escapeHtml(r.dataDo||'—')}</td>`,
-      osoby:`<td style="text-align:center">${r.osoby||'—'}</td>`,
-      gosc:`<td><div class="agata-guest"><div>${escapeHtml(r.gosc||'—')}</div><div class="meta">${escapeHtml(r.apartament||'—')}</div></div></td>`,
-      partner:`<td style="text-align:center">${partnerBadge(r.partner)}</td>`,
-      status:`<td style="text-align:center">${statusBadge(r.status)}</td>`,
-      apartament:`<td>${escapeHtml(r.apartament||'—')}</td>`,
-      transakcja:`<td style="text-align:right">${fmt(r.transakcja||0)} zł</td>`,
-      prowizja:`<td style="text-align:right">${fmt(r.prowizja||0)} zł</td>`,
-      golaCena:`<td style="text-align:right">${fmt(r.golaCena||0)} zł</td>`,
-      cenaSystem:`<td style="text-align:right">${fmt(r.cenaSystem||0)} zł</td>`,
-      doplata:`<td style="text-align:right">${fmt(r.doplata||0)} zł</td>`,
-      cenaCalkowita:`<td style="text-align:right;font-weight:700">${fmt(r.cenaCalkowita||0)} zł</td>`,
+      dataOd:`<td class="ta-c">${escapeHtml(r.dataOd||'—')}</td>`,
+      dataDo:`<td class="ta-c">${escapeHtml(r.dataDo||'—')}</td>`,
+      osoby:`<td class="ta-c">${r.osoby||'—'}</td>`,
+      gosc:`<td class="ta-l"><div class="agata-guest"><div>${escapeHtml(r.gosc||'—')}</div><div class="meta">${escapeHtml(r.apartament||'—')}</div></div></td>`,
+      partner:`<td class="ta-c">${partnerBadge(r.partner)}</td>`,
+      status:`<td class="ta-c">${statusBadge(r.status)}</td>`,
+      apartament:`<td class="ta-l">${escapeHtml(r.apartament||'—')}</td>`,
+      transakcja:`<td class="ta-r">${fmt(r.transakcja||0)} zł</td>`,
+      prowizja:`<td class="ta-r">${fmt(r.prowizja||0)} zł</td>`,
+      golaCena:`<td class="ta-r">${fmt(r.golaCena||0)} zł</td>`,
+      cenaSystem:`<td class="ta-r">${fmt(r.cenaSystem||0)} zł</td>`,
+      doplata:`<td class="ta-r">${fmt(r.doplata||0)} zł</td>`,
+      cenaCalkowita:`<td class="ta-r" style="font-weight:700">${fmt(r.cenaCalkowita||0)} zł</td>`,
     };
     const separator=lastGroupDate!==r.dataDo
       ? `<tr class="agata-day-row"><td colspan="${visibleColumns.length}">Wymeldowanie: ${escapeHtml(fmtDateLabel(r.dataDo))}</td></tr>`
@@ -4217,14 +4217,14 @@ function buildAgataFakturaView(){
   }).join('');
 
   const breakdownRows=(data.breakdown||[]).map(r=>`<tr>
-    <td>${escapeHtml(r.apartament||'—')}</td>
-    <td style="text-align:center">${partnerBadge(r.partner)}</td>
-    <td style="text-align:right">${fmt(r.transakcja||0)} zł</td>
-    <td style="text-align:right">${fmt(r.prowizja||0)} zł</td>
-    <td style="text-align:right">${fmt(r.golaCena||0)} zł</td>
-    <td style="text-align:right">${fmt(r.cenaSystem||0)} zł</td>
-    <td style="text-align:right">${fmt(r.doplata||0)} zł</td>
-    <td style="text-align:right">${fmt(r.cenaCalkowita||0)} zł</td>
+    <td class="ta-l">${escapeHtml(r.apartament||'—')}</td>
+    <td class="ta-c">${partnerBadge(r.partner)}</td>
+    <td class="ta-r">${fmt(r.transakcja||0)} zł</td>
+    <td class="ta-r">${fmt(r.prowizja||0)} zł</td>
+    <td class="ta-r">${fmt(r.golaCena||0)} zł</td>
+    <td class="ta-r">${fmt(r.cenaSystem||0)} zł</td>
+    <td class="ta-r">${fmt(r.doplata||0)} zł</td>
+    <td class="ta-r">${fmt(r.cenaCalkowita||0)} zł</td>
   </tr>`).join('');
 
   const columnControls=`<div class="agata-controls">
@@ -4238,7 +4238,7 @@ function buildAgataFakturaView(){
       ${columnControls}
       <div class="artur-table-wrap">
         <table class="artur-table agata-table">
-          <thead><tr>${visibleColumns.map(col=>`<th>${col.label}</th>`).join('')}</tr></thead>
+          <thead><tr>${visibleColumns.map(col=>`<th class="${['dataOd','dataDo','osoby','partner','status'].includes(col.key)?'ta-c':(['transakcja','prowizja','golaCena','cenaSystem','doplata','cenaCalkowita'].includes(col.key)?'ta-r':'ta-l')}">${col.label}</th>`).join('')}</tr></thead>
           <tbody>${reservationRows||`<tr><td colspan="${visibleColumns.length}" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>`}</tbody>
         </table>
       </div>
