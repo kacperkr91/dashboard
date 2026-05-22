@@ -4104,8 +4104,15 @@ function buildAgataFakturaView(){
     <td style="text-align:center">${r.osoby||'—'}</td>
     <td>${escapeHtml(r.gosc||'—')}</td>
     <td>${escapeHtml(r.partner||'—')}</td>
+    <td style="text-align:center">${escapeHtml(r.status||'—')}</td>
     <td>${escapeHtml(r.apartament||'—')}</td>
+    <td style="text-align:right">${fmt(r.transakcja||0)} zł</td>
+    <td style="text-align:right">${fmt(r.prowizja||0)} zł</td>
+    <td style="text-align:right">${fmt(r.golaCena||0)} zł</td>
+    <td style="text-align:right">${fmt(r.cenaSystem||0)} zł</td>
+    <td style="text-align:right">${fmt(r.doplata||0)} zł</td>
     <td style="text-align:right">${fmt(r.cenaCalkowita||0)} zł</td>
+    <td style="text-align:right">${fmt(r.vat||0)} zł</td>
   </tr>`).join('');
 
   const breakdownRows=(data.breakdown||[]).map(r=>`<tr>
@@ -4122,11 +4129,11 @@ function buildAgataFakturaView(){
   const tables=`<div class="artur-grid">
     <div class="grid-card">
       <div class="card-title">Rezerwacje miesiąca</div>
-      <div class="card-subtitle">Lista rezerwacji pobrana bezpośrednio z arkusza Agaty.</div>
+      <div class="card-subtitle">Pełna tabela rezerwacji w układzie zbliżonym do arkusza Agaty, razem z prowizjami i kwotami.</div>
       <div class="artur-table-wrap">
         <table class="artur-table">
-          <thead><tr><th>Data od</th><th>Data do</th><th>Osoby</th><th>Goście</th><th>Partner</th><th>Apartament</th><th>Cena całkowita</th></tr></thead>
-          <tbody>${reservationRows||'<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>'}</tbody>
+          <thead><tr><th>Data od</th><th>Data do</th><th>Osoby</th><th>Goście</th><th>Partner</th><th>Status</th><th>Apartament</th><th>Transakcja</th><th>Prowizja</th><th>Goła cena</th><th>Cena z systemu</th><th>Dopłata</th><th>Cena całkowita</th><th>VAT</th></tr></thead>
+          <tbody>${reservationRows||'<tr><td colspan="14" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>'}</tbody>
         </table>
       </div>
     </div>
@@ -8764,25 +8771,4 @@ function generateHKMessage(){
     </div>
   </div>`;
   document.body.appendChild(modal);
-  document.getElementById('hkMsgBox').value=msg;
-  document.getElementById('hkCopyBtn').onclick=function(){
-    navigator.clipboard.writeText(document.getElementById('hkMsgBox').value).then(()=>{
-      this.textContent='✓ Skopiowano!';this.style.background='#16a34a';
-      setTimeout(()=>{this.textContent='Kopiuj';this.style.background='#25D366';},2000);
-    });
-  };
-}
-
-
-
-
-window.addEventListener('load',()=>{
-  if(typeof Chart==='undefined'){
-    console.warn('Chart.js not available');
-    window.Chart=function(){return{destroy:()=>{},update:()=>{}};};window.Chart.register=()=>{};
-  }
-  bootDashboard();
-});
-</script>
-</body>
-</html>
+  document.getElementById('hkMsgBox').
