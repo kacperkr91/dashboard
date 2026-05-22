@@ -471,6 +471,8 @@ const CONFIG={
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
   ksefRange:          'A2:O2000',
+  agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
+  agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
   otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
   otvStartRow:        4,
@@ -1232,6 +1234,15 @@ let HK_MONTHS=[
   {key:'2026-04',label:'Kwiecień 2026',short:'Kwi 26'},
 ];
 
+let AGATA_MONTHS=[
+  {key:'2025-12',label:'Grudzień 2025',short:'Gru 25'},
+  {key:'2026-01',label:'Styczeń 2026', short:'Sty 26'},
+  {key:'2026-02',label:'Luty 2026',    short:'Lut 26'},
+  {key:'2026-03',label:'Marzec 2026',  short:'Mar 26'},
+  {key:'2026-04',label:'Kwiecień 2026',short:'Kwi 26'},
+  {key:'2026-05',label:'Maj 2026',     short:'Maj 26'},
+];
+
 const MONTH_NAMES_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
 const MONTH_SHORT_PL=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
 const ARTUR_PAYMENT_NIP='6771000478';
@@ -1316,6 +1327,7 @@ function shiftMonthKey(monthKey, delta){
 
 let _hkMonthsDetected=false;
 let _otvMonthsDetected=false;
+let _agataMonthsDetected=false;
 
 async function detectHkMonths(){
   if(_hkMonthsDetected)return; // tylko raz na sesję
@@ -1348,6 +1360,24 @@ async function detectOtvMonths(){
       if(!months.find(m=>m.key===_state.otvMonth))_state.otvMonth=lastKey;
     }
   }catch(e){console.warn('detectOtvMonths failed:',e);}
+}
+
+async function detectAgataMonths(){
+  if(_agataMonthsDetected)return;
+  const apiKey=CONFIG.agataApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.agataSpreadsheetId;
+  if(!apiKey||!spreadsheetId)return;
+  try{
+    const names=await fetchSheetNames(spreadsheetId,apiKey);
+    const months=buildMonthList(names);
+    if(months.length>0){
+      AGATA_MONTHS=months;
+      _agataMonthsDetected=true;
+      const currentKey=getMonthKeyFromDate(new Date());
+      const preferredKey=months.find(m=>m.key===currentKey)?currentKey:months[months.length-1].key;
+      if(!months.find(m=>m.key===_state.agataMonth)||_state.agataMonth!==preferredKey)_state.agataMonth=preferredKey;
+    }
+  }catch(e){console.warn('detectAgataMonths failed:',e);}
 }
 
 
@@ -1594,6 +1624,113 @@ async function loadOtvMonth(monthKey){
   }
   if(!result.length)throw new Error('NO_OTV_DATA');
   return result;
+}
+
+async function loadAgataMonth(monthKey){
+  const apiKey=CONFIG.agataApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.agataSpreadsheetId;
+  if(!apiKey||!spreadsheetId)throw new Error('MISSING_AGATA_CONFIG');
+  const encRange=encodeURIComponent(`'${monthKey}'!B2:Y220`);
+  const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encRange}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`);
+  const vals=data.values||[];
+  if(!vals.length)throw new Error('NO_AGATA_DATA');
+
+  const cell=(r,c)=>String(vals[r]?.[c]||'').trim();
+  const money=(r,c)=>parseMoneyValue(vals[r]?.[c]||0);
+  const normalizePartner=partner=>{
+    const p=String(partner||'').trim();
+    if(/booking/i.test(p))return'Booking.com';
+    if(/airbnb/i.test(p))return'Airbnb';
+    if(/profit/i.test(p))return'Profitroom';
+    return p||'—';
+  };
+
+  const totals={
+    transakcja: money(0,9),
+    prowizja: money(0,10),
+    golaCena: money(0,11),
+    cenaSystem: money(0,12),
+    doplata: money(0,13),
+    cenaCalkowita: money(0,14),
+    vat: money(0,15),
+  };
+
+  const faktura={
+    netto:0,
+    vat:0,
+    brutto:0,
+    odliczenia:{hornet:0,previo:0,yieldplanet:0,kartaSim:0,suma:0},
+    doplatyInneSuma:0,
+  };
+
+  let section='';
+  for(let r=0;r<vals.length;r++){
+    for(let c=0;c<24;c++){
+      const raw=cell(r,c);
+      const key=raw.toLowerCase();
+      if(!raw)continue;
+      if(key.includes('faktura'))section='faktura';
+      else if(key.includes('odliczenia'))section='odliczenia';
+      else if(key.includes('dopłaty inne')||key.includes('doplaty inne'))section='doplaty';
+
+      if(key.includes('kwota netto'))faktura.netto=money(r,c+1)||money(r,c+2);
+      else if(key.includes('kwota brutto'))faktura.brutto=money(r,c+1)||money(r,c+2);
+      else if(key==='vat 8%'||key==='vat8%'||key==='vat')faktura.vat=money(r,c+1)||money(r,c+2);
+      else if(key==='hornet')faktura.odliczenia.hornet=money(r,c+1)||money(r,c+2);
+      else if(key==='previo')faktura.odliczenia.previo=money(r,c+1)||money(r,c+2);
+      else if(key==='yieldplanet')faktura.odliczenia.yieldplanet=money(r,c+1)||money(r,c+2);
+      else if(key.includes('karta sim'))faktura.odliczenia.kartaSim=money(r,c+1)||money(r,c+2);
+      else if(key==='suma'&&section==='odliczenia')faktura.odliczenia.suma=money(r,c+1)||money(r,c+2);
+      else if(key==='suma'&&section==='doplaty')faktura.doplatyInneSuma=money(r,c+1)||money(r,c+2);
+    }
+  }
+
+  const reservations=[];
+  for(let r=2;r<vals.length;r++){
+    const apartament=cell(r,8);
+    const partner=cell(r,6);
+    const gosc=cell(r,4);
+    if(!apartament&&!partner&&!gosc)continue;
+    reservations.push({
+      dataOd:cell(r,0),
+      dataDo:cell(r,1),
+      osoby:parseInt(cell(r,3),10)||0,
+      gosc,
+      partner:normalizePartner(partner),
+      status:cell(r,7),
+      apartament,
+      transakcja:money(r,9),
+      prowizja:money(r,10),
+      golaCena:money(r,11),
+      cenaSystem:money(r,12),
+      doplata:money(r,13),
+      cenaCalkowita:money(r,14),
+      vat:money(r,15),
+    });
+  }
+  if(!reservations.length && !faktura.brutto && !totals.cenaCalkowita)throw new Error('NO_AGATA_DATA');
+
+  const breakdownMap={};
+  reservations.forEach(r=>{
+    const key=`${r.apartament}__${r.partner}`;
+    if(!breakdownMap[key]){
+      breakdownMap[key]={
+        apartament:r.apartament||'—',
+        partner:r.partner||'—',
+        transakcja:0,prowizja:0,golaCena:0,cenaSystem:0,doplata:0,cenaCalkowita:0,vat:0,
+      };
+    }
+    breakdownMap[key].transakcja+=r.transakcja;
+    breakdownMap[key].prowizja+=r.prowizja;
+    breakdownMap[key].golaCena+=r.golaCena;
+    breakdownMap[key].cenaSystem+=r.cenaSystem;
+    breakdownMap[key].doplata+=r.doplata;
+    breakdownMap[key].cenaCalkowita+=r.cenaCalkowita;
+    breakdownMap[key].vat+=r.vat;
+  });
+
+  const breakdown=Object.values(breakdownMap).sort((a,b)=>(b.cenaCalkowita||0)-(a.cenaCalkowita||0));
+  return{totals,faktura,reservations,breakdown};
 }
 
 /* FORECAST */
@@ -2330,6 +2467,7 @@ let _state={
   adminUsersLoading:false,
   ksefFilter:'all',
   ksefSearch:'',
+  agataMonth:getMonthKeyFromDate(new Date()),
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -2354,7 +2492,7 @@ let _state={
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, ksef:null, weather:null
+    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, ksef:null, weather:null
   }
 };
 let _charts={};
@@ -2387,11 +2525,17 @@ const DASHBOARD_MODULE_LABELS={
   parking:'Parking'
 };
 function hasModuleAccess(section){
+  if(section==='agata-faktura')return canViewAgataFaktura();
   if(section==='users-admin')return canConfig();
   const user=_state.authUser;
   if(!user)return false;
   const modules=Array.isArray(user.modules)?user.modules:[];
   return modules.includes('*')||modules.includes(section);
+}
+function canViewAgataFaktura(){
+  const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  const role=String(_state.authUser?.role||'').trim().toLowerCase();
+  return role==='admin'||login==='kacper';
 }
 function canConfig(){
   return !!(_state.authUser?.permissions?.canConfig);
@@ -3887,6 +4031,118 @@ function buildPrevioView(){
   </div>`;
 
   return monthNav+kpis+chanPie+grid+drawer;
+}
+
+function buildAgataFakturaView(){
+  const monthKey=_state.agataMonth;
+  const data=_state.data.agata?.[monthKey];
+  const activeMonth=AGATA_MONTHS.find(m=>m.key===monthKey);
+  const monthNav=`<div class="hk-month-nav">
+    ${AGATA_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setAgataMonth('${m.key}')">${m.short}</button>`).join('')}
+  </div>`;
+
+  if(!data)return monthNav+renderLoading('Ładowanie Agata Faktura…');
+  if(data.error)return monthNav+renderError(data.error);
+
+  const t=data.totals||{};
+  const f=data.faktura||{};
+  const od=f.odliczenia||{};
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-green"><div class="label">Kwota netto</div><div class="value"><span class="sym">zł</span>${fmt(f.netto||0)}</div><div class="sub">${activeMonth?.label||monthKey}</div></div>
+    <div class="kpi-card c-blue"><div class="label">VAT 8%</div><div class="value"><span class="sym">zł</span>${fmt(f.vat||0)}</div><div class="sub">Z bloku faktury</div></div>
+    <div class="kpi-card c-purple"><div class="label">Kwota brutto</div><div class="value"><span class="sym">zł</span>${fmt(f.brutto||0)}</div><div class="sub">Gotowa wartość z arkusza</div></div>
+    <div class="kpi-card c-orange"><div class="label">Odliczenia</div><div class="value"><span class="sym">zł</span>${fmt(od.suma||0)}</div><div class="sub">Dopłaty inne: ${fmt(f.doplatyInneSuma||0)} zł</div></div>
+  </div>`;
+
+  const summary=`<div class="artur-grid">
+    <div class="grid-card">
+      <div class="card-title">Faktura</div>
+      <div class="card-subtitle">Wartości pobrane z gotowego bloku rozliczeniowego arkusza.</div>
+      <div class="artur-table-wrap">
+        <table class="artur-table">
+          <tbody>
+            <tr><td><strong>Kwota netto</strong></td><td style="text-align:right">${fmt(f.netto||0)} zł</td></tr>
+            <tr><td><strong>VAT 8%</strong></td><td style="text-align:right">${fmt(f.vat||0)} zł</td></tr>
+            <tr><td><strong>Kwota brutto</strong></td><td style="text-align:right">${fmt(f.brutto||0)} zł</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="card-title">Odliczenia i dopłaty</div>
+      <div class="card-subtitle">Podgląd miesięcznych odliczeń wpisywanych w arkuszu Agaty.</div>
+      <div class="artur-table-wrap">
+        <table class="artur-table">
+          <tbody>
+            <tr><td>Hornet</td><td style="text-align:right">${fmt(od.hornet||0)} zł</td></tr>
+            <tr><td>Previo</td><td style="text-align:right">${fmt(od.previo||0)} zł</td></tr>
+            <tr><td>Yieldplanet</td><td style="text-align:right">${fmt(od.yieldplanet||0)} zł</td></tr>
+            <tr><td>Karta SIM</td><td style="text-align:right">${fmt(od.kartaSim||0)} zł</td></tr>
+            <tr><td><strong>Suma odliczeń</strong></td><td style="text-align:right"><strong>${fmt(od.suma||0)} zł</strong></td></tr>
+            <tr><td><strong>Dopłaty inne</strong></td><td style="text-align:right"><strong>${fmt(f.doplatyInneSuma||0)} zł</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+
+  const totalsBar=`<div class="grid-card" style="margin-bottom:24px">
+    <div class="card-title">Kwoty z miesiąca</div>
+    <div class="card-subtitle">Szybki podgląd sum z wiersza zbiorczego arkusza.</div>
+    <div class="kpi-row" style="margin-bottom:0">
+      <div class="kpi-card c-blue"><div class="label">Transakcja</div><div class="value"><span class="sym">zł</span>${fmt(t.transakcja||0)}</div></div>
+      <div class="kpi-card c-red"><div class="label">Prowizja</div><div class="value"><span class="sym">zł</span>${fmt(t.prowizja||0)}</div></div>
+      <div class="kpi-card c-green"><div class="label">Cena z systemu</div><div class="value"><span class="sym">zł</span>${fmt(t.cenaSystem||0)}</div></div>
+      <div class="kpi-card c-orange"><div class="label">Cena całkowita</div><div class="value"><span class="sym">zł</span>${fmt(t.cenaCalkowita||0)}</div></div>
+    </div>
+  </div>`;
+
+  const reservationRows=(data.reservations||[]).map(r=>`<tr>
+    <td>${escapeHtml(r.dataOd||'—')}</td>
+    <td>${escapeHtml(r.dataDo||'—')}</td>
+    <td style="text-align:center">${r.osoby||'—'}</td>
+    <td>${escapeHtml(r.gosc||'—')}</td>
+    <td>${escapeHtml(r.partner||'—')}</td>
+    <td>${escapeHtml(r.apartament||'—')}</td>
+    <td style="text-align:right">${fmt(r.cenaCalkowita||0)} zł</td>
+  </tr>`).join('');
+
+  const breakdownRows=(data.breakdown||[]).map(r=>`<tr>
+    <td>${escapeHtml(r.apartament||'—')}</td>
+    <td>${escapeHtml(r.partner||'—')}</td>
+    <td style="text-align:right">${fmt(r.transakcja||0)} zł</td>
+    <td style="text-align:right">${fmt(r.prowizja||0)} zł</td>
+    <td style="text-align:right">${fmt(r.golaCena||0)} zł</td>
+    <td style="text-align:right">${fmt(r.cenaSystem||0)} zł</td>
+    <td style="text-align:right">${fmt(r.doplata||0)} zł</td>
+    <td style="text-align:right">${fmt(r.cenaCalkowita||0)} zł</td>
+  </tr>`).join('');
+
+  const tables=`<div class="artur-grid">
+    <div class="grid-card">
+      <div class="card-title">Rezerwacje miesiąca</div>
+      <div class="card-subtitle">Lista rezerwacji pobrana bezpośrednio z arkusza Agaty.</div>
+      <div class="artur-table-wrap">
+        <table class="artur-table">
+          <thead><tr><th>Data od</th><th>Data do</th><th>Osoby</th><th>Goście</th><th>Partner</th><th>Apartament</th><th>Cena całkowita</th></tr></thead>
+          <tbody>${reservationRows||'<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="card-title">Rozbicie po apartamencie i partnerze</div>
+      <div class="card-subtitle">Agregacja kwot z tabeli rezerwacji dla wybranego miesiąca.</div>
+      <div class="artur-table-wrap">
+        <table class="artur-table">
+          <thead><tr><th>Apartament</th><th>Partner</th><th>Transakcja</th><th>Prowizja</th><th>Goła cena</th><th>Cena z systemu</th><th>Dopłata</th><th>Cena całkowita</th></tr></thead>
+          <tbody>${breakdownRows||'<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">Brak danych</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+
+  return monthNav+kpis+totalsBar+summary+tables;
 }
 
 function openPrevioDrawer(date){
@@ -7901,6 +8157,7 @@ async function init(){
   const needHousekeeping=hasModuleAccess('housekeeping');
   const needOtv=hasModuleAccess('otv');
   const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout']);
+  const needAgata=canViewAgataFaktura();
   const needParking=hasModuleAccess('parking');
   const needKsef=hasAnyModuleAccess(['ksef','artur-payments']);
   const progressDelay=_state.authUser?.role==='admin'?2000:120;
@@ -7908,7 +8165,7 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},parking:null,ksef:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;
 
   mount(`<div class="app"><header>
@@ -7938,10 +8195,12 @@ async function init(){
   await Promise.allSettled([
     needHousekeeping?detectHkMonths():Promise.resolve(),
     needOtv?detectOtvMonths():Promise.resolve(),
+    needAgata?detectAgataMonths():Promise.resolve(),
   ]);
 
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
+  const initAgataKey=_state.agataMonth;
   const initPrevioKey=_state.previoMonth;
   const initRentalKey=_state.rentalMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
@@ -7950,11 +8209,12 @@ async function init(){
   const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Jeszcze chwila…');
-  const [rentalCurrentR,previor,previoPrevR,previoNextR,parkingr]=await Promise.allSettled([
+  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,parkingr]=await Promise.allSettled([
     needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(prevPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(nextPrevioKey):Promise.resolve(null),
+    needAgata?loadAgataMonth(initAgataKey):Promise.resolve(null),
     needParking?loadParkingData():Promise.resolve(null),
   ]);
   if(needRental)_state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
@@ -7963,6 +8223,7 @@ async function init(){
     if(prevPrevioKey)_state.data.previo[prevPrevioKey]=previoPrevR.status==='fulfilled'?previoPrevR.value:{error:previoPrevR.reason?.message||'Błąd'};
     if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
   }
+  if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
   if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   await delay(progressDelay);
@@ -8115,6 +8376,7 @@ function renderApp(){
     ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
+    ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
     ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
     ${navButton('booking-payout','Wypłaty','💰','background:#003580;border-color:#003580;color:#fff')}
     ${navButton('dyzury','Dyżury','📅','background:#7c3aed;border-color:#7c3aed;color:#fff')}
@@ -8186,6 +8448,8 @@ function renderApp(){
     content=buildOtvView();
   } else if(section==='previo'){
     content=buildPrevioView();
+  } else if(section==='agata-faktura'){
+    content=buildAgataFakturaView();
   } else if(section==='artur-payments'){
     content=buildArturPaymentsView(data.ksef);
   } else if(section==='users-admin'){
@@ -8389,6 +8653,23 @@ function setHkMonth(key){
     }).catch(e=>{
       _state.data.housekeeping[key]={error:e.message||'Błąd'};
       if(_state.section==='housekeeping'&&_state.hkMonth===key)renderApp();
+    });
+  } else {
+    renderApp();
+  }
+}
+
+function setAgataMonth(key){
+  _state.agataMonth=key;
+  if(!_state.data.agata[key]){
+    _state.data.agata[key]=null;
+    renderApp();
+    loadAgataMonth(key).then(data=>{
+      _state.data.agata[key]=data;
+      if(_state.section==='agata-faktura'&&_state.agataMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.agata[key]={error:e.message||'Błąd'};
+      if(_state.section==='agata-faktura'&&_state.agataMonth===key)renderApp();
     });
   } else {
     renderApp();
