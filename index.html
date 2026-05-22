@@ -445,7 +445,14 @@
     .agata-faktura-line.netto{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;}
     .agata-faktura-line.vat{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
     .agata-faktura-line.brutto{background:#f5f3ff;border:1px solid #ddd6fe;color:#6d28d9;}
+    .agata-totals-sticky{position:sticky;top:12px;z-index:8;}
+    .agata-totals-bar{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;}
+    .agata-total-box{background:linear-gradient(180deg,#fde68a 0%,#fcd34d 100%);border:1px solid #f59e0b;border-radius:12px;padding:12px 14px;box-shadow:0 8px 18px rgba(245,158,11,0.14);}
+    .agata-total-box .label{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#92400e;margin-bottom:6px;}
+    .agata-total-box .value{font-size:20px;font-weight:800;color:#451a03;line-height:1.05;}
     @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
+    @media(max-width:1200px){.agata-totals-bar{grid-template-columns:repeat(3,minmax(120px,1fr));}}
+    @media(max-width:700px){.agata-totals-bar{grid-template-columns:repeat(2,minmax(120px,1fr));}.agata-totals-sticky{position:static;}}
 
     /* ── PRINT / PDF ── */
     @media print {
@@ -4175,14 +4182,16 @@ function buildAgataFakturaView(){
     </div>
   </div>`;
 
-  const totalsBar=`<div class="grid-card" style="margin-bottom:24px">
+  const totalsBar=`<div class="grid-card agata-totals-sticky" style="margin-bottom:24px">
     <div class="card-title">Kwoty z miesiąca</div>
-    <div class="card-subtitle">Szybki podgląd sum z wiersza zbiorczego arkusza.</div>
-    <div class="kpi-row" style="margin-bottom:0">
-      <div class="kpi-card c-blue"><div class="label">Transakcja</div><div class="value"><span class="sym">zł</span>${fmt(t.transakcja||0)}</div></div>
-      <div class="kpi-card c-red"><div class="label">Prowizja</div><div class="value"><span class="sym">zł</span>${fmt(t.prowizja||0)}</div></div>
-      <div class="kpi-card c-green"><div class="label">Cena z systemu</div><div class="value"><span class="sym">zł</span>${fmt(t.cenaSystem||0)}</div></div>
-      <div class="kpi-card c-orange"><div class="label">Cena całkowita</div><div class="value"><span class="sym">zł</span>${fmt(t.cenaCalkowita||0)}</div></div>
+    <div class="card-subtitle">Przypięte sumy z górnego wiersza arkusza Agaty.</div>
+    <div class="agata-totals-bar">
+      <div class="agata-total-box"><div class="label">Transakcja</div><div class="value">${fmt(t.transakcja||0)} zł</div></div>
+      <div class="agata-total-box"><div class="label">Prowizja</div><div class="value">${fmt(t.prowizja||0)} zł</div></div>
+      <div class="agata-total-box"><div class="label">Goła cena</div><div class="value">${fmt(t.golaCena||0)} zł</div></div>
+      <div class="agata-total-box"><div class="label">Cena z systemu</div><div class="value">${fmt(t.cenaSystem||0)} zł</div></div>
+      <div class="agata-total-box"><div class="label">Dopłata</div><div class="value">${fmt(t.doplata||0)} zł</div></div>
+      <div class="agata-total-box"><div class="label">Cena całkowita</div><div class="value">${fmt(t.cenaCalkowita||0)} zł</div></div>
     </div>
   </div>`;
 
