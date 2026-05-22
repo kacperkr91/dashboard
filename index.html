@@ -417,7 +417,7 @@
     .agata-table{font-size:11px;table-layout:auto;}
     .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;padding:8px 8px;}
     .agata-table td{padding:7px 8px;}
-    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:8px 10px;}
+    .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:14px 10px 10px;position:relative;z-index:0;}
     .agata-table tr.agata-booking{background:rgba(0,53,128,0.03);}
     .agata-table tr.agata-airbnb{background:rgba(255,90,95,0.04);}
     .agata-table tr.agata-profitroom{background:rgba(99,102,241,0.04);}
@@ -479,7 +479,7 @@
       line-height:1.05;
       white-space:nowrap;
     }
-    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:64px;z-index:8;background:#f8fafc;}
+    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:74px;z-index:8;background:#f8fafc;}
     @media(max-width:700px){
       .agata-table thead tr.agata-sum-row th{position:static;}
       .agata-table thead tr:not(.agata-sum-row) th{position:static;}
@@ -2579,7 +2579,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','agata-faktura','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -2591,6 +2591,7 @@ const DASHBOARD_MODULE_LABELS={
   otv:'Rezerwacje OTV',
   previo:'Previo',
   'artur-payments':'Płatności Artur',
+  'agata-faktura':'Agata Faktura',
   'booking-payout':'Wypłaty',
   dyzury:'Dyżury',
   kalendarz:'Kalendarz',
@@ -2609,7 +2610,8 @@ function hasModuleAccess(section){
 function canViewAgataFaktura(){
   const login=String(_state.authUser?.login||'').trim().toLowerCase();
   const role=String(_state.authUser?.role||'').trim().toLowerCase();
-  return role==='admin'||login==='kacper';
+  const modules=Array.isArray(_state.authUser?.modules)?_state.authUser.modules:[];
+  return role==='admin'||login==='kacper'||modules.includes('*')||modules.includes('agata-faktura');
 }
 function getAgataColumnPrefs(){
   return _state.agataColumnPrefs||{};
