@@ -389,8 +389,8 @@
     .artur-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;}
     .artur-table-wrap{overflow:auto;}
     .artur-table{width:100%;border-collapse:collapse;font-size:12px;}
-    .artur-table th{background:var(--bg);padding:10px 12px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);white-space:nowrap;}
-    .artur-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+    .artur-table th{background:var(--bg);padding:10px 10px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);white-space:nowrap;}
+    .artur-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
     .artur-table th:nth-child(1),.artur-table td:nth-child(1),
     .artur-table th:nth-child(3),.artur-table td:nth-child(3),
     .artur-table th:nth-child(4),.artur-table td:nth-child(4),
@@ -430,6 +430,18 @@
     .agata-status-badge.s{background:#fee2e2;color:#b91c1c;}
     .agata-guest{display:flex;flex-direction:column;gap:2px;}
     .agata-guest .meta{font-size:10px;color:var(--text-muted);}
+    .agata-table th:nth-child(1),.agata-table td:nth-child(1),
+    .agata-table th:nth-child(2),.agata-table td:nth-child(2),
+    .agata-table th:nth-child(3),.agata-table td:nth-child(3),
+    .agata-table th:nth-child(5),.agata-table td:nth-child(5),
+    .agata-table th:nth-child(6),.agata-table td:nth-child(6){text-align:center;}
+    .agata-faktura-stack{display:grid;grid-template-columns:1fr;gap:10px;}
+    .agata-faktura-line{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-radius:12px;}
+    .agata-faktura-line .name{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;}
+    .agata-faktura-line .amount{font-size:22px;font-weight:800;line-height:1;}
+    .agata-faktura-line.netto{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;}
+    .agata-faktura-line.vat{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
+    .agata-faktura-line.brutto{background:#f5f3ff;border:1px solid #ddd6fe;color:#6d28d9;}
     @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
 
     /* ── PRINT / PDF ── */
@@ -4127,14 +4139,19 @@ function buildAgataFakturaView(){
     <div class="grid-card">
       <div class="card-title">Faktura</div>
       <div class="card-subtitle">Wartości pobrane z gotowego bloku rozliczeniowego arkusza.</div>
-      <div class="artur-table-wrap">
-        <table class="artur-table">
-          <tbody>
-            <tr><td><strong>Kwota netto</strong></td><td style="text-align:right">${fmt(f.netto||0)} zł</td></tr>
-            <tr><td><strong>VAT 8%</strong></td><td style="text-align:right">${fmt(f.vat||0)} zł</td></tr>
-            <tr><td><strong>Kwota brutto</strong></td><td style="text-align:right">${fmt(f.brutto||0)} zł</td></tr>
-          </tbody>
-        </table>
+      <div class="agata-faktura-stack">
+        <div class="agata-faktura-line netto">
+          <div class="name">Kwota netto</div>
+          <div class="amount">${fmt(f.netto||0)} zł</div>
+        </div>
+        <div class="agata-faktura-line vat">
+          <div class="name">VAT 8%</div>
+          <div class="amount">${fmt(f.vat||0)} zł</div>
+        </div>
+        <div class="agata-faktura-line brutto">
+          <div class="name">Kwota brutto</div>
+          <div class="amount">${fmt(f.brutto||0)} zł</div>
+        </div>
       </div>
     </div>
     <div class="grid-card">
