@@ -413,16 +413,34 @@
     .artur-input:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,0.1);}
     .artur-small{font-size:11px;color:var(--text-muted);}
     .tasks-shell{display:flex;flex-direction:column;gap:18px;}
-    .tasks-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-    .tasks-view-btn{border:1px solid var(--border);background:#fff;color:var(--text-mid);padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;}
-    .tasks-view-btn.active{background:#0f766e;border-color:#0f766e;color:#fff;}
-    .task-form-grid{display:grid;grid-template-columns:1.1fr 1.2fr .9fr .9fr .95fr auto;gap:12px;align-items:end;}
-    .task-card{border:1px solid var(--border);border-radius:16px;padding:16px;background:#fff;box-shadow:0 10px 24px rgba(15,23,42,0.04);}
-    .task-card.done{opacity:.72;background:#f8fafc;}
+    .tasks-hero{display:grid;grid-template-columns:1.2fr .9fr;gap:18px;}
+    .tasks-panel{position:relative;overflow:hidden;border:1px solid rgba(15,118,110,0.14);border-radius:24px;background:linear-gradient(135deg,#f8fffe 0%,#f0fdfa 45%,#ecfeff 100%);box-shadow:0 18px 40px rgba(15,23,42,0.07);}
+    .tasks-panel::before{content:"";position:absolute;inset:auto -60px -60px auto;width:180px;height:180px;border-radius:999px;background:radial-gradient(circle,#99f6e4 0%,rgba(153,246,228,0) 70%);opacity:.7;pointer-events:none;}
+    .tasks-panel-inner{position:relative;padding:22px 22px 20px;}
+    .tasks-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:10px;}
+    .tasks-lead{font-size:28px;font-weight:800;line-height:1.06;color:#0f172a;margin:0 0 8px;}
+    .tasks-desc{font-size:14px;line-height:1.6;color:#475569;max-width:640px;}
+    .tasks-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:18px;}
+    .tasks-view-btn{border:1px solid rgba(148,163,184,0.35);background:rgba(255,255,255,0.88);backdrop-filter:blur(8px);color:#334155;padding:10px 14px;border-radius:999px;font-size:12px;font-weight:800;cursor:pointer;transition:.18s ease;}
+    .tasks-view-btn:hover{transform:translateY(-1px);border-color:#5eead4;color:#0f766e;}
+    .tasks-view-btn.active{background:#0f766e;border-color:#0f766e;color:#fff;box-shadow:0 10px 22px rgba(15,118,110,0.24);}
+    .tasks-mini-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+    .tasks-mini-stat{background:#fff;border:1px solid rgba(226,232,240,0.9);border-radius:18px;padding:16px 16px 14px;box-shadow:0 10px 24px rgba(15,23,42,0.05);}
+    .tasks-mini-stat .k{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:8px;}
+    .tasks-mini-stat .v{font-size:30px;font-weight:800;line-height:1;color:#0f172a;}
+    .tasks-mini-stat .s{font-size:12px;color:#64748b;margin-top:8px;}
+    .tasks-composer{border:1px solid rgba(226,232,240,0.9);border-radius:24px;background:#fff;box-shadow:0 16px 36px rgba(15,23,42,0.06);}
+    .tasks-composer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px 0;}
+    .tasks-composer-body{padding:18px 20px 20px;}
+    .task-form-grid{display:grid;grid-template-columns:1.15fr 1.25fr .85fr .9fr .95fr .8fr;gap:12px;align-items:start;}
+    .task-card{border:1px solid rgba(226,232,240,0.9);border-radius:22px;padding:18px;background:#fff;box-shadow:0 12px 28px rgba(15,23,42,0.05);position:relative;overflow:hidden;}
+    .task-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#14b8a6;opacity:.95;}
+    .task-card.note::before{background:#8b5cf6;}
+    .task-card.done{opacity:.82;background:#f8fafc;}
     .task-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
-    .task-title{font-size:16px;font-weight:800;color:var(--text);}
-    .task-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
-    .task-text{font-size:13px;line-height:1.55;color:var(--text-mid);white-space:pre-wrap;margin-top:10px;}
+    .task-title{font-size:17px;font-weight:800;color:var(--text);line-height:1.25;}
+    .task-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+    .task-text{font-size:13px;line-height:1.65;color:var(--text-mid);white-space:pre-wrap;margin-top:12px;background:#f8fafc;border:1px solid #eef2f7;border-radius:14px;padding:12px 13px;}
     .task-chip{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800;line-height:1;}
     .task-chip.task{background:#dcfce7;color:#166534;}
     .task-chip.note{background:#ede9fe;color:#6d28d9;}
@@ -434,13 +452,19 @@
     .task-chip.low{background:#e2e8f0;color:#475569;}
     .task-chip.private{background:#f3e8ff;color:#7e22ce;}
     .task-chip.shared{background:#ecfeff;color:#0f766e;}
-    .task-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;}
+    .task-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;}
     .task-assignee{font-size:12px;font-weight:700;color:#0f172a;}
     .task-submeta{font-size:11px;color:var(--text-muted);}
     .tasks-columns{display:grid;grid-template-columns:1.1fr .95fr;gap:18px;}
     .tasks-list{display:flex;flex-direction:column;gap:12px;}
-    @media(max-width:1180px){.task-form-grid{grid-template-columns:1fr 1fr;}.tasks-columns{grid-template-columns:1fr;}}
-    @media(max-width:700px){.task-form-grid{grid-template-columns:1fr;}.tasks-toolbar{gap:8px;}}
+    .task-empty{min-height:260px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px dashed #cbd5e1;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px;}
+    .task-empty-icon{font-size:36px;line-height:1;margin-bottom:12px;}
+    .task-form-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;}
+    .task-privacy{display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;font-weight:600;}
+    .task-ghost-btn{border:1px solid #cbd5e1;background:#fff;color:#475569;padding:10px 14px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;}
+    .task-ghost-btn:hover{border-color:#94a3b8;color:#0f172a;}
+    @media(max-width:1180px){.tasks-hero{grid-template-columns:1fr;}.task-form-grid{grid-template-columns:1fr 1fr;}.tasks-columns{grid-template-columns:1fr;}}
+    @media(max-width:700px){.task-form-grid{grid-template-columns:1fr;}.tasks-toolbar{gap:8px;}.tasks-composer-head{padding:16px 16px 0;}.tasks-composer-body{padding:16px;}.tasks-panel-inner{padding:18px 16px 16px;}.tasks-mini-stats{grid-template-columns:1fr 1fr;}}
     .agata-controls{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
     .agata-col-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid var(--border);background:var(--white);font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;user-select:none;}
     .agata-col-chip.active{background:#ecfeff;border-color:#67e8f9;color:#0f766e;}
@@ -2749,7 +2773,7 @@ function buildTaskCard(item){
   const createdText=createdLabel&&!Number.isNaN(createdLabel.getTime())
     ? `${String(createdLabel.getDate()).padStart(2,'0')}.${String(createdLabel.getMonth()+1).padStart(2,'0')} ${String(createdLabel.getHours()).padStart(2,'0')}:${String(createdLabel.getMinutes()).padStart(2,'0')}`
     : '';
-  return `<div class="task-card ${status==='done'?'done':''}">
+  return `<div class="task-card ${status==='done'?'done':''} ${isNote?'note':''}">
     <div class="task-head">
       <div style="min-width:0">
         <div class="task-title">${escapeHtml(item.title||'Bez tytułu')}</div>
@@ -2787,42 +2811,63 @@ function buildTasksView(){
   const visibleItems=getTaskViewItems(_state.tasksView||'mine');
   const viewKey=_state.tasksView||'mine';
   const userOptions=getTaskUsersOptions().map(user=>`<option value="${escapeHtml(user.login)}" ${String(editingTask?.assignedTo||'').trim().toLowerCase()===user.login?'selected':''}>${escapeHtml(user.label)}</option>`).join('');
-  const cards=visibleItems.length?visibleItems.map(buildTaskCard).join(''):`<div class="empty-section" style="min-height:220px"><div class="empty-icon">🗂️</div><p>${viewKey==='done'?'Brak zakończonych zadań.':viewKey==='open'?'Brak otwartych zadań.':'Nie masz teraz przypisanych zadań.'}</p></div>`;
+  const overdueCount=openItems.filter(item=>item.type!=='note'&&item.dueDate&&item.status!=='done'&&item.dueDate<new Date().toISOString().slice(0,10)).length;
+  const noteCount=(allTasks.items||[]).filter(item=>item.type==='note').length;
+  const cards=visibleItems.length?visibleItems.map(buildTaskCard).join(''):`<div class="task-empty"><div class="task-empty-icon">🗂️</div><strong style="font-size:16px;color:#0f172a">${viewKey==='done'?'Na razie pusto':viewKey==='open'?'Brak otwartych wpisów':'Zero pozycji do Ciebie'}</strong><div style="font-size:13px;color:#64748b;line-height:1.6;max-width:320px;margin-top:8px">${viewKey==='done'?'Kiedy zaczniesz domykać zadania, historia pojawi się tutaj.':viewKey==='open'?'Wygląda na to, że zespół ma dziś czysto.':`Tu zobaczysz rzeczy przypisane do Ciebie i własne prywatne wpisy.`}</div></div>`;
   return `<div class="tasks-shell">
-    <div class="grid-card">
-      <div class="line-chart-label">
-        <div>
-          <div class="card-title">Zadania i notatki</div>
-          <div class="card-subtitle">Wspólna lista dla zespołu z przypisaniem, terminem i statusem.</div>
+    <div class="tasks-hero">
+      <div class="tasks-panel">
+        <div class="tasks-panel-inner">
+          <div class="tasks-eyebrow">Operacje zespołu</div>
+          <h2 class="tasks-lead">Zadania i notatki pod ręką</h2>
+          <div class="tasks-desc">Szybko dodasz zadanie, przekażesz je konkretnej osobie albo zostawisz prywatną notatkę tylko dla siebie. Bez szukania po modułach i bez zgadywania, kto ma to zrobić.</div>
+          <div class="tasks-toolbar">
+            <button class="tasks-view-btn ${viewKey==='mine'?'active':''}" onclick="setTasksView('mine')">Do mnie (${myItems.length})</button>
+            <button class="tasks-view-btn ${viewKey==='open'?'active':''}" onclick="setTasksView('open')">Otwarte (${openItems.length})</button>
+            <button class="tasks-view-btn ${viewKey==='done'?'active':''}" onclick="setTasksView('done')">Zrobione (${doneItems.length})</button>
+          </div>
         </div>
-        <div class="tasks-toolbar">
-          <button class="tasks-view-btn ${viewKey==='mine'?'active':''}" onclick="setTasksView('mine')">Do mnie (${myItems.length})</button>
-          <button class="tasks-view-btn ${viewKey==='open'?'active':''}" onclick="setTasksView('open')">Otwarte (${openItems.length})</button>
-          <button class="tasks-view-btn ${viewKey==='done'?'active':''}" onclick="setTasksView('done')">Zrobione (${doneItems.length})</button>
-        </div>
+      </div>
+      <div class="tasks-mini-stats">
+        <div class="tasks-mini-stat"><div class="k">Do mnie</div><div class="v">${myItems.length}</div><div class="s">Aktywne wpisy przypięte do Ciebie</div></div>
+        <div class="tasks-mini-stat"><div class="k">Otwarte</div><div class="v">${openItems.length}</div><div class="s">Wszystko, co czeka w zespole</div></div>
+        <div class="tasks-mini-stat"><div class="k">Po terminie</div><div class="v">${overdueCount}</div><div class="s">Wymagają szybkiej uwagi</div></div>
+        <div class="tasks-mini-stat"><div class="k">Notatki</div><div class="v">${noteCount}</div><div class="s">Luźne wpisy i przypomnienia</div></div>
       </div>
     </div>
-    <div class="grid-card">
-      <div class="card-title">${editingTask?'Edytuj wpis':'Dodaj wpis'}</div>
-      <div class="card-subtitle">${editingTask?'Zmiany zapiszą się dla wszystkich, którzy mają dostęp do tego wpisu.':'Możesz dodać zadanie do wykonania albo luźną notatkę dla zespołu.'}</div>
-      <div class="task-form-grid">
-        <div class="field"><label>Tytuł</label><input id="task-title-input" class="artur-input" type="text" placeholder="Np. Zadzwonić do serwisu pralek" value="${escapeHtml(editingTask?.title||'')}"></div>
-        <div class="field"><label>Opis / notatka</label><textarea id="task-text-input" class="artur-input" rows="2" placeholder="Szczegóły dla zespołu...">${escapeHtml(editingTask?.text||'')}</textarea></div>
-        <div class="field"><label>Typ</label><select id="task-type-input" class="filter-select" onchange="updateTaskFormVisibility()"><option value="task" ${editingTask?.type!=='note'?'selected':''}>Zadanie</option><option value="note" ${editingTask?.type==='note'?'selected':''}>Notatka</option></select></div>
-        <div class="field"><label>Priorytet</label><select id="task-priority-input" class="filter-select"><option value="normal" ${editingTask?.priority!=='high'&&editingTask?.priority!=='low'?'selected':''}>Normalny</option><option value="high" ${editingTask?.priority==='high'?'selected':''}>Pilny</option><option value="low" ${editingTask?.priority==='low'?'selected':''}>Niski</option></select></div>
-        <div class="field"><label>Przypisz do</label><select id="task-assignee-input" class="filter-select"><option value="">Nieprzypisane</option>${userOptions}</select></div>
-        <div class="field" id="task-due-wrap" style="${editingTask?.type==='note'?'display:none':''}"><label>Termin</label><input id="task-due-input" class="artur-input" type="date" value="${escapeHtml(editingTask?.dueDate||'')}"></div>
+    <div class="tasks-composer">
+      <div class="tasks-composer-head">
+        <div>
+          <div class="card-title">${editingTask?'Edytuj wpis':'Dodaj wpis'}</div>
+          <div class="card-subtitle">${editingTask?'Popraw treść, przypisanie albo prywatność bez usuwania wpisu.':'Dodaj zadanie do wykonania albo krótką notatkę dla siebie lub zespołu.'}</div>
+        </div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:12px"><input id="task-private-input" type="checkbox" ${String(editingTask?.visibility||'shared').trim().toLowerCase()==='private'?'checked':''}> Widoczne tylko dla mnie</label>
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
-        ${editingTask?`<button class="ksef-action-btn" onclick="resetTaskForm()">Anuluj edycję</button>`:''}
-        <button class="btn-primary" style="width:auto;padding:10px 16px" onclick="submitDashboardTaskForm()">${editingTask?'Zapisz zmiany':'Dodaj'}</button>
+      <div class="tasks-composer-body">
+        <div class="task-form-grid">
+          <div class="field"><label>Tytuł</label><input id="task-title-input" class="artur-input" type="text" placeholder="Np. Zadzwonić do serwisu pralek" value="${escapeHtml(editingTask?.title||'')}"></div>
+          <div class="field"><label>Opis / notatka</label><textarea id="task-text-input" class="artur-input" rows="2" placeholder="Szczegóły dla zespołu...">${escapeHtml(editingTask?.text||'')}</textarea></div>
+          <div class="field"><label>Typ</label><select id="task-type-input" class="filter-select" onchange="updateTaskFormVisibility()"><option value="task" ${editingTask?.type!=='note'?'selected':''}>Zadanie</option><option value="note" ${editingTask?.type==='note'?'selected':''}>Notatka</option></select></div>
+          <div class="field"><label>Priorytet</label><select id="task-priority-input" class="filter-select"><option value="normal" ${editingTask?.priority!=='high'&&editingTask?.priority!=='low'?'selected':''}>Normalny</option><option value="high" ${editingTask?.priority==='high'?'selected':''}>Pilny</option><option value="low" ${editingTask?.priority==='low'?'selected':''}>Niski</option></select></div>
+          <div class="field"><label>Przypisz do</label><select id="task-assignee-input" class="filter-select"><option value="">Nieprzypisane</option>${userOptions}</select></div>
+          <div class="field" id="task-due-wrap" style="${editingTask?.type==='note'?'display:none':''}"><label>Termin</label><input id="task-due-input" class="artur-input" type="date" value="${escapeHtml(editingTask?.dueDate||'')}"></div>
+        </div>
+        <div class="task-form-row">
+          <label class="task-privacy"><input id="task-private-input" type="checkbox" ${String(editingTask?.visibility||'shared').trim().toLowerCase()==='private'?'checked':''}> Widoczne tylko dla mnie</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            ${editingTask?`<button class="task-ghost-btn" onclick="resetTaskForm()">Anuluj edycję</button>`:''}
+            <button class="btn-primary" style="width:auto;padding:10px 16px" onclick="submitDashboardTaskForm()">${editingTask?'Zapisz zmiany':'Dodaj wpis'}</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="tasks-columns">
       <div class="grid-card">
-        <div class="card-title">${viewKey==='done'?'Zakończone wpisy':viewKey==='open'?'Otwarte wpisy':'Twoje wpisy'}</div>
-        <div class="card-subtitle">${viewKey==='done'?'Historia wykonanych zadań i domkniętych notatek.':viewKey==='open'?'Wszystko, co jest jeszcze aktywne w zespole.':'Zadania przypisane do Ciebie albo dodane przez Ciebie.'}</div>
+        <div class="line-chart-label">
+          <div>
+            <div class="card-title">${viewKey==='done'?'Zakończone wpisy':viewKey==='open'?'Otwarte wpisy':'Twoje wpisy'}</div>
+            <div class="card-subtitle">${viewKey==='done'?'Historia wykonanych zadań i domkniętych notatek.':viewKey==='open'?'Wszystko, co jest jeszcze aktywne w zespole.':'Zadania przypisane do Ciebie albo dodane przez Ciebie.'}</div>
+          </div>
+        </div>
         <div class="tasks-list">${cards}</div>
       </div>
       <div class="grid-card">
@@ -2831,7 +2876,7 @@ function buildTasksView(){
         <div class="kpi-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:4px">
           <div class="kpi-card c-green"><div class="label">Do mnie</div><div class="value">${myItems.length}</div><div class="sub">Aktywne wpisy</div></div>
           <div class="kpi-card c-orange"><div class="label">Otwarte</div><div class="value">${openItems.length}</div><div class="sub">Cały zespół</div></div>
-          <div class="kpi-card c-blue"><div class="label">Po terminie</div><div class="value">${openItems.filter(item=>item.dueDate&&item.status!=='done'&&item.dueDate<new Date().toISOString().slice(0,10)).length}</div><div class="sub">Wymagają uwagi</div></div>
+          <div class="kpi-card c-blue"><div class="label">Po terminie</div><div class="value">${overdueCount}</div><div class="sub">Wymagają uwagi</div></div>
           <div class="kpi-card c-purple"><div class="label">Zrobione</div><div class="value">${doneItems.length}</div><div class="sub">Wspólna historia</div></div>
         </div>
       </div>
