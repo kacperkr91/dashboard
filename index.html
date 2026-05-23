@@ -432,6 +432,8 @@
     .task-chip.high{background:#fee2e2;color:#b91c1c;}
     .task-chip.normal{background:#dbeafe;color:#1d4ed8;}
     .task-chip.low{background:#e2e8f0;color:#475569;}
+    .task-chip.private{background:#f3e8ff;color:#7e22ce;}
+    .task-chip.shared{background:#ecfeff;color:#0f766e;}
     .task-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;}
     .task-assignee{font-size:12px;font-weight:700;color:#0f172a;}
     .task-submeta{font-size:11px;color:var(--text-muted);}
@@ -2619,8 +2621,12 @@ function canEditTask(item){
 }
 
 function getTaskViewItems(viewKey){
-  const all=(getDashboardTasks().items||[]).slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
   const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  const all=(getDashboardTasks().items||[]).filter(item=>{
+    const visibility=String(item?.visibility||'shared').trim().toLowerCase();
+    if(visibility!=='private')return true;
+    return String(item?.createdBy||'').trim().toLowerCase()===login;
+  }).slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
   if(viewKey==='done')return all.filter(item=>item.status==='done');
   if(viewKey==='open')return all.filter(item=>item.status!=='done');
   return all.filter(item=>item.status!=='done' && (String(item.assignedTo||'').trim().toLowerCase()===login || String(item.createdBy||'').trim().toLowerCase()===login));
@@ -2646,6 +2652,7 @@ function addDashboardTaskFromForm(){
   const priority=String(document.getElementById('task-priority-input')?.value||'normal').trim().toLowerCase();
   const dueDate=String(document.getElementById('task-due-input')?.value||'').trim();
   const type=String(document.getElementById('task-type-input')?.value||'task').trim().toLowerCase()==='note'?'note':'task';
+  const visibility=document.getElementById('task-private-input')?.checked?'private':'shared';
   if(!title&&!text)return;
   const tasks=getDashboardTasks();
   const now=new Date().toISOString();
@@ -2659,6 +2666,7 @@ function addDashboardTaskFromForm(){
     status:type==='note'?'open':'open',
     priority,
     dueDate,
+    visibility,
     createdAt:now,
     createdBy:String(_state.authUser?.login||'').trim().toLowerCase(),
     createdByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
@@ -2669,6 +2677,7 @@ function addDashboardTaskFromForm(){
   const typeEl=document.getElementById('task-type-input'); if(typeEl)typeEl.value='task';
   const priorityEl=document.getElementById('task-priority-input'); if(priorityEl)priorityEl.value='normal';
   const assigneeEl=document.getElementById('task-assignee-input'); if(assigneeEl)assigneeEl.value='';
+  const privateEl=document.getElementById('task-private-input'); if(privateEl)privateEl.checked=false;
   if(_state.section==='tasks')renderApp();
 }
 
@@ -2707,6 +2716,7 @@ function buildTaskCard(item){
           <span class="task-chip ${item.type==='note'?'note':'task'}">${item.type==='note'?'Notatka':'Zadanie'}</span>
           <span class="task-chip ${status}">${status==='done'?'Zrobione':status==='in_progress'?'W trakcie':'Otwarte'}</span>
           <span class="task-chip ${priority}">${priority==='high'?'Pilne':priority==='low'?'Niski priorytet':'Normalny priorytet'}</span>
+          <span class="task-chip ${String(item.visibility||'shared').trim().toLowerCase()==='private'?'private':'shared'}">${String(item.visibility||'shared').trim().toLowerCase()==='private'?'Prywatne':'Wspólne'}</span>
         </div>
         <div class="task-submeta" style="margin-top:8px">Dodał(a): ${escapeHtml(item.createdByName||item.createdBy||'Użytkownik')}${createdText?` · ${createdText}`:''}</div>
       </div>
@@ -2760,6 +2770,7 @@ function buildTasksView(){
         <div class="field"><label>Przypisz do</label><select id="task-assignee-input" class="filter-select"><option value="">Nieprzypisane</option>${userOptions}</select></div>
         <div class="field"><label>Termin</label><input id="task-due-input" class="artur-input" type="date"></div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:12px"><input id="task-private-input" type="checkbox"> Widoczne tylko dla mnie</label>
       <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn-primary" style="width:auto;padding:10px 16px" onclick="addDashboardTaskFromForm()">Dodaj</button></div>
     </div>
     <div class="tasks-columns">
