@@ -388,6 +388,7 @@
     .artur-month-btn.active{background:#334155;color:#fff;border-color:#334155;}
     .artur-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;}
     .artur-table-wrap{overflow:auto;}
+    .agata-reservations-wrap{position:relative;max-height:72vh;overflow:auto;border:1px solid var(--border);border-radius:16px;background:#fff;}
     .artur-table{width:100%;border-collapse:collapse;font-size:12px;}
     .artur-table th{background:var(--bg);padding:10px 10px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);white-space:nowrap;}
     .artur-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
@@ -448,7 +449,7 @@
     .agata-faktura-line.brutto{background:#f5f3ff;border:1px solid #ddd6fe;color:#6d28d9;}
     @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
     .agata-table thead tr.agata-sum-row th{
-      position:sticky;top:12px;z-index:9;
+      position:sticky;top:0;z-index:9;
       background:linear-gradient(180deg,#fde68a 0%,#fcd34d 100%);
       border-bottom:2px solid #f59e0b;
       color:#451a03;
@@ -480,11 +481,12 @@
       line-height:1.05;
       white-space:nowrap;
     }
-    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:74px;z-index:8;background:#f8fafc;}
+    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:58px;z-index:8;background:#f8fafc;}
     @media(max-width:700px){
       .agata-table thead tr.agata-sum-row th{position:static;}
       .agata-table thead tr:not(.agata-sum-row) th{position:static;}
       .agata-table thead tr.agata-sum-row th .sum-value{font-size:13px;}
+      .agata-reservations-wrap{max-height:none;overflow:visible;border:none;border-radius:0;background:transparent;}
     }
 
     /* ── PRINT / PDF ── */
@@ -4286,7 +4288,7 @@ function buildAgataFakturaView(){
       <div class="card-title">Rezerwacje miesiąca</div>
       <div class="card-subtitle">Pełna tabela rezerwacji w układzie zbliżonym do arkusza Agaty, z przypiętymi sumami nad kolumnami kwotowymi.</div>
       ${columnControls}
-      <div class="artur-table-wrap">
+      <div class="artur-table-wrap agata-reservations-wrap">
         <table class="artur-table agata-table">
           <thead>
             <tr class="agata-sum-row">${sumHeaderCells}</tr>
