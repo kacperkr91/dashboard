@@ -2644,40 +2644,80 @@ function getTaskDueLabel(dueDate){
   return `${String(due.getDate()).padStart(2,'0')}.${String(due.getMonth()+1).padStart(2,'0')}.${due.getFullYear()}`;
 }
 
-function addDashboardTaskFromForm(){
-  if(!canUseTasks())return;
-  const title=String(document.getElementById('task-title-input')?.value||'').trim();
-  const text=String(document.getElementById('task-text-input')?.value||'').trim();
-  const assignedTo=String(document.getElementById('task-assignee-input')?.value||'').trim().toLowerCase();
-  const priority=String(document.getElementById('task-priority-input')?.value||'normal').trim().toLowerCase();
-  const dueDate=String(document.getElementById('task-due-input')?.value||'').trim();
-  const type=String(document.getElementById('task-type-input')?.value||'task').trim().toLowerCase()==='note'?'note':'task';
-  const visibility=document.getElementById('task-private-input')?.checked?'private':'shared';
-  if(!title&&!text)return;
-  const tasks=getDashboardTasks();
-  const now=new Date().toISOString();
-  tasks.items.unshift({
-    id:`task_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-    type,
-    title:title||'Bez tytułu',
-    text,
-    assignedTo,
-    assignedLabel:getTaskUserLabel(assignedTo),
-    status:type==='note'?'open':'open',
-    priority,
-    dueDate,
-    visibility,
-    createdAt:now,
-    createdBy:String(_state.authUser?.login||'').trim().toLowerCase(),
-    createdByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
-    updatedAt:now
-  });
-  saveDashboardTasks(tasks);
+function getTaskBeingEdited(){
+  const editId=String(_state.taskEditId||'').trim();
+  if(!editId)return null;
+  return (getDashboardTasks().items||[]).find(item=>String(item?.id||'')===editId)||null;
+}
+
+function updateTaskFormVisibility(){
+  const type=String(document.getElementById('task-type-input')?.value||'task').trim().toLowerCase();
+  const dueWrap=document.getElementById('task-due-wrap');
+  if(dueWrap)dueWrap.style.display=type==='note'?'none':'';
+}
+
+function resetTaskForm(){
   ['task-title-input','task-text-input','task-due-input'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const typeEl=document.getElementById('task-type-input'); if(typeEl)typeEl.value='task';
   const priorityEl=document.getElementById('task-priority-input'); if(priorityEl)priorityEl.value='normal';
   const assigneeEl=document.getElementById('task-assignee-input'); if(assigneeEl)assigneeEl.value='';
   const privateEl=document.getElementById('task-private-input'); if(privateEl)privateEl.checked=false;
+  _state.taskEditId='';
+  updateTaskFormVisibility();
+  if(_state.section==='tasks')renderApp();
+}
+
+function startEditTask(taskId){
+  const item=(getDashboardTasks().items||[]).find(entry=>String(entry?.id||'')===String(taskId||''));
+  if(!item||!canEditTask(item))return;
+  _state.taskEditId=String(item.id||'');
+  if(_state.section==='tasks')renderApp();
+}
+
+function submitDashboardTaskForm(){
+  if(!canUseTasks())return;
+  const title=String(document.getElementById('task-title-input')?.value||'').trim();
+  const text=String(document.getElementById('task-text-input')?.value||'').trim();
+  const assignedTo=String(document.getElementById('task-assignee-input')?.value||'').trim().toLowerCase();
+  const priority=String(document.getElementById('task-priority-input')?.value||'normal').trim().toLowerCase();
+  const type=String(document.getElementById('task-type-input')?.value||'task').trim().toLowerCase()==='note'?'note':'task';
+  const dueDate=type==='note'?'':String(document.getElementById('task-due-input')?.value||'').trim();
+  const visibility=document.getElementById('task-private-input')?.checked?'private':'shared';
+  if(!title&&!text)return;
+  const tasks=getDashboardTasks();
+  const now=new Date().toISOString();
+  const editing=getTaskBeingEdited();
+  if(editing&&canEditTask(editing)){
+    editing.type=type;
+    editing.title=title||'Bez tytułu';
+    editing.text=text;
+    editing.assignedTo=assignedTo;
+    editing.assignedLabel=getTaskUserLabel(assignedTo);
+    editing.priority=priority;
+    editing.dueDate=dueDate;
+    editing.visibility=visibility;
+    editing.updatedAt=now;
+    if(type==='note')editing.status='open';
+  }else{
+    tasks.items.unshift({
+      id:`task_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+      type,
+      title:title||'Bez tytułu',
+      text,
+      assignedTo,
+      assignedLabel:getTaskUserLabel(assignedTo),
+      status:'open',
+      priority,
+      dueDate,
+      visibility,
+      createdAt:now,
+      createdBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+      createdByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+      updatedAt:now
+    });
+  }
+  saveDashboardTasks(tasks);
+  resetTaskForm();
   if(_state.section==='tasks')renderApp();
 }
 
@@ -2703,6 +2743,7 @@ function deleteDashboardTask(taskId){
 function buildTaskCard(item){
   const status=String(item.status||'open');
   const priority=String(item.priority||'normal');
+  const isNote=item.type==='note';
   const assigneeLabel=getTaskUserLabel(item.assignedTo||'');
   const createdLabel=item.createdAt?new Date(item.createdAt):null;
   const createdText=createdLabel&&!Number.isNaN(createdLabel.getTime())
@@ -2713,8 +2754,8 @@ function buildTaskCard(item){
       <div style="min-width:0">
         <div class="task-title">${escapeHtml(item.title||'Bez tytułu')}</div>
         <div class="task-meta">
-          <span class="task-chip ${item.type==='note'?'note':'task'}">${item.type==='note'?'Notatka':'Zadanie'}</span>
-          <span class="task-chip ${status}">${status==='done'?'Zrobione':status==='in_progress'?'W trakcie':'Otwarte'}</span>
+          <span class="task-chip ${isNote?'note':'task'}">${isNote?'Notatka':'Zadanie'}</span>
+          ${!isNote?`<span class="task-chip ${status}">${status==='done'?'Zrobione':status==='in_progress'?'W trakcie':'Otwarte'}</span>`:''}
           <span class="task-chip ${priority}">${priority==='high'?'Pilne':priority==='low'?'Niski priorytet':'Normalny priorytet'}</span>
           <span class="task-chip ${String(item.visibility||'shared').trim().toLowerCase()==='private'?'private':'shared'}">${String(item.visibility||'shared').trim().toLowerCase()==='private'?'Prywatne':'Wspólne'}</span>
         </div>
@@ -2722,14 +2763,15 @@ function buildTaskCard(item){
       </div>
       <div style="text-align:right;min-width:180px">
         <div class="task-assignee">Przypisane: ${escapeHtml(assigneeLabel)}</div>
-        <div class="task-submeta">${item.dueDate?`Termin: ${escapeHtml(getTaskDueLabel(item.dueDate))}`:'Bez terminu'}</div>
+        <div class="task-submeta">${isNote?'Luźna notatka':(item.dueDate?`Termin: ${escapeHtml(getTaskDueLabel(item.dueDate))}`:'Bez terminu')}</div>
       </div>
     </div>
     ${item.text?`<div class="task-text">${escapeHtml(item.text||'')}</div>`:''}
     <div class="task-actions">
-      ${canEditTask(item)&&status!=='open'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','open')">Otwórz</button>`:''}
-      ${canEditTask(item)&&status!=='in_progress'&&item.type!=='note'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','in_progress')">W trakcie</button>`:''}
-      ${canEditTask(item)&&status!=='done'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','done')">Oznacz jako zrobione</button>`:''}
+      ${canEditTask(item)?`<button class="ksef-action-btn" onclick="startEditTask('${item.id}')">Edytuj</button>`:''}
+      ${canEditTask(item)&&!isNote&&status!=='open'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','open')">Otwórz</button>`:''}
+      ${canEditTask(item)&&!isNote&&status!=='in_progress'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','in_progress')">W trakcie</button>`:''}
+      ${canEditTask(item)&&!isNote&&status!=='done'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','done')">Oznacz jako zrobione</button>`:''}
       ${canEditTask(item)?`<button class="ksef-action-btn" onclick="deleteDashboardTask('${item.id}')">Usuń</button>`:''}
     </div>
   </div>`;
@@ -2738,12 +2780,13 @@ function buildTaskCard(item){
 function buildTasksView(){
   const allTasks=getDashboardTasks();
   if(!allTasks)return renderLoading('Ładowanie zadań…');
+  const editingTask=getTaskBeingEdited();
   const myItems=getTaskViewItems('mine');
   const openItems=getTaskViewItems('open');
   const doneItems=getTaskViewItems('done');
   const visibleItems=getTaskViewItems(_state.tasksView||'mine');
   const viewKey=_state.tasksView||'mine';
-  const userOptions=getTaskUsersOptions().map(user=>`<option value="${escapeHtml(user.login)}">${escapeHtml(user.label)}</option>`).join('');
+  const userOptions=getTaskUsersOptions().map(user=>`<option value="${escapeHtml(user.login)}" ${String(editingTask?.assignedTo||'').trim().toLowerCase()===user.login?'selected':''}>${escapeHtml(user.label)}</option>`).join('');
   const cards=visibleItems.length?visibleItems.map(buildTaskCard).join(''):`<div class="empty-section" style="min-height:220px"><div class="empty-icon">🗂️</div><p>${viewKey==='done'?'Brak zakończonych zadań.':viewKey==='open'?'Brak otwartych zadań.':'Nie masz teraz przypisanych zadań.'}</p></div>`;
   return `<div class="tasks-shell">
     <div class="grid-card">
@@ -2760,18 +2803,21 @@ function buildTasksView(){
       </div>
     </div>
     <div class="grid-card">
-      <div class="card-title">Dodaj wpis</div>
-      <div class="card-subtitle">Możesz dodać zadanie do wykonania albo luźną notatkę dla zespołu.</div>
+      <div class="card-title">${editingTask?'Edytuj wpis':'Dodaj wpis'}</div>
+      <div class="card-subtitle">${editingTask?'Zmiany zapiszą się dla wszystkich, którzy mają dostęp do tego wpisu.':'Możesz dodać zadanie do wykonania albo luźną notatkę dla zespołu.'}</div>
       <div class="task-form-grid">
-        <div class="field"><label>Tytuł</label><input id="task-title-input" class="artur-input" type="text" placeholder="Np. Zadzwonić do serwisu pralek"></div>
-        <div class="field"><label>Opis / notatka</label><textarea id="task-text-input" class="artur-input" rows="2" placeholder="Szczegóły dla zespołu..."></textarea></div>
-        <div class="field"><label>Typ</label><select id="task-type-input" class="filter-select"><option value="task">Zadanie</option><option value="note">Notatka</option></select></div>
-        <div class="field"><label>Priorytet</label><select id="task-priority-input" class="filter-select"><option value="normal">Normalny</option><option value="high">Pilny</option><option value="low">Niski</option></select></div>
+        <div class="field"><label>Tytuł</label><input id="task-title-input" class="artur-input" type="text" placeholder="Np. Zadzwonić do serwisu pralek" value="${escapeHtml(editingTask?.title||'')}"></div>
+        <div class="field"><label>Opis / notatka</label><textarea id="task-text-input" class="artur-input" rows="2" placeholder="Szczegóły dla zespołu...">${escapeHtml(editingTask?.text||'')}</textarea></div>
+        <div class="field"><label>Typ</label><select id="task-type-input" class="filter-select" onchange="updateTaskFormVisibility()"><option value="task" ${editingTask?.type!=='note'?'selected':''}>Zadanie</option><option value="note" ${editingTask?.type==='note'?'selected':''}>Notatka</option></select></div>
+        <div class="field"><label>Priorytet</label><select id="task-priority-input" class="filter-select"><option value="normal" ${editingTask?.priority!=='high'&&editingTask?.priority!=='low'?'selected':''}>Normalny</option><option value="high" ${editingTask?.priority==='high'?'selected':''}>Pilny</option><option value="low" ${editingTask?.priority==='low'?'selected':''}>Niski</option></select></div>
         <div class="field"><label>Przypisz do</label><select id="task-assignee-input" class="filter-select"><option value="">Nieprzypisane</option>${userOptions}</select></div>
-        <div class="field"><label>Termin</label><input id="task-due-input" class="artur-input" type="date"></div>
+        <div class="field" id="task-due-wrap" style="${editingTask?.type==='note'?'display:none':''}"><label>Termin</label><input id="task-due-input" class="artur-input" type="date" value="${escapeHtml(editingTask?.dueDate||'')}"></div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:12px"><input id="task-private-input" type="checkbox"> Widoczne tylko dla mnie</label>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn-primary" style="width:auto;padding:10px 16px" onclick="addDashboardTaskFromForm()">Dodaj</button></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding-top:12px"><input id="task-private-input" type="checkbox" ${String(editingTask?.visibility||'shared').trim().toLowerCase()==='private'?'checked':''}> Widoczne tylko dla mnie</label>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
+        ${editingTask?`<button class="ksef-action-btn" onclick="resetTaskForm()">Anuluj edycję</button>`:''}
+        <button class="btn-primary" style="width:auto;padding:10px 16px" onclick="submitDashboardTaskForm()">${editingTask?'Zapisz zmiany':'Dodaj'}</button>
+      </div>
     </div>
     <div class="tasks-columns">
       <div class="grid-card">
@@ -2814,6 +2860,7 @@ let _state={
   arturPaymentsMonth:getMonthKeyFromDate(new Date()),
   arturManualEditMap:{},
   tasksView:'mine',
+  taskEditId:'',
   bookingPeriodKey:null,
   payoutTab:'booking',
   airbnbPayoutKey:null,
