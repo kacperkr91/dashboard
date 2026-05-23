@@ -412,6 +412,33 @@
     .artur-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 10px;border-radius:8px;outline:none;}
     .artur-input:focus{border-color:#334155;box-shadow:0 0 0 3px rgba(51,65,85,0.1);}
     .artur-small{font-size:11px;color:var(--text-muted);}
+    .tasks-shell{display:flex;flex-direction:column;gap:18px;}
+    .tasks-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    .tasks-view-btn{border:1px solid var(--border);background:#fff;color:var(--text-mid);padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;}
+    .tasks-view-btn.active{background:#0f766e;border-color:#0f766e;color:#fff;}
+    .task-form-grid{display:grid;grid-template-columns:1.1fr 1.2fr .9fr .9fr .95fr auto;gap:12px;align-items:end;}
+    .task-card{border:1px solid var(--border);border-radius:16px;padding:16px;background:#fff;box-shadow:0 10px 24px rgba(15,23,42,0.04);}
+    .task-card.done{opacity:.72;background:#f8fafc;}
+    .task-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+    .task-title{font-size:16px;font-weight:800;color:var(--text);}
+    .task-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+    .task-text{font-size:13px;line-height:1.55;color:var(--text-mid);white-space:pre-wrap;margin-top:10px;}
+    .task-chip{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800;line-height:1;}
+    .task-chip.task{background:#dcfce7;color:#166534;}
+    .task-chip.note{background:#ede9fe;color:#6d28d9;}
+    .task-chip.open{background:#fee2e2;color:#b91c1c;}
+    .task-chip.in_progress{background:#fef3c7;color:#b45309;}
+    .task-chip.done{background:#dcfce7;color:#15803d;}
+    .task-chip.high{background:#fee2e2;color:#b91c1c;}
+    .task-chip.normal{background:#dbeafe;color:#1d4ed8;}
+    .task-chip.low{background:#e2e8f0;color:#475569;}
+    .task-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;}
+    .task-assignee{font-size:12px;font-weight:700;color:#0f172a;}
+    .task-submeta{font-size:11px;color:var(--text-muted);}
+    .tasks-columns{display:grid;grid-template-columns:1.1fr .95fr;gap:18px;}
+    .tasks-list{display:flex;flex-direction:column;gap:12px;}
+    @media(max-width:1180px){.task-form-grid{grid-template-columns:1fr 1fr;}.tasks-columns{grid-template-columns:1fr;}}
+    @media(max-width:700px){.task-form-grid{grid-template-columns:1fr;}.tasks-toolbar{gap:8px;}}
     .agata-controls{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
     .agata-col-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid var(--border);background:var(--white);font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;user-select:none;}
     .agata-col-chip.active{background:#ecfeff;border-color:#67e8f9;color:#0f766e;}
@@ -2538,6 +2565,223 @@ function buildArturPaymentsView(rows){
   </div>`;
 }
 
+function getDashboardTasks(){
+  if(_tasksCache&&typeof _tasksCache==='object'&&Array.isArray(_tasksCache.items))return _tasksCache;
+  try{
+    const parsed=JSON.parse(localStorage.getItem('dashboard_tasks')||'{}');
+    _tasksCache=parsed&&typeof parsed==='object'?parsed:{items:[]};
+    if(!Array.isArray(_tasksCache.items))_tasksCache.items=[];
+    return _tasksCache;
+  }catch(e){
+    _tasksCache={items:[]};
+    return _tasksCache;
+  }
+}
+
+function saveDashboardTasks(payload){
+  _tasksCache=payload&&typeof payload==='object'?payload:{items:[]};
+  if(!Array.isArray(_tasksCache.items))_tasksCache.items=[];
+  localStorage.setItem('dashboard_tasks',JSON.stringify(_tasksCache));
+  syncPushTasks(_tasksCache);
+}
+
+function getTaskUsersOptions(){
+  const users=Array.isArray(_state.assignableUsers)&&_state.assignableUsers.length?_state.assignableUsers:(Array.isArray(_state.adminUsers)?_state.adminUsers:[]);
+  const active=users.filter(user=>user?.active!==false).map(user=>({
+    login:String(user.login||'').trim().toLowerCase(),
+    label:String(user.displayName||user.login||'').trim()
+  })).filter(user=>user.login);
+  const currentLogin=String(_state.authUser?.login||'').trim().toLowerCase();
+  const currentLabel=String(_state.authUser?.displayName||currentLogin||'').trim();
+  if(currentLogin&&!active.find(user=>user.login===currentLogin)){
+    active.unshift({login:currentLogin,label:currentLabel});
+  }
+  return active;
+}
+
+function getTaskUserLabel(login){
+  const normalized=String(login||'').trim().toLowerCase();
+  if(!normalized)return'Nieprzypisane';
+  const match=getTaskUsersOptions().find(user=>user.login===normalized);
+  return match?.label||normalized;
+}
+
+function canUseTasks(){
+  return hasModuleAccess('tasks');
+}
+
+function canEditTask(item){
+  if(_state.authUser?.role==='admin')return true;
+  const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  const createdBy=String(item?.createdBy||'').trim().toLowerCase();
+  const assignedTo=String(item?.assignedTo||'').trim().toLowerCase();
+  return !!login && (login===createdBy || login===assignedTo);
+}
+
+function getTaskViewItems(viewKey){
+  const all=(getDashboardTasks().items||[]).slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  if(viewKey==='done')return all.filter(item=>item.status==='done');
+  if(viewKey==='open')return all.filter(item=>item.status!=='done');
+  return all.filter(item=>item.status!=='done' && (String(item.assignedTo||'').trim().toLowerCase()===login || String(item.createdBy||'').trim().toLowerCase()===login));
+}
+
+function setTasksView(view){
+  _state.tasksView=view||'mine';
+  if(_state.section==='tasks')renderApp();
+}
+
+function getTaskDueLabel(dueDate){
+  if(!dueDate)return '';
+  const due=parseDatePL(dueDate)||parseDateDMY(dueDate)||parseHKDate(dueDate);
+  if(!due)return dueDate;
+  return `${String(due.getDate()).padStart(2,'0')}.${String(due.getMonth()+1).padStart(2,'0')}.${due.getFullYear()}`;
+}
+
+function addDashboardTaskFromForm(){
+  if(!canUseTasks())return;
+  const title=String(document.getElementById('task-title-input')?.value||'').trim();
+  const text=String(document.getElementById('task-text-input')?.value||'').trim();
+  const assignedTo=String(document.getElementById('task-assignee-input')?.value||'').trim().toLowerCase();
+  const priority=String(document.getElementById('task-priority-input')?.value||'normal').trim().toLowerCase();
+  const dueDate=String(document.getElementById('task-due-input')?.value||'').trim();
+  const type=String(document.getElementById('task-type-input')?.value||'task').trim().toLowerCase()==='note'?'note':'task';
+  if(!title&&!text)return;
+  const tasks=getDashboardTasks();
+  const now=new Date().toISOString();
+  tasks.items.unshift({
+    id:`task_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    type,
+    title:title||'Bez tytułu',
+    text,
+    assignedTo,
+    assignedLabel:getTaskUserLabel(assignedTo),
+    status:type==='note'?'open':'open',
+    priority,
+    dueDate,
+    createdAt:now,
+    createdBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+    createdByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+    updatedAt:now
+  });
+  saveDashboardTasks(tasks);
+  ['task-title-input','task-text-input','task-due-input'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const typeEl=document.getElementById('task-type-input'); if(typeEl)typeEl.value='task';
+  const priorityEl=document.getElementById('task-priority-input'); if(priorityEl)priorityEl.value='normal';
+  const assigneeEl=document.getElementById('task-assignee-input'); if(assigneeEl)assigneeEl.value='';
+  if(_state.section==='tasks')renderApp();
+}
+
+function updateTaskStatus(taskId,status){
+  const tasks=getDashboardTasks();
+  const item=tasks.items.find(entry=>String(entry.id||'')===String(taskId||''));
+  if(!item||!canEditTask(item))return;
+  item.status=status;
+  item.updatedAt=new Date().toISOString();
+  saveDashboardTasks(tasks);
+  if(_state.section==='tasks')renderApp();
+}
+
+function deleteDashboardTask(taskId){
+  const tasks=getDashboardTasks();
+  const item=tasks.items.find(entry=>String(entry.id||'')===String(taskId||''));
+  if(!item||!canEditTask(item))return;
+  tasks.items=tasks.items.filter(entry=>String(entry.id||'')!==String(taskId||''));
+  saveDashboardTasks(tasks);
+  if(_state.section==='tasks')renderApp();
+}
+
+function buildTaskCard(item){
+  const status=String(item.status||'open');
+  const priority=String(item.priority||'normal');
+  const assigneeLabel=getTaskUserLabel(item.assignedTo||'');
+  const createdLabel=item.createdAt?new Date(item.createdAt):null;
+  const createdText=createdLabel&&!Number.isNaN(createdLabel.getTime())
+    ? `${String(createdLabel.getDate()).padStart(2,'0')}.${String(createdLabel.getMonth()+1).padStart(2,'0')} ${String(createdLabel.getHours()).padStart(2,'0')}:${String(createdLabel.getMinutes()).padStart(2,'0')}`
+    : '';
+  return `<div class="task-card ${status==='done'?'done':''}">
+    <div class="task-head">
+      <div style="min-width:0">
+        <div class="task-title">${escapeHtml(item.title||'Bez tytułu')}</div>
+        <div class="task-meta">
+          <span class="task-chip ${item.type==='note'?'note':'task'}">${item.type==='note'?'Notatka':'Zadanie'}</span>
+          <span class="task-chip ${status}">${status==='done'?'Zrobione':status==='in_progress'?'W trakcie':'Otwarte'}</span>
+          <span class="task-chip ${priority}">${priority==='high'?'Pilne':priority==='low'?'Niski priorytet':'Normalny priorytet'}</span>
+        </div>
+        <div class="task-submeta" style="margin-top:8px">Dodał(a): ${escapeHtml(item.createdByName||item.createdBy||'Użytkownik')}${createdText?` · ${createdText}`:''}</div>
+      </div>
+      <div style="text-align:right;min-width:180px">
+        <div class="task-assignee">Przypisane: ${escapeHtml(assigneeLabel)}</div>
+        <div class="task-submeta">${item.dueDate?`Termin: ${escapeHtml(getTaskDueLabel(item.dueDate))}`:'Bez terminu'}</div>
+      </div>
+    </div>
+    ${item.text?`<div class="task-text">${escapeHtml(item.text||'')}</div>`:''}
+    <div class="task-actions">
+      ${canEditTask(item)&&status!=='open'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','open')">Otwórz</button>`:''}
+      ${canEditTask(item)&&status!=='in_progress'&&item.type!=='note'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','in_progress')">W trakcie</button>`:''}
+      ${canEditTask(item)&&status!=='done'?`<button class="ksef-action-btn" onclick="updateTaskStatus('${item.id}','done')">Oznacz jako zrobione</button>`:''}
+      ${canEditTask(item)?`<button class="ksef-action-btn" onclick="deleteDashboardTask('${item.id}')">Usuń</button>`:''}
+    </div>
+  </div>`;
+}
+
+function buildTasksView(){
+  const allTasks=getDashboardTasks();
+  if(!allTasks)return renderLoading('Ładowanie zadań…');
+  const myItems=getTaskViewItems('mine');
+  const openItems=getTaskViewItems('open');
+  const doneItems=getTaskViewItems('done');
+  const visibleItems=getTaskViewItems(_state.tasksView||'mine');
+  const viewKey=_state.tasksView||'mine';
+  const userOptions=getTaskUsersOptions().map(user=>`<option value="${escapeHtml(user.login)}">${escapeHtml(user.label)}</option>`).join('');
+  const cards=visibleItems.length?visibleItems.map(buildTaskCard).join(''):`<div class="empty-section" style="min-height:220px"><div class="empty-icon">🗂️</div><p>${viewKey==='done'?'Brak zakończonych zadań.':viewKey==='open'?'Brak otwartych zadań.':'Nie masz teraz przypisanych zadań.'}</p></div>`;
+  return `<div class="tasks-shell">
+    <div class="grid-card">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title">Zadania i notatki</div>
+          <div class="card-subtitle">Wspólna lista dla zespołu z przypisaniem, terminem i statusem.</div>
+        </div>
+        <div class="tasks-toolbar">
+          <button class="tasks-view-btn ${viewKey==='mine'?'active':''}" onclick="setTasksView('mine')">Do mnie (${myItems.length})</button>
+          <button class="tasks-view-btn ${viewKey==='open'?'active':''}" onclick="setTasksView('open')">Otwarte (${openItems.length})</button>
+          <button class="tasks-view-btn ${viewKey==='done'?'active':''}" onclick="setTasksView('done')">Zrobione (${doneItems.length})</button>
+        </div>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="card-title">Dodaj wpis</div>
+      <div class="card-subtitle">Możesz dodać zadanie do wykonania albo luźną notatkę dla zespołu.</div>
+      <div class="task-form-grid">
+        <div class="field"><label>Tytuł</label><input id="task-title-input" class="artur-input" type="text" placeholder="Np. Zadzwonić do serwisu pralek"></div>
+        <div class="field"><label>Opis / notatka</label><textarea id="task-text-input" class="artur-input" rows="2" placeholder="Szczegóły dla zespołu..."></textarea></div>
+        <div class="field"><label>Typ</label><select id="task-type-input" class="filter-select"><option value="task">Zadanie</option><option value="note">Notatka</option></select></div>
+        <div class="field"><label>Priorytet</label><select id="task-priority-input" class="filter-select"><option value="normal">Normalny</option><option value="high">Pilny</option><option value="low">Niski</option></select></div>
+        <div class="field"><label>Przypisz do</label><select id="task-assignee-input" class="filter-select"><option value="">Nieprzypisane</option>${userOptions}</select></div>
+        <div class="field"><label>Termin</label><input id="task-due-input" class="artur-input" type="date"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn-primary" style="width:auto;padding:10px 16px" onclick="addDashboardTaskFromForm()">Dodaj</button></div>
+    </div>
+    <div class="tasks-columns">
+      <div class="grid-card">
+        <div class="card-title">${viewKey==='done'?'Zakończone wpisy':viewKey==='open'?'Otwarte wpisy':'Twoje wpisy'}</div>
+        <div class="card-subtitle">${viewKey==='done'?'Historia wykonanych zadań i domkniętych notatek.':viewKey==='open'?'Wszystko, co jest jeszcze aktywne w zespole.':'Zadania przypisane do Ciebie albo dodane przez Ciebie.'}</div>
+        <div class="tasks-list">${cards}</div>
+      </div>
+      <div class="grid-card">
+        <div class="card-title">Szybki podgląd</div>
+        <div class="card-subtitle">Najważniejsze liczby na teraz.</div>
+        <div class="kpi-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:4px">
+          <div class="kpi-card c-green"><div class="label">Do mnie</div><div class="value">${myItems.length}</div><div class="sub">Aktywne wpisy</div></div>
+          <div class="kpi-card c-orange"><div class="label">Otwarte</div><div class="value">${openItems.length}</div><div class="sub">Cały zespół</div></div>
+          <div class="kpi-card c-blue"><div class="label">Po terminie</div><div class="value">${openItems.filter(item=>item.dueDate&&item.status!=='done'&&item.dueDate<new Date().toISOString().slice(0,10)).length}</div><div class="sub">Wymagają uwagi</div></div>
+          <div class="kpi-card c-purple"><div class="label">Zrobione</div><div class="value">${doneItems.length}</div><div class="sub">Wspólna historia</div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* STATE */
 let _state={
   section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
@@ -2547,6 +2791,7 @@ let _state={
   authError:'',
   adminUsers:[],
   adminUsersLoading:false,
+  assignableUsers:[],
   ksefFilter:'all',
   ksefSearch:'',
   agataMonth:getMonthKeyFromDate(new Date()),
@@ -2557,6 +2802,7 @@ let _state={
   previoMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   arturPaymentsMonth:getMonthKeyFromDate(new Date()),
   arturManualEditMap:{},
+  tasksView:'mine',
   bookingPeriodKey:null,
   payoutTab:'booking',
   airbnbPayoutKey:null,
@@ -2575,7 +2821,7 @@ let _state={
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, ksef:null, weather:null
+    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, ksef:null, weather:null, tasks:null
   }
 };
 let _charts={};
@@ -2588,7 +2834,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','agata-faktura','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','agata-faktura','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -2601,6 +2847,7 @@ const DASHBOARD_MODULE_LABELS={
   previo:'Previo',
   'artur-payments':'Płatności Artur',
   'agata-faktura':'Agata Faktura',
+  tasks:'Zadania',
   'booking-payout':'Wypłaty',
   dyzury:'Dyżury',
   kalendarz:'Kalendarz',
@@ -5718,6 +5965,7 @@ let _kalCache=null;
 let _paidCache=null;
 let _ksefPaidCache=null;
 let _arturPaymentsCache=null;
+let _tasksCache=null;
 
 async function syncPull(){
   if(!CONFIG.syncUrl||!_state.authToken)return;
@@ -5729,12 +5977,16 @@ async function syncPull(){
       fetch(`${CONFIG.syncUrl}?action=getDone${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getKsefPaid${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getArturPayments${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getTasks${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getAssignableUsers${tokenParam}`).then(r=>r.json()),
     ]);
     const kalData=results[0].status==='fulfilled'?results[0].value:null;
     const paidData=results[1].status==='fulfilled'?results[1].value:null;
     const doneData=results[2].status==='fulfilled'?results[2].value:null;
     const ksefPaidData=results[3].status==='fulfilled'?results[3].value:null;
     const arturPaymentsData=results[4].status==='fulfilled'?results[4].value:null;
+    const tasksData=results[5].status==='fulfilled'?results[5].value:null;
+    const assignableUsersData=results[6].status==='fulfilled'?results[6].value:null;
     if(kalData?.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
@@ -5764,6 +6016,17 @@ async function syncPull(){
         syncPushArturPayments(localArtur);
       }
       localStorage.setItem('artur_manual_payments',JSON.stringify(_arturPaymentsCache));
+    }
+    if(tasksData&&typeof tasksData.tasks==='object'&&tasksData.tasks!==null){
+      _tasksCache=tasksData.tasks;
+      if(!Array.isArray(_tasksCache.items))_tasksCache.items=[];
+      localStorage.setItem('dashboard_tasks',JSON.stringify(_tasksCache));
+    }
+    if(assignableUsersData&&Array.isArray(assignableUsersData.users)){
+      _state.assignableUsers=assignableUsersData.users.map(user=>({
+        login:String(user?.login||'').trim().toLowerCase(),
+        displayName:String(user?.displayName||user?.login||'').trim()
+      })).filter(user=>user.login);
     }
   }catch(e){console.warn('syncPull failed:',e);}
 }
@@ -5862,6 +6125,18 @@ async function syncPushArturPayments(payments){
       body:JSON.stringify({action:'saveArturPayments',token:_state.authToken,payments}),
     });
   }catch(e){console.warn('syncPushArturPayments failed:',e);}
+}
+
+async function syncPushTasks(tasks){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveTasks',token:_state.authToken,tasks}),
+    });
+  }catch(e){console.warn('syncPushTasks failed:',e);}
 }
 
 function getKalEvents(){
@@ -8552,6 +8827,7 @@ function renderApp(){
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
     ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
     ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
+    ${navButton('tasks','Zadania','✅','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('booking-payout','Wypłaty','💰','background:#003580;border-color:#003580;color:#fff')}
     ${navButton('dyzury','Dyżury','📅','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('kalendarz','Kalendarz','📆','background:#0369a1;border-color:#0369a1;color:#fff')}
@@ -8626,6 +8902,8 @@ function renderApp(){
     content=buildAgataFakturaView();
   } else if(section==='artur-payments'){
     content=buildArturPaymentsView(data.ksef);
+  } else if(section==='tasks'){
+    content=buildTasksView();
   } else if(section==='users-admin'){
     content=buildDashboardUsersView();
   } else if(section==='booking-payout'){
