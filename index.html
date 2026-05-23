@@ -388,7 +388,7 @@
     .artur-month-btn.active{background:#334155;color:#fff;border-color:#334155;}
     .artur-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;}
     .artur-table-wrap{overflow:auto;}
-    .agata-reservations-wrap{position:relative;max-height:72vh;overflow:auto;border:1px solid var(--border);border-radius:16px;background:#fff;}
+    .agata-reservations-wrap{position:relative;max-height:72vh;overflow-y:auto;overflow-x:hidden;border:1px solid var(--border);border-radius:16px;background:#fff;}
     .artur-table{width:100%;border-collapse:collapse;font-size:12px;}
     .artur-table th{background:var(--bg);padding:10px 10px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);white-space:nowrap;}
     .artur-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
@@ -415,9 +415,9 @@
     .agata-controls{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
     .agata-col-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid var(--border);background:var(--white);font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;user-select:none;}
     .agata-col-chip.active{background:#ecfeff;border-color:#67e8f9;color:#0f766e;}
-    .agata-table{font-size:11px;table-layout:auto;}
-    .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;padding:8px 8px;}
-    .agata-table td{padding:7px 8px;}
+    .agata-table{font-size:10px;table-layout:auto;}
+    .agata-table th{position:sticky;top:0;z-index:1;background:#f8fafc;padding:7px 6px;line-height:1.1;white-space:normal;}
+    .agata-table td{padding:6px 6px;}
     .agata-table tr.agata-day-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #c7d2fe;padding:10px 10px 12px;position:relative;z-index:0;line-height:1.25;}
     .agata-table tr.agata-day-row.first-visible td{padding-top:54px;}
     .agata-table tr.agata-booking{background:rgba(0,53,128,0.03);}
@@ -428,9 +428,15 @@
     .agata-table th.ta-r,.agata-table td.ta-r{text-align:right;}
     .agata-table th.ta-l,.agata-table td.ta-l{text-align:left;}
     .agata-table th,.agata-table td{overflow:visible;text-overflow:clip;}
-    .agata-table .col-guest,.agata-table .col-apartment{white-space:normal;line-height:1.25;}
+    .agata-table .col-date{width:76px;}
+    .agata-table .col-count{width:52px;}
+    .agata-table .col-guest{width:132px;white-space:normal;line-height:1.2;}
+    .agata-table .col-partner{width:96px;}
+    .agata-table .col-status{width:64px;}
+    .agata-table .col-apartment{width:128px;white-space:normal;line-height:1.2;}
+    .agata-table .col-money{width:96px;}
     .agata-table .col-money,.agata-table .col-date,.agata-table .col-count,.agata-table .col-partner,.agata-table .col-status{white-space:nowrap;}
-    .agata-partner-badge,.agata-status-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:700;line-height:1;white-space:nowrap;}
+    .agata-partner-badge,.agata-status-badge{display:inline-flex;align-items:center;justify-content:center;padding:3px 6px;border-radius:999px;font-size:9px;font-weight:700;line-height:1;white-space:nowrap;}
     .agata-partner-badge.booking{background:#003580;color:#fff;}
     .agata-partner-badge.airbnb{background:#FF5A5F;color:#fff;}
     .agata-partner-badge.profitroom{background:#6366f1;color:#fff;}
@@ -453,7 +459,7 @@
       background:linear-gradient(180deg,#fde68a 0%,#fcd34d 100%);
       border-bottom:2px solid #f59e0b;
       color:#451a03;
-      padding:10px 10px 8px;
+      padding:8px 6px 6px;
       vertical-align:bottom;
     }
     .agata-table thead tr.agata-sum-row th.agata-sum-empty{
@@ -464,24 +470,24 @@
     }
     .agata-table thead tr.agata-sum-row th .sum-label{
       display:block;
-      font-size:9px;
+      font-size:8px;
       font-weight:800;
       letter-spacing:.06em;
       text-transform:uppercase;
       color:#92400e;
-      margin-bottom:4px;
+      margin-bottom:3px;
       white-space:normal;
       line-height:1.15;
     }
     .agata-table thead tr.agata-sum-row th .sum-value{
       display:block;
-      font-size:15px;
+      font-size:13px;
       font-weight:800;
       color:#451a03;
       line-height:1.05;
       white-space:nowrap;
     }
-    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:58px;z-index:8;background:#f8fafc;}
+    .agata-table thead tr:not(.agata-sum-row) th{position:sticky;top:46px;z-index:8;background:#f8fafc;border-top:0;}
     @media(max-width:700px){
       .agata-table thead tr.agata-sum-row th{position:static;}
       .agata-table thead tr:not(.agata-sum-row) th{position:static;}
