@@ -4747,20 +4747,41 @@ function exportAgataPdf(monthKey, monthLabel){
     if(/profit/i.test(p))return'Profitroom';
     return p||'—';
   };
+  const partnerClass=partner=>{
+    const p=String(partner||'').toLowerCase();
+    if(p.includes('booking'))return'booking';
+    if(p.includes('airbnb'))return'airbnb';
+    if(p.includes('profit'))return'profitroom';
+    return'other';
+  };
   const fmtDateLabel=value=>{
     const d=parseDatePL(value);
     if(!d)return value||'—';
     return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
   };
+  const fmtGroupDateLabel=value=>{
+    const d=parseDatePL(value);
+    if(!d)return value||'—';
+    return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')} · ${DOW_PL_SHORT[d.getDay()]}`;
+  };
+  const partnerBadge=partner=>`<span class="partner-badge ${partnerClass(partner)}">${escapeHtml(partnerBadgeLabel(partner))}</span>`;
+  const statusBadge=status=>`<span class="status-badge">${escapeHtml(String(status||'—').trim()||'—')}</span>`;
 
-  const reservationRows=reservations.map((r,i)=>`
-    <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+  let lastExportGroupDate='';
+  const reservationRows=reservations.map((r,i)=>{
+    const rowClass=partnerClass(r.partner);
+    const separator=lastExportGroupDate!==r.dataDo
+      ? `<tr class="group-row"><td colspan="13">Wymeldowanie: ${escapeHtml(fmtGroupDateLabel(r.dataDo))}</td></tr>`
+      : '';
+    lastExportGroupDate=r.dataDo;
+    return `${separator}
+    <tr class="row-${rowClass}" style="background:${i%2===0?'#fff':'#f8fafc'}">
       <td>${fmtDateLabel(r.dataOd)}</td>
       <td>${fmtDateLabel(r.dataDo)}</td>
       <td class="c">${r.osoby||'—'}</td>
       <td>${escapeHtml(r.gosc||'—')}</td>
-      <td class="c">${escapeHtml(partnerBadgeLabel(r.partner))}</td>
-      <td class="c">${escapeHtml(r.status||'—')}</td>
+      <td class="c">${partnerBadge(r.partner)}</td>
+      <td class="c">${statusBadge(r.status)}</td>
       <td>${escapeHtml(r.apartament||'—')}</td>
       <td class="r">${fmt(r.transakcja||0)} zł</td>
       <td class="r">${fmt(r.prowizja||0)} zł</td>
@@ -4769,12 +4790,13 @@ function exportAgataPdf(monthKey, monthLabel){
       <td class="r">${fmt(r.doplata||0)} zł</td>
       <td class="r strong">${fmt(r.cenaCalkowita||0)} zł</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   const breakdownRows=breakdown.map((r,i)=>`
     <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
       <td>${escapeHtml(r.apartament||'—')}</td>
-      <td class="c">${escapeHtml(partnerBadgeLabel(r.partner))}</td>
+      <td class="c">${partnerBadge(r.partner)}</td>
       <td class="r">${fmt(r.transakcja||0)} zł</td>
       <td class="r">${fmt(r.prowizja||0)} zł</td>
       <td class="r">${fmt(r.golaCena||0)} zł</td>
@@ -4807,11 +4829,17 @@ function exportAgataPdf(monthKey, monthLabel){
       .sum-card.brutto .value{color:#6d28d9}
       .sum-card.odliczenia{background:#fff7ed;border-color:#fed7aa}
       .sum-card.odliczenia .value{color:#c2410c}
-      .invoice-box{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+      .invoice-box{display:grid;grid-template-columns:1fr .9fr;gap:18px}
       .invoice-hero{background:linear-gradient(135deg,#f8fffe 0%,#f0fdfa 48%,#ecfeff 100%);border:1px solid #99f6e4;border-radius:16px;padding:20px}
       .invoice-hero .eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:8px}
-      .invoice-hero .lead{font-size:28px;font-weight:800;color:#0f172a;line-height:1.05}
-      .invoice-hero .sub{font-size:14px;color:#475569;line-height:1.6;margin-top:8px}
+      .invoice-hero .sub{font-size:14px;color:#475569;line-height:1.6}
+      .invoice-table{width:100%;margin-top:14px;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #cbd5e1;border-radius:12px}
+      .invoice-table th{background:#f8fafc;color:#475569;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:10px 12px}
+      .invoice-table td{padding:12px;font-size:14px;border-top:1px solid #e2e8f0}
+      .invoice-table td.amount{font-weight:800;text-align:right}
+      .invoice-table tr.netto td.amount{color:#166534}
+      .invoice-table tr.vat td.amount{color:#1d4ed8}
+      .invoice-table tr.brutto td.amount{color:#6d28d9;font-size:18px}
       .invoice-lines{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px}
       .line{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
       .line:last-child{border-bottom:none}
@@ -4823,6 +4851,16 @@ function exportAgataPdf(monthKey, monthLabel){
       .c{text-align:center}
       .r{text-align:right}
       .strong{font-weight:800}
+      .partner-badge,.status-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800;line-height:1;white-space:nowrap}
+      .partner-badge.booking{background:#003580;color:#fff}
+      .partner-badge.airbnb{background:#FF5A5F;color:#fff}
+      .partner-badge.profitroom{background:#6366f1;color:#fff}
+      .partner-badge.other{background:#cbd5e1;color:#334155}
+      .status-badge{background:#e2e8f0;color:#475569}
+      .group-row td{background:#eef2ff!important;color:#3730a3;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid #c7d2fe}
+      .row-booking td{background:rgba(0,53,128,0.025)}
+      .row-airbnb td{background:rgba(255,90,95,0.03)}
+      .row-profitroom td{background:rgba(99,102,241,0.03)}
       .totals-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
       .totals-strip .mini{background:#fde68a;padding:10px 8px;border-radius:10px;border:1px solid #fcd34d}
       .totals-strip .mini .k{font-size:10px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
@@ -4856,8 +4894,15 @@ function exportAgataPdf(monthKey, monthLabel){
     <div class="section invoice-box">
       <div class="invoice-hero">
         <div class="eyebrow">Faktura do wystawienia</div>
-        <div class="lead">${fmt(f.brutto||0)} zł brutto</div>
-        <div class="sub">Na ten miesiąc z arkusza Agaty wynika faktura: <strong>${fmt(f.netto||0)} zł netto</strong> + <strong>${fmt(f.vat||0)} zł VAT 8%</strong> = <strong>${fmt(f.brutto||0)} zł brutto</strong>.</div>
+        <div class="sub">Na ten miesiąc z arkusza Agaty wynika poniższa faktura do wystawienia.</div>
+        <table class="invoice-table">
+          <thead><tr><th>Pozycja</th><th>Kwota</th></tr></thead>
+          <tbody>
+            <tr class="netto"><td>Kwota netto</td><td class="amount">${fmt(f.netto||0)} zł</td></tr>
+            <tr class="vat"><td>VAT 8%</td><td class="amount">${fmt(f.vat||0)} zł</td></tr>
+            <tr class="brutto"><td>Kwota brutto</td><td class="amount">${fmt(f.brutto||0)} zł</td></tr>
+          </tbody>
+        </table>
       </div>
       <div class="invoice-lines">
         <div class="line"><span class="name">Hornet</span><span class="amount">${fmt(od.hornet||0)} zł</span></div>
