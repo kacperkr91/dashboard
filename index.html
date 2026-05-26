@@ -2700,6 +2700,22 @@ function getTaskDueLabel(dueDate){
   return `${String(due.getDate()).padStart(2,'0')}.${String(due.getMonth()+1).padStart(2,'0')}.${due.getFullYear()}`;
 }
 
+function getCalendarBannerTasks(){
+  const login=String(_state.authUser?.login||'').trim().toLowerCase();
+  const all=(getDashboardTasks().items||[]).filter(item=>{
+    if(!item || item.type==='note' || item.status==='done' || !item.dueDate)return false;
+    const visibility=String(item.visibility||'shared').trim().toLowerCase();
+    if(visibility==='private' && String(item.createdBy||'').trim().toLowerCase()!==login)return false;
+    return true;
+  });
+  return all.map(item=>{
+    const due=parseDatePL(item.dueDate)||parseDateDMY(item.dueDate)||parseHKDate(item.dueDate);
+    if(!due)return null;
+    due.setHours(0,0,0,0);
+    return {...item,dueDateObj:due};
+  }).filter(Boolean);
+}
+
 function getTaskBeingEdited(){
   const editId=String(_state.taskEditId||'').trim();
   if(!editId)return null;
@@ -8956,6 +8972,7 @@ function getTodayBanner(){
   try{
     if(!shouldShowTodayBanner())return'';
     const events=getKalEvents();
+    const taskItems=getCalendarBannerTasks();
     const today=new Date();
     const dk=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     const todayEvs=events[dk]||[];
@@ -8988,6 +9005,14 @@ function getTodayBanner(){
       });
     }
 
+    const pendingTasks=taskItems
+      .map(item=>{
+        const diff=Math.round((today-item.dueDateObj)/86400000);
+        return {...item,_daysAgo:diff,_dateKey:fmtDateKey(item.dueDateObj)};
+      })
+      .filter(item=>item._daysAgo>=0&&item._daysAgo<=3)
+      .sort((a,b)=>a._daysAgo-b._daysAgo||String(a.title||'').localeCompare(String(b.title||''),'pl'));
+
     const kalItems=pendingEvs.map(ev=>{
       const cat=katColor(ev.cat);
       const icon=ev.cat==='platnosc'?'💰':ev.cat==='umowa'?'📝':ev.cat==='remont'?'🔧':ev.cat==='spotkanie'?'🤝':'📌';
@@ -8995,7 +9020,17 @@ function getTodayBanner(){
       return`<span onclick="kalEditEvent('${ev._dateKey}','${ev.id}')" style="display:inline-flex;align-items:center;gap:5px;background:${ev._daysAgo>0?'#fef2f2':cat.bg};color:${ev._daysAgo>0?'#dc2626':cat.color};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap;cursor:pointer;border:1px solid ${ev._daysAgo>0?'#fca5a5':'transparent'}">${icon} ${ev.title}${overdue}</span>`;
     }).join('');
 
-    const allItems=(parkingChip||'')+kalItems||`<span style="font-size:12px;color:#92400e;opacity:0.6;font-style:italic">Brak wydarzeń — spokojny dzień ✌️</span>`;
+    const taskChips=pendingTasks.map(item=>{
+      const priority=String(item.priority||'normal').trim().toLowerCase();
+      const canOpenTasks=hasModuleAccess('tasks');
+      const accent=priority==='high'?'#b91c1c':priority==='low'?'#0f766e':'#4338ca';
+      const bg=priority==='high'?'#fef2f2':priority==='low'?'#ecfdf5':'#eef2ff';
+      const border=priority==='high'?'#fca5a5':priority==='low'?'#99f6e4':'#c7d2fe';
+      const overdue=item._daysAgo>0?`<span style="font-size:10px;background:#fff;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px">${item._daysAgo}d temu</span>`:'';
+      return`<span ${canOpenTasks?`onclick="setSection('tasks')"`:''} style="display:inline-flex;align-items:center;gap:5px;background:${item._daysAgo>0?'#fef2f2':bg};color:${item._daysAgo>0?'#dc2626':accent};font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;white-space:nowrap;${canOpenTasks?'cursor:pointer;':''}border:1px solid ${item._daysAgo>0?'#fca5a5':border}">✅ ${escapeHtml(item.title||'Zadanie')}${overdue}</span>`;
+    }).join('');
+
+    const allItems=(parkingChip||'')+kalItems+taskChips||`<span style="font-size:12px;color:#92400e;opacity:0.6;font-style:italic">Brak wydarzeń — spokojny dzień ✌️</span>`;
 
     return`<div style="display:flex;align-items:center;gap:10px;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:11px 18px;margin-bottom:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(251,191,36,0.15)">
       <span style="font-size:12px;font-weight:700;color:#92400e;white-space:nowrap;flex-shrink:0">📅 ${dateLabel}</span>
