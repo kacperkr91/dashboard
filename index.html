@@ -4533,9 +4533,14 @@ function buildAgataFakturaView(){
   const monthNav=`<div class="hk-month-nav">
     ${AGATA_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setAgataMonth('${m.key}')">${m.short}</button>`).join('')}
   </div>`;
+  const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
+      📄 Eksportuj PDF dla Agaty
+    </button>
+  </div>`;
 
-  if(!data)return monthNav+renderLoading('Ładowanie Agata Faktura…');
-  if(data.error)return monthNav+renderError(data.error);
+  if(!data)return monthNav+exportBtn+renderLoading('Ładowanie Agata Faktura…');
+  if(data.error)return monthNav+exportBtn+renderError(data.error);
 
   const t=data.totals||{};
   const f=data.faktura||{};
@@ -4714,7 +4719,212 @@ function buildAgataFakturaView(){
     </div>
   </div>`;
 
-  return monthNav+kpis+summary+tables;
+  return monthNav+exportBtn+kpis+summary+tables;
+}
+
+function exportAgataPdf(monthKey, monthLabel){
+  const data=_state.data.agata?.[monthKey];
+  if(!data||data.error){
+    alert('Brak danych Agata Faktura do eksportu.');
+    return;
+  }
+
+  const t=data.totals||{};
+  const f=data.faktura||{};
+  const od=f.odliczenia||{};
+  const reservations=[...(data.reservations||[])].sort((a,b)=>{
+    const ad=String(a.dataDo||'');
+    const bd=String(b.dataDo||'');
+    if(ad!==bd)return ad.localeCompare(bd);
+    return String(a.apartament||'').localeCompare(String(b.apartament||''),'pl');
+  });
+  const breakdown=[...(data.breakdown||[])];
+
+  const partnerBadgeLabel=partner=>{
+    const p=String(partner||'').trim();
+    if(/booking/i.test(p))return'Booking.com';
+    if(/airbnb/i.test(p))return'Airbnb';
+    if(/profit/i.test(p))return'Profitroom';
+    return p||'—';
+  };
+  const fmtDateLabel=value=>{
+    const d=parseDatePL(value);
+    if(!d)return value||'—';
+    return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  };
+
+  const reservationRows=reservations.map((r,i)=>`
+    <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+      <td>${fmtDateLabel(r.dataOd)}</td>
+      <td>${fmtDateLabel(r.dataDo)}</td>
+      <td class="c">${r.osoby||'—'}</td>
+      <td>${escapeHtml(r.gosc||'—')}</td>
+      <td class="c">${escapeHtml(partnerBadgeLabel(r.partner))}</td>
+      <td class="c">${escapeHtml(r.status||'—')}</td>
+      <td>${escapeHtml(r.apartament||'—')}</td>
+      <td class="r">${fmt(r.transakcja||0)} zł</td>
+      <td class="r">${fmt(r.prowizja||0)} zł</td>
+      <td class="r">${fmt(r.golaCena||0)} zł</td>
+      <td class="r">${fmt(r.cenaSystem||0)} zł</td>
+      <td class="r">${fmt(r.doplata||0)} zł</td>
+      <td class="r strong">${fmt(r.cenaCalkowita||0)} zł</td>
+    </tr>
+  `).join('');
+
+  const breakdownRows=breakdown.map((r,i)=>`
+    <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+      <td>${escapeHtml(r.apartament||'—')}</td>
+      <td class="c">${escapeHtml(partnerBadgeLabel(r.partner))}</td>
+      <td class="r">${fmt(r.transakcja||0)} zł</td>
+      <td class="r">${fmt(r.prowizja||0)} zł</td>
+      <td class="r">${fmt(r.golaCena||0)} zł</td>
+      <td class="r">${fmt(r.cenaSystem||0)} zł</td>
+      <td class="r">${fmt(r.doplata||0)} zł</td>
+      <td class="r strong">${fmt(r.cenaCalkowita||0)} zł</td>
+    </tr>
+  `).join('');
+
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="pl"><head>
+    <meta charset="UTF-8">
+    <title>Agata Faktura ${monthLabel}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;padding:22px}
+      h1{font-size:24px;font-weight:800;color:#0f172a;margin-bottom:4px}
+      .subtitle{font-size:13px;color:#64748b;margin-bottom:22px}
+      .section{margin-bottom:26px}
+      .section-title{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:.06em}
+      .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px}
+      .sum-card{border-radius:12px;padding:16px;border:1px solid #e2e8f0}
+      .sum-card .label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:6px}
+      .sum-card .value{font-size:24px;font-weight:800;line-height:1.05}
+      .sum-card.netto{background:#ecfdf5;border-color:#bbf7d0}
+      .sum-card.netto .value{color:#166534}
+      .sum-card.vat{background:#eff6ff;border-color:#bfdbfe}
+      .sum-card.vat .value{color:#1d4ed8}
+      .sum-card.brutto{background:#f5f3ff;border-color:#ddd6fe}
+      .sum-card.brutto .value{color:#6d28d9}
+      .sum-card.odliczenia{background:#fff7ed;border-color:#fed7aa}
+      .sum-card.odliczenia .value{color:#c2410c}
+      .invoice-box{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+      .invoice-hero{background:linear-gradient(135deg,#f8fffe 0%,#f0fdfa 48%,#ecfeff 100%);border:1px solid #99f6e4;border-radius:16px;padding:20px}
+      .invoice-hero .eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin-bottom:8px}
+      .invoice-hero .lead{font-size:28px;font-weight:800;color:#0f172a;line-height:1.05}
+      .invoice-hero .sub{font-size:14px;color:#475569;line-height:1.6;margin-top:8px}
+      .invoice-lines{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px}
+      .line{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+      .line:last-child{border-bottom:none}
+      .line .name{color:#475569}
+      .line .amount{font-weight:800;color:#0f172a}
+      table{width:100%;border-collapse:collapse}
+      thead th{background:#f8fafc;padding:8px 8px;text-align:left;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0}
+      td{padding:7px 8px;font-size:11px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+      .c{text-align:center}
+      .r{text-align:right}
+      .strong{font-weight:800}
+      .totals-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
+      .totals-strip .mini{background:#fde68a;padding:10px 8px;border-radius:10px;border:1px solid #fcd34d}
+      .totals-strip .mini .k{font-size:10px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+      .totals-strip .mini .v{font-size:15px;font-weight:800;color:#78350f}
+      .print-actions{margin-bottom:18px}
+      .print-actions button{background:#166534;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-right:8px}
+      .print-actions .secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+      @media print{
+        body{padding:10mm}
+        @page{margin:10mm;size:A4 landscape}
+        .print-actions{display:none}
+        .section{page-break-inside:avoid}
+      }
+    </style>
+  </head><body>
+    <div class="print-actions">
+      <button onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
+      <button class="secondary" onclick="window.close()">✕ Zamknij</button>
+    </div>
+
+    <h1>Agata Faktura</h1>
+    <div class="subtitle">Old Town Vistula Premium Apartments · ${monthLabel} · Wygenerowano: ${new Date().toLocaleDateString('pl-PL')}</div>
+
+    <div class="summary-grid">
+      <div class="sum-card netto"><div class="label">Kwota netto</div><div class="value">${fmt(f.netto||0)} zł</div></div>
+      <div class="sum-card vat"><div class="label">VAT 8%</div><div class="value">${fmt(f.vat||0)} zł</div></div>
+      <div class="sum-card brutto"><div class="label">Kwota brutto</div><div class="value">${fmt(f.brutto||0)} zł</div></div>
+      <div class="sum-card odliczenia"><div class="label">Odliczenia</div><div class="value">${fmt(od.suma||0)} zł</div></div>
+    </div>
+
+    <div class="section invoice-box">
+      <div class="invoice-hero">
+        <div class="eyebrow">Faktura do wystawienia</div>
+        <div class="lead">${fmt(f.brutto||0)} zł brutto</div>
+        <div class="sub">Na ten miesiąc z arkusza Agaty wynika faktura: <strong>${fmt(f.netto||0)} zł netto</strong> + <strong>${fmt(f.vat||0)} zł VAT 8%</strong> = <strong>${fmt(f.brutto||0)} zł brutto</strong>.</div>
+      </div>
+      <div class="invoice-lines">
+        <div class="line"><span class="name">Hornet</span><span class="amount">${fmt(od.hornet||0)} zł</span></div>
+        <div class="line"><span class="name">Previo</span><span class="amount">${fmt(od.previo||0)} zł</span></div>
+        <div class="line"><span class="name">Yieldplanet</span><span class="amount">${fmt(od.yieldplanet||0)} zł</span></div>
+        <div class="line"><span class="name">Karta SIM</span><span class="amount">${fmt(od.kartaSim||0)} zł</span></div>
+        <div class="line"><span class="name">Suma odliczeń</span><span class="amount">${fmt(od.suma||0)} zł</span></div>
+        <div class="line"><span class="name">Dopłaty inne</span><span class="amount">${fmt(f.doplatyInneSuma||0)} zł</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Sumy miesiąca</div>
+      <div class="totals-strip">
+        <div class="mini"><div class="k">Transakcja</div><div class="v">${fmt(t.transakcja||0)} zł</div></div>
+        <div class="mini"><div class="k">Prowizja</div><div class="v">${fmt(t.prowizja||0)} zł</div></div>
+        <div class="mini"><div class="k">Goła cena</div><div class="v">${fmt(t.golaCena||0)} zł</div></div>
+        <div class="mini"><div class="k">Cena z systemu</div><div class="v">${fmt(t.cenaSystem||0)} zł</div></div>
+        <div class="mini"><div class="k">Dopłata</div><div class="v">${fmt(t.doplata||0)} zł</div></div>
+        <div class="mini"><div class="k">Cena całkowita</div><div class="v">${fmt(t.cenaCalkowita||0)} zł</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Rezerwacje miesiąca</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Data od</th>
+            <th>Data do</th>
+            <th class="c">Osoby</th>
+            <th>Goście</th>
+            <th class="c">Partner</th>
+            <th class="c">Status</th>
+            <th>Apartament</th>
+            <th class="r">Transakcja</th>
+            <th class="r">Prowizja</th>
+            <th class="r">Goła cena</th>
+            <th class="r">Cena z systemu</th>
+            <th class="r">Dopłata</th>
+            <th class="r">Cena całkowita</th>
+          </tr>
+        </thead>
+        <tbody>${reservationRows||'<tr><td colspan="13" class="c">Brak danych</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Rozbicie po apartamencie i partnerze</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Apartament</th>
+            <th class="c">Partner</th>
+            <th class="r">Transakcja</th>
+            <th class="r">Prowizja</th>
+            <th class="r">Goła cena</th>
+            <th class="r">Cena z systemu</th>
+            <th class="r">Dopłata</th>
+            <th class="r">Cena całkowita</th>
+          </tr>
+        </thead>
+        <tbody>${breakdownRows||'<tr><td colspan="8" class="c">Brak danych</td></tr>'}</tbody>
+      </table>
+    </div>
+  </body></html>`);
+  w.document.close();
 }
 
 function openPrevioDrawer(date){
