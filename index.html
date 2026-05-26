@@ -6276,7 +6276,16 @@ async function syncPushTasks(tasks){
 
 function getKalEvents(){
   if(_kalCache!==null)return _kalCache;
-  try{_kalCache=JSON.parse(localStorage.getItem('kal_events')||'{}');return _kalCache;}
+  try{
+    const raw=JSON.parse(localStorage.getItem('kal_events')||'{}');
+    const normalized=normalizeRecurringKalEvents(raw||{});
+    _kalCache=normalized;
+    if(JSON.stringify(raw||{})!==JSON.stringify(normalized)){
+      localStorage.setItem('kal_events',JSON.stringify(normalized));
+      syncPushKal(normalized);
+    }
+    return _kalCache;
+  }
   catch(e){_kalCache={};return{};}
 }
 
@@ -6458,6 +6467,23 @@ function nextWorkday(date){
   }
 }
 
+function fmtDateKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function isLastDayOfMonthDate(date){
+  return date.getDate()===new Date(date.getFullYear(),date.getMonth()+1,0).getDate();
+}
+
+function addMonthsPreservingDay(baseDate, monthsToAdd, keepLastDay=false){
+  const base=new Date(baseDate);
+  const targetYear=base.getFullYear();
+  const targetMonth=base.getMonth()+monthsToAdd;
+  const lastDayTarget=new Date(targetYear, targetMonth+1, 0).getDate();
+  const desiredDay=keepLastDay ? lastDayTarget : Math.min(base.getDate(), lastDayTarget);
+  return new Date(targetYear, targetMonth, desiredDay);
+}
+
 // ── Generuj daty dla wydarzeń cyklicznych ──
 function getRecurringDates(baseDate, recur, horizonMonths=13){
   const dates=[];
@@ -6468,21 +6494,74 @@ function getRecurringDates(baseDate, recur, horizonMonths=13){
   if(recur==='none'){
     dates.push(baseDate);
   } else if(recur==='monthly'){
-    let d=new Date(base);
+    const keepLastDay=isLastDayOfMonthDate(base);
+    let step=0;
+    let d=addMonthsPreservingDay(base,0,keepLastDay);
     while(d<=horizon){
-      const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      dates.push(dk);
-      d.setMonth(d.getMonth()+1);
+      dates.push(fmtDateKey(d));
+      step+=1;
+      d=addMonthsPreservingDay(base,step,keepLastDay);
     }
   } else if(recur==='yearly'){
+    const keepLastDay=isLastDayOfMonthDate(base);
     let d=new Date(base);
     while(d<=horizon){
-      const dk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      dates.push(dk);
-      d.setFullYear(d.getFullYear()+1);
+      dates.push(fmtDateKey(d));
+      const nextYear=d.getFullYear()+1;
+      const lastDayTarget=new Date(nextYear,d.getMonth()+1,0).getDate();
+      const desiredDay=keepLastDay ? lastDayTarget : Math.min(base.getDate(), lastDayTarget);
+      d=new Date(nextYear,d.getMonth(),desiredDay);
     }
   }
   return dates;
+}
+
+function normalizeRecurringKalEvents(events){
+  const source=(events&&typeof events==='object')?events:{};
+  const recurringMap=new Map();
+  const singleEvents=[];
+
+  Object.entries(source).forEach(([dk,list])=>{
+    (Array.isArray(list)?list:[]).forEach(ev=>{
+      if(!ev||!ev.id)return;
+      if(ev.recur==='monthly' || ev.recur==='yearly'){
+        const existing=recurringMap.get(ev.id);
+        if(!existing || String(dk)<String(existing.baseDate)){
+          recurringMap.set(ev.id,{...ev,baseDate:dk});
+        }
+      } else {
+        singleEvents.push({date:dk,event:ev});
+      }
+    });
+  });
+
+  const normalized={};
+  singleEvents.forEach(({date,event})=>{
+    if(!normalized[date])normalized[date]=[];
+    normalized[date].push({...event});
+  });
+
+  recurringMap.forEach(rec=>{
+    const dates=getRecurringDates(rec.baseDate,rec.recur);
+    dates.forEach(dk=>{
+      if(!normalized[dk])normalized[dk]=[];
+      normalized[dk].push({
+        id:rec.id,
+        title:rec.title||'',
+        desc:rec.desc||'',
+        cat:rec.cat||'inne',
+        recur:rec.recur,
+        isAuto:!!rec.isAuto,
+      });
+    });
+  });
+
+  Object.keys(normalized).forEach(dk=>{
+    normalized[dk]=normalized[dk]
+      .filter(Boolean)
+      .sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),'pl'));
+  });
+  return normalized;
 }
 
 // ── ZUS: 15-ty każdego miesiąca → następny dzień roboczy ──
