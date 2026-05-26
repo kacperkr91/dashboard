@@ -1903,6 +1903,31 @@ function calcPrevioForecast(monthKey){
   const rows=_state.data.previo[monthKey];
   if(!rows||rows.error||!Array.isArray(rows))return null;
 
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const keyOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const nightPrice=row=>((+row.noce||0)>0?(+row.cena||0)/(+row.noce||1):0);
+  const collectOccupiedNightKeys=(sourceRows,startDate,endDate)=>{
+    const keys=new Set();
+    (sourceRows||[]).forEach(r=>{
+      const from=parseDateDMY(r.dataOd);
+      const to=parseDateDMY(r.dataDo);
+      const apt=String(r.apt||'').trim();
+      if(!from||!to||!apt)return;
+      let cur=new Date(from);
+      while(cur<to){
+        if(cur>=startDate&&cur<=endDate)keys.add(`${apt}__${keyOf(cur)}`);
+        cur=addDays(cur,1);
+      }
+    });
+    return keys;
+  };
+  const averageNightValue=(sourceRows)=>{
+    const bookedNights=(sourceRows||[]).reduce((s,r)=>s+(parseInt(r.noce,10)||0),0);
+    const bookedValue=(sourceRows||[]).reduce((s,r)=>s+(+r.cena||0),0);
+    return bookedNights>0?bookedValue/bookedNights:0;
+  };
+
   const [yr,mo]=monthKey.split('-').map(Number);
   const today=new Date();today.setHours(0,0,0,0);
   const monthStart=new Date(yr,mo-1,1);
@@ -1928,6 +1953,7 @@ function calcPrevioForecast(monthKey){
     return d&&d>refDate;
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
+  const currentBookedTotal=active.reduce((s,r)=>s+r.cena,0);
 
   // Last year same month
   const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
@@ -1961,6 +1987,13 @@ function calcPrevioForecast(monthKey){
   // Estimate last-minute bookings using last year as base
   let estNewBookings=0;
   const earnedPerDay=daysDone>0?earned/daysDone:0;
+  const totalApts=29;
+  const futureStart=monthKey>currentMonthKey?monthStart:addDays(refDate,1);
+  const possibleFutureNightCount=daysLeft>0?totalApts*daysLeft:0;
+  const occupiedFutureNightKeys=daysLeft>0?collectOccupiedNightKeys(active,futureStart,monthEnd):new Set();
+  const confirmedFutureNightCount=occupiedFutureNightKeys.size;
+  const currentOccRate=possibleFutureNightCount>0?confirmedFutureNightCount/possibleFutureNightCount:0;
+  const currentAdrPerNight=averageNightValue(active)||averageNightValue(confirmedRows)||earnedPerDay||0;
 
   if(monthKey<currentMonthKey){
     return{
@@ -1988,25 +2021,24 @@ function calcPrevioForecast(monthKey){
     // Scale factor: how much faster/slower we're running vs last year
     const pace=lyEarnedToDate>0?earned/lyEarnedToDate:1;
 
-    // What came in last-minute last year (booked after today's equivalent)
-    const lyFutureEarned=lastYearTotal-lyEarnedToDate;
-
-    // Estimate = last year's remaining * pace - what we already have confirmed
-    estNewBookings=Math.max(0, lyFutureEarned*pace - confirmed);
+    const lyMonthEnd=new Date(yr-1,mo,0);
+    const lyFutureStart=monthKey>currentMonthKey?new Date(yr-1,mo-1,1):new Date(yr-1,mo-1,Math.min(daysDone+1,lyMonthEnd.getDate()));
+    const lyPossibleFutureNightCount=totalApts*Math.max(lyMonthEnd.getDate()-Math.max(daysDone,0),0);
+    const lyOccupiedFutureNightKeys=lyPossibleFutureNightCount>0?collectOccupiedNightKeys(lyActive,lyFutureStart,lyMonthEnd):new Set();
+    const lyOccRate=lyPossibleFutureNightCount>0?lyOccupiedFutureNightKeys.size/lyPossibleFutureNightCount:currentOccRate;
+    const targetOccRate=clamp(lyOccRate*pace, currentOccRate, 0.98);
+    const additionalNightCount=Math.max(Math.round((targetOccRate-currentOccRate)*possibleFutureNightCount),0);
+    estNewBookings=additionalNightCount*currentAdrPerNight;
   } else {
-    // Fallback: use avg last-7-days pattern
-    const last7Start=daysInMon-6;
-    const daysInLast7Remaining=Math.max(0,daysInMon-Math.max(daysDone,last7Start-1));
-    const last7Weight=daysInLast7Remaining/7;
-    const estTotal=earned+earnedPerDay*daysLeft;
-    estNewBookings=Math.max(0,estTotal*avgLast7Pct-confirmed)*last7Weight;
+    const targetOccRate=clamp(currentOccRate+0.12, currentOccRate, 0.9);
+    const additionalNightCount=Math.max(Math.round((targetOccRate-currentOccRate)*possibleFutureNightCount),0);
+    estNewBookings=additionalNightCount*currentAdrPerNight;
   }
 
-  const forecastTotal=earned+confirmed+estNewBookings;
+  const forecastTotal=currentBookedTotal+estNewBookings;
 
   // Occupied apts
   const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
-  const totalApts=29;
   const freeApts=Math.max(0,totalApts-confirmedApts.size);
 
   return{
