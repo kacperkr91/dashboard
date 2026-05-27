@@ -3090,9 +3090,15 @@ function setLaundryApartment(name){
   _state.laundryApartment=String(name||'');
   if(_state.section==='laundry-textiles')renderApp();
 }
-function setLaundrySearch(value){
+let _laundrySearchTimer=null;
+function applyLaundrySearch(value){
   _state.laundrySearch=String(value||'');
   if(_state.section==='laundry-textiles')renderApp();
+}
+function setLaundrySearch(value){
+  if(_laundrySearchTimer)clearTimeout(_laundrySearchTimer);
+  const nextValue=String(value||'');
+  _laundrySearchTimer=setTimeout(()=>applyLaundrySearch(nextValue),260);
 }
 function buildLaundryTextilesView(){
   const data=_state.data.laundry;
@@ -3108,9 +3114,14 @@ function buildLaundryTextilesView(){
   _state.laundryApartment=selected;
 
   const search=String(_state.laundrySearch||'').trim().toLowerCase();
-  const baseItems=[...(data.byApartment?.[selected]||[])];
+  const baseItems=search
+    ? [...(data.items||[])].filter(item=>{
+        const hay=[item.id,item.typ,item.ktoPral,item.uwagi,item.apartament].join(' ').toLowerCase();
+        return hay.includes(search);
+      })
+    : [...(data.byApartment?.[selected]||[])];
   const items=search?baseItems.filter(item=>{
-    const hay=[item.id,item.typ,item.ktoPral,item.uwagi].join(' ').toLowerCase();
+    const hay=[item.id,item.typ,item.ktoPral,item.uwagi,item.apartament].join(' ').toLowerCase();
     return hay.includes(search);
   }):baseItems;
 
@@ -3126,29 +3137,29 @@ function buildLaundryTextilesView(){
   const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
 
-  const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
+  const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected&&!search?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
   const toolbar=`<div class="laundry-toolbar">
-    <input class="laundry-search" type="text" placeholder="Szukaj po ID, typie, osobie albo uwagach…" value="${escapeHtml(_state.laundrySearch||'')}" oninput="setLaundrySearch(this.value)">
+    <input class="laundry-search" type="text" placeholder="Szukaj po ID, typie, apartamencie, osobie albo uwagach…" value="${escapeHtml(_state.laundrySearch||'')}" oninput="setLaundrySearch(this.value)" onchange="applyLaundrySearch(this.value)">
   </div>`;
   const typeCards=typeEntries.length?typeEntries.map(([type,count])=>`<div class="laundry-type-card"><div class="n">${escapeHtml(type)}</div><div class="c">${count}</div><div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div></div>`).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
   const detailRows=items.length?items.map(item=>`<div class="laundry-item">
     <div class="laundry-id">${escapeHtml(item.id)}</div>
-    <div class="laundry-main">
-      <div class="t">${escapeHtml(item.typ)}</div>
-      <div class="u">${item.uwagi?escapeHtml(item.uwagi):'Bez dodatkowych uwag'}</div>
-    </div>
-    <div class="laundry-meta">
-      <div class="d">${escapeHtml(item.dataPrania||'—')}</div>
-      <div class="w">${item.ktoPral?`Prał(a): ${escapeHtml(item.ktoPral)}`:'Brak osoby'}</div>
-    </div>
+      <div class="laundry-main">
+        <div class="t">${escapeHtml(item.typ)}</div>
+        <div class="u">${search?`Apartament: ${escapeHtml(item.apartament)}${item.uwagi?` · ${escapeHtml(item.uwagi)}`:''}`:(item.uwagi?escapeHtml(item.uwagi):'Bez dodatkowych uwag')}</div>
+      </div>
+      <div class="laundry-meta">
+        <div class="d">${escapeHtml(item.dataPrania||'—')}</div>
+        <div class="w">${item.ktoPral?`Prał(a): ${escapeHtml(item.ktoPral)}`:'Brak osoby'}</div>
+      </div>
   </div>`).join(''):`<div class="laundry-empty"><div class="i">🧺</div><strong>Brak pozycji</strong><div>Dla tego apartamentu nie ma tekstyliów pasujących do wpisanego filtra.</div></div>`;
 
   return `<div class="laundry-shell">
     <div class="laundry-hero">
       <div>
         <div class="laundry-eyebrow">Stan bieżący tekstyliów</div>
-        <h2 class="laundry-title">${escapeHtml(selected)}</h2>
-        <div class="laundry-desc">Sprawdzisz tutaj dokładnie, co znajduje się aktualnie w wybranym apartamencie: kołdry, podkłady, poduszki i pozostałe tekstylia wraz z ostatnią datą prania i osobą, która je prała.</div>
+        <h2 class="laundry-title">${search?`Wyniki dla: ${escapeHtml(_state.laundrySearch)}`:escapeHtml(selected)}</h2>
+        <div class="laundry-desc">${search?'Wyszukiwanie działa teraz przez cały arkusz „Stan bieżący”, więc od razu znajdziesz tekstylia niezależnie od apartamentu.':'Sprawdzisz tutaj dokładnie, co znajduje się aktualnie w wybranym apartamencie: kołdry, podkłady, poduszki i pozostałe tekstylia wraz z ostatnią datą prania i osobą, która je prała.'}</div>
       </div>
       <div class="laundry-kpis">
         <div class="laundry-kpi"><div class="k">Łącznie pozycji</div><div class="v">${items.length}</div><div class="s">Wszystkie sztuki przypisane do tego miejsca po uwzględnieniu filtra.</div></div>
@@ -3159,14 +3170,14 @@ function buildLaundryTextilesView(){
     </div>
     <div class="grid-card">
       <div class="card-title">Wybór apartamentu</div>
-      <div class="card-subtitle">Kliknij lokal, aby zobaczyć jego aktualny stan tekstyliów na podstawie zakładki „Stan bieżący”.</div>
+      <div class="card-subtitle">${search?'Masz aktywne wyszukiwanie globalne. Wyczyść frazę, aby wrócić do widoku pojedynczego apartamentu.':'Kliknij lokal, aby zobaczyć jego aktualny stan tekstyliów na podstawie zakładki „Stan bieżący”.'}</div>
       ${apartmentPills}
       <div style="margin-top:14px">${toolbar}</div>
     </div>
     <div class="laundry-sections">
       <div class="grid-card">
-        <div class="card-title">Co dokładnie znajduje się w apartamencie</div>
-        <div class="card-subtitle">Pełna lista sztuk przypisanych do wybranego lokalu.</div>
+        <div class="card-title">${search?'Dopasowane tekstylia z całego arkusza':'Co dokładnie znajduje się w apartamencie'}</div>
+        <div class="card-subtitle">${search?'Pełna lista pasujących pozycji z wszystkich apartamentów.':'Pełna lista sztuk przypisanych do wybranego lokalu.'}</div>
         <div class="laundry-list">${detailRows}</div>
       </div>
       <div class="grid-card">
