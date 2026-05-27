@@ -4546,7 +4546,10 @@ function buildAgataFakturaView(){
   const monthNav=`<div class="hk-month-nav">
     ${AGATA_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setAgataMonth('${m.key}')">${m.short}</button>`).join('')}
   </div>`;
-  const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;margin-bottom:16px">
+  const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
+      📊 Pobierz XLS z rezerwacjami
+    </button>
     <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📄 Eksportuj PDF dla Agaty
     </button>
@@ -4983,6 +4986,66 @@ function exportAgataPdf(monthKey, monthLabel){
     </div>
   </body></html>`);
   w.document.close();
+}
+
+function exportAgataReservationsXls(monthKey, monthLabel){
+  const data=_state.data.agata?.[monthKey];
+  if(!data||data.error){
+    alert('Brak danych Agata Faktura do eksportu.');
+    return;
+  }
+
+  const reservations=[...(data.reservations||[])].sort((a,b)=>{
+    const ad=String(a.dataDo||'');
+    const bd=String(b.dataDo||'');
+    if(ad!==bd)return ad.localeCompare(bd);
+    const aa=String(a.apartament||'');
+    const ba=String(b.apartament||'');
+    return aa.localeCompare(ba,'pl');
+  });
+  if(!reservations.length){
+    alert('Brak rezerwacji do pobrania.');
+    return;
+  }
+
+  const headers=['Data od','Data do','Osoby','Goście','Partner','Status','Apartament','Transakcja','Prowizja','Goła cena','Cena z systemu','Dopłata','Cena całkowita'];
+  const rows=reservations.map(r=>[
+    r.dataOd||'',
+    r.dataDo||'',
+    r.osoby||'',
+    r.gosc||'',
+    r.partner||'',
+    r.status||'',
+    r.apartament||'',
+    fmt(r.transakcja||0)+' zł',
+    fmt(r.prowizja||0)+' zł',
+    fmt(r.golaCena||0)+' zł',
+    fmt(r.cenaSystem||0)+' zł',
+    fmt(r.doplata||0)+' zł',
+    fmt(r.cenaCalkowita||0)+' zł',
+  ]);
+
+  const tableRows=[
+    `<tr>${headers.map(h=>`<th style="background:#0f766e;color:#fff;padding:8px 10px;border:1px solid #cbd5e1;font-size:12px;font-weight:700;text-align:center">${escapeHtml(h)}</th>`).join('')}</tr>`,
+    ...rows.map(row=>`<tr>${row.map((cell,idx)=>`<td style="padding:7px 9px;border:1px solid #e2e8f0;font-size:12px;${idx>=7?'text-align:right':idx===2||idx===4||idx===5?'text-align:center':'text-align:left'}">${escapeHtml(String(cell??''))}</td>`).join('')}</tr>`)
+  ].join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+    <table>
+      <tr><td colspan="${headers.length}" style="font-size:16px;font-weight:700;padding:0 0 10px 0">Agata Faktura — rezerwacje miesiąca ${escapeHtml(monthLabel)}</td></tr>
+      ${tableRows}
+    </table>
+  </body></html>`;
+
+  const blob=new Blob(['\ufeff',html],{type:'application/vnd.ms-excel;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`agata_rezerwacje_${monthKey}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 function openPrevioDrawer(date){
