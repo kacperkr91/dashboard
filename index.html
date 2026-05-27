@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root{
       --blue:#2563eb;--blue-light:#eff6ff;--blue-mid:#bfdbfe;
@@ -1652,9 +1653,11 @@ async function loadPrevioMonth(monthKey){
     for(let i=0;i<maxLen;i++){
       const dataDo=v(4,i).replace(/^'/,'').trim();
       if(!dataDo)continue;
-      const parsedDo=parseDateDMY(dataDo);
+      const parsedDo=parseDateForMonthKey(dataDo, monthKey);
       const dataDoMonth=parsedDo?`${parsedDo.getFullYear()}-${String(parsedDo.getMonth()+1).padStart(2,'0')}`:'';
       if(mode==='master' && dataDoMonth!==monthKey)continue;
+      const dataOd=v(3,i);
+      const parsedOd=parseDateForMonthKey(dataOd, parsedDo?getMonthKeyFromParsedDate(parsedDo):monthKey);
       const apt=v(6,i);
       if(!apt)continue;
       const statusId=v(9,i);
@@ -1663,9 +1666,11 @@ async function loadPrevioMonth(monthKey){
         resId:   v(0,i),
         voucher: v(1,i),
         dataRez: v(2,i),
-        dataOd:  v(3,i),
+        dataOd,
         dataDo,
-        godzinaOd:  v(3,i).length>10?v(3,i).slice(11,16):'',
+        dataOdKey: parsedOd?dateKey(parsedOd):'',
+        dataDoKey: parsedDo?dateKey(parsedDo):'',
+        godzinaOd:  dataOd.length>10?dataOd.slice(11,16):'',
         godzinaDo:  dataDo.length>10?dataDo.slice(11,16):'',
         noce:    parseInt(v(5,i))||0,
         apt,
@@ -1944,8 +1949,8 @@ function calcPrevioForecast(monthKey){
   const collectOccupiedNightKeys=(sourceRows,startDate,endDate)=>{
     const keys=new Set();
     (sourceRows||[]).forEach(r=>{
-      const from=parseDateDMY(r.dataOd);
-      const to=parseDateDMY(r.dataDo);
+      const from=parsePrevioRowDate(r,'dataOd');
+      const to=parsePrevioRowDate(r,'dataDo');
       const apt=String(r.apt||'').trim();
       if(!from||!to||!apt)return;
       let cur=new Date(from);
@@ -1977,13 +1982,13 @@ function calcPrevioForecast(monthKey){
 
   // Already earned = checkouts up to reference day within selected month
   const earned=active.filter(r=>{
-    const d=parseDateDMY(r.dataDo);
+    const d=parsePrevioRowDate(r,'dataDo');
     return d&&d<=refDate;
   }).reduce((s,r)=>s+r.cena,0);
 
   // Confirmed future = already booked, checkout after reference day
   const confirmedRows=active.filter(r=>{
-    const d=parseDateDMY(r.dataDo);
+    const d=parsePrevioRowDate(r,'dataDo');
     return d&&d>refDate;
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
@@ -1992,8 +1997,9 @@ function calcPrevioForecast(monthKey){
   // Last year same month
   const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
   const lastYearRows=_state.data.previo[lastYearKey];
+  const lastYearActiveRows=Array.isArray(lastYearRows)?lastYearRows.filter(r=>!r.cancelled):[];
   const lastYearTotal=Array.isArray(lastYearRows)?
-    lastYearRows.filter(r=>!r.cancelled).reduce((s,r)=>s+r.cena,0):null;
+    lastYearActiveRows.reduce((s,r)=>s+r.cena,0):null;
 
   // Calculate historical last-7-days pattern from all available past months
   const allMonthKeys=Object.keys(_state.data.previo).filter(k=>{
@@ -2010,7 +2016,7 @@ function calcPrevioForecast(monthKey){
       const [mYr,mMo]=mk.split('-').map(Number);
       const mDays=new Date(mYr,mMo,0).getDate();
       const last7=mRows.filter(r=>{
-        const d=parseDateDMY(r.dataDo);
+        const d=parsePrevioRowDate(r,'dataDo');
         return d&&d.getDate()>=mDays-6;
       }).reduce((s,r)=>s+r.cena,0);
       return last7/total;
@@ -2033,6 +2039,7 @@ function calcPrevioForecast(monthKey){
     return{
       earned, confirmed:0, estNewBookings:0, forecastTotal:earned,
       lastYearTotal, lastYearKey,
+      lastYearRowCount:lastYearActiveRows.length,
       avgLast7Pct:Math.round(avgLast7Pct*100),
       daysDone:daysInMon, daysLeft:0, daysInMon,
       pctDone:100,
@@ -2043,11 +2050,11 @@ function calcPrevioForecast(monthKey){
   }
 
   if(Array.isArray(lastYearRows)&&lastYearRows.length&&lastYearTotal>0){
-    const lyActive=lastYearRows.filter(r=>!r.cancelled);
+    const lyActive=lastYearActiveRows;
 
     // What was earned in last year up to same day of month
     const lyEarnedToDate=lyActive.filter(r=>{
-      const d=parseDateDMY(r.dataDo);
+      const d=parsePrevioRowDate(r,'dataDo');
       return d&&d.getDate()<=daysDone;
     }).reduce((s,r)=>s+r.cena,0);
 
@@ -2078,6 +2085,7 @@ function calcPrevioForecast(monthKey){
   return{
     earned, confirmed, estNewBookings, forecastTotal,
     lastYearTotal, lastYearKey,
+    lastYearRowCount:lastYearActiveRows.length,
     avgLast7Pct:Math.round(avgLast7Pct*100),
     daysDone, daysLeft, daysInMon,
     pctDone:Math.round(daysDone/daysInMon*100),
@@ -2224,6 +2232,40 @@ function parseDateDMY(str){
     return new Date(y,b-1,a); // default ambiguous slash format to DD/MM
   }
   return null;
+}
+
+function getMonthKeyFromParsedDate(dateObj){
+  if(!(dateObj instanceof Date)||isNaN(dateObj))return'';
+  return`${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
+}
+
+function parseDateForMonthKey(str, monthKey=''){
+  if(!str)return null;
+  const s=String(str).trim().split(' ')[0];
+  const slash=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!slash)return parseDateDMY(s);
+  const a=parseInt(slash[1],10);
+  const b=parseInt(slash[2],10);
+  const y=parseInt(slash[3],10);
+  const asDmy=new Date(y,b-1,a);
+  const asMdy=new Date(y,a-1,b);
+  if(monthKey){
+    const dmyKey=getMonthKeyFromParsedDate(asDmy);
+    const mdyKey=getMonthKeyFromParsedDate(asMdy);
+    if(dmyKey===monthKey&&mdyKey!==monthKey)return asDmy;
+    if(mdyKey===monthKey&&dmyKey!==monthKey)return asMdy;
+    if(dmyKey===monthKey)return asDmy;
+  }
+  if(a>12&&b<=12)return asDmy;
+  if(b>12&&a<=12)return asMdy;
+  return asDmy;
+}
+
+function parsePrevioRowDate(row, field='dataDo'){
+  const keyField=field==='dataOd'?'dataOdKey':'dataDoKey';
+  const keyed=row?.[keyField];
+  if(keyed)return parseDateDMY(keyed);
+  return parseDateForMonthKey(row?.[field]||'');
 }
 
 function dateKey(d){
@@ -4569,7 +4611,7 @@ function buildAgataFakturaView(){
   </div>`;
   const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
     <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
-      📊 Pobierz XLS z rezerwacjami
+      📊 Pobierz Excel z rezerwacjami
     </button>
     <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📄 Eksportuj PDF dla Agaty
@@ -5015,6 +5057,10 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     alert('Brak danych Agata Faktura do eksportu.');
     return;
   }
+  if(typeof XLSX==='undefined'){
+    alert('Biblioteka Excel nie załadowała się jeszcze. Odśwież dashboard i spróbuj ponownie.');
+    return;
+  }
 
   const reservations=[...(data.reservations||[])].sort((a,b)=>{
     const ad=String(a.dataDo||'');
@@ -5045,120 +5091,23 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     Number((r.doplata||0).toFixed(2)),
     Number((r.cenaCalkowita||0).toFixed(2)),
   ]);
+  const aoa=[
+    [`Agata Faktura - rezerwacje miesiąca ${monthLabel}`],
+    [],
+    headers,
+    ...rows,
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[
+    {wch:12},{wch:12},{wch:8},{wch:28},{wch:18},{wch:10},{wch:24},
+    {wch:14},{wch:14},{wch:14},{wch:16},{wch:12},{wch:16},
+  ];
+  ws['!autofilter']={ref:`A3:M${rows.length+3}`};
+  ws['!freeze']={xSplit:0,ySplit:3};
 
-  const xmlEscape=value=>String(value??'')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&apos;');
-  const cellXml=(value,type='String',styleId='CellText')=>`<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${xmlEscape(value)}</Data></Cell>`;
-
-  const headerRow=`<Row>
-    ${headers.map(h=>cellXml(h,'String','Header')).join('')}
-  </Row>`;
-  const titleRow=`<Row>
-    <Cell ss:MergeAcross="${headers.length-1}" ss:StyleID="Title"><Data ss:Type="String">${xmlEscape(`Agata Faktura - rezerwacje miesiąca ${monthLabel}`)}</Data></Cell>
-  </Row>`;
-  const dataRows=rows.map(row=>`<Row>
-    ${row.map((cell,idx)=>{
-      if(idx>=7)return cellXml(cell,'Number','Money');
-      if(idx===2)return cellXml(cell,'Number','Center');
-      if(idx===4||idx===5)return cellXml(cell,'String','Center');
-      return cellXml(cell,'String','CellText');
-    }).join('')}
-  </Row>`).join('');
-
-  const xml=`<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="Default" ss:Name="Normal">
-      <Alignment ss:Vertical="Center"/>
-      <Borders/>
-      <Font ss:FontName="Calibri" ss:Size="11"/>
-      <Interior/>
-      <NumberFormat/>
-      <Protection/>
-    </Style>
-    <Style ss:ID="Title">
-      <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1"/>
-    </Style>
-    <Style ss:ID="Header">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:Bold="1" ss:Color="#FFFFFF"/>
-      <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
-        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
-        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
-        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="CellText">
-      <Alignment ss:Vertical="Center"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="Center">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="Money">
-      <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
-      </Borders>
-      <NumberFormat ss:Format="#,##0.00 &quot;zł&quot;"/>
-    </Style>
-  </Styles>
-  <Worksheet ss:Name="Rezerwacje">
-    <Table>
-      <Column ss:Width="78"/>
-      <Column ss:Width="78"/>
-      <Column ss:Width="44"/>
-      <Column ss:Width="140"/>
-      <Column ss:Width="86"/>
-      <Column ss:Width="64"/>
-      <Column ss:Width="130"/>
-      <Column ss:Width="76"/>
-      <Column ss:Width="76"/>
-      <Column ss:Width="82"/>
-      <Column ss:Width="92"/>
-      <Column ss:Width="76"/>
-      <Column ss:Width="92"/>
-      ${titleRow}
-      <Row/>
-      ${headerRow}
-      ${dataRows}
-    </Table>
-    <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
-      <FreezePanes/>
-      <FrozenNoSplit/>
-      <SplitHorizontal>3</SplitHorizontal>
-      <TopRowBottomPane>3</TopRowBottomPane>
-      <ProtectObjects>False</ProtectObjects>
-      <ProtectScenarios>False</ProtectScenarios>
-    </WorksheetOptions>
-  </Worksheet>
-</Workbook>`;
-
-  const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`agata_rezerwacje_${monthKey}.xls`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Rezerwacje');
+  XLSX.writeFile(wb,`agata_rezerwacje_${monthKey}.xlsx`,{compression:true});
 }
 
 function openPrevioDrawer(date){
@@ -8246,6 +8195,7 @@ function buildOblozenieLive(){
   ensurePrevioForecastLoadedForRentalKey(getRentalMonthKeyFromDate(today));
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const normalizePrevioDate=value=>{
+    if(value&&typeof value==='object'&&value.dataDoKey)return value.dataDoKey;
     const parsed=parseDateDMY(String(value||'').trim());
     return parsed?dateKey(parsed):String(value||'').slice(0,10);
   };
@@ -8270,11 +8220,11 @@ function buildOblozenieLive(){
       })
     : [];
   const currentMonthEarned=currentMonthRows.reduce((sum,row)=>{
-    const checkout=parseDateDMY(row.dataDo||'');
+    const checkout=parsePrevioRowDate(row,'dataDo');
     return checkout && checkout<=today ? sum+(row.cena||0) : sum;
   },0);
   const realizedMonthRows=currentMonthRows.filter(row=>{
-    const checkout=parseDateDMY(row.dataDo||'');
+    const checkout=parsePrevioRowDate(row,'dataDo');
     return checkout && checkout<=today;
   });
   const currentMonthTotal=currentMonthRows.reduce((sum,row)=>sum+(row.cena||0),0);
@@ -8626,6 +8576,7 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.06em">Rok temu</div>
           <div style="font-size:18px;font-weight:800;color:#4338ca;margin-top:6px">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#3730a3;opacity:.8;margin-top:6px">Ten sam miesiąc w poprzednim roku</div>
+          ${isAdmin()&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
           </div>
         </div>
       </div>
