@@ -8576,7 +8576,7 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.06em">Rok temu</div>
           <div style="font-size:18px;font-weight:800;color:#4338ca;margin-top:6px">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#3730a3;opacity:.8;margin-top:6px">Ten sam miesiąc w poprzednim roku</div>
-          ${isAdmin()&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
+          ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
           </div>
         </div>
       </div>
