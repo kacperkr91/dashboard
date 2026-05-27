@@ -506,6 +506,42 @@
     .agata-faktura-line.netto{background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;}
     .agata-faktura-line.vat{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
     .agata-faktura-line.brutto{background:#f5f3ff;border:1px solid #ddd6fe;color:#6d28d9;}
+    .laundry-shell{display:flex;flex-direction:column;gap:18px;}
+    .laundry-hero{background:linear-gradient(135deg,#f8fafc 0%,#eff6ff 48%,#ecfeff 100%);border:1px solid rgba(148,163,184,0.2);border-radius:24px;padding:24px 26px;display:grid;grid-template-columns:1.2fr .9fr;gap:18px;box-shadow:0 18px 40px rgba(15,23,42,0.06);}
+    .laundry-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#0369a1;margin-bottom:10px;}
+    .laundry-title{font-size:28px;font-weight:800;line-height:1.06;color:#0f172a;margin:0 0 8px;}
+    .laundry-desc{font-size:14px;line-height:1.6;color:#475569;max-width:680px;}
+    .laundry-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+    .laundry-kpi{background:rgba(255,255,255,0.88);border:1px solid rgba(226,232,240,0.92);border-radius:18px;padding:16px;box-shadow:0 10px 24px rgba(15,23,42,0.04);}
+    .laundry-kpi .k{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:8px;}
+    .laundry-kpi .v{font-size:28px;font-weight:800;line-height:1;color:#0f172a;}
+    .laundry-kpi .s{font-size:12px;color:#64748b;margin-top:8px;line-height:1.45;}
+    .laundry-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    .laundry-search{flex:1;min-width:220px;background:#fff;border:1px solid var(--border);border-radius:999px;padding:12px 16px;font-size:13px;color:var(--text);outline:none;box-shadow:0 10px 22px rgba(15,23,42,0.03);}
+    .laundry-search:focus{border-color:#38bdf8;box-shadow:0 0 0 4px rgba(56,189,248,0.12);}
+    .laundry-pill-row{display:flex;gap:10px;flex-wrap:wrap;}
+    .laundry-pill{border:1px solid #cbd5e1;background:#fff;color:#475569;padding:10px 14px;border-radius:999px;font-size:12px;font-weight:800;cursor:pointer;transition:.18s ease;box-shadow:0 8px 18px rgba(15,23,42,0.03);}
+    .laundry-pill:hover{transform:translateY(-1px);border-color:#7dd3fc;color:#0f172a;}
+    .laundry-pill.active{background:#0f766e;border-color:#0f766e;color:#fff;box-shadow:0 12px 24px rgba(15,118,110,0.22);}
+    .laundry-sections{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:18px;}
+    .laundry-type-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:14px;}
+    .laundry-type-card{background:#fff;border:1px solid rgba(226,232,240,0.9);border-radius:18px;padding:16px 16px 14px;box-shadow:0 10px 24px rgba(15,23,42,0.04);}
+    .laundry-type-card .n{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:6px;}
+    .laundry-type-card .c{font-size:24px;font-weight:800;line-height:1;color:#0369a1;}
+    .laundry-type-card .m{font-size:11px;color:#64748b;margin-top:8px;line-height:1.45;}
+    .laundry-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+    .laundry-item{display:grid;grid-template-columns:92px 1fr auto;gap:14px;align-items:center;padding:14px 16px;border:1px solid rgba(226,232,240,0.9);border-radius:16px;background:#fff;box-shadow:0 8px 18px rgba(15,23,42,0.04);}
+    .laundry-id{display:inline-flex;align-items:center;justify-content:center;min-width:72px;padding:8px 10px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:800;letter-spacing:.04em;}
+    .laundry-main{min-width:0;}
+    .laundry-main .t{font-size:14px;font-weight:700;color:#0f172a;line-height:1.35;}
+    .laundry-main .u{font-size:12px;color:#64748b;margin-top:4px;line-height:1.45;}
+    .laundry-meta{text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+    .laundry-meta .d{font-size:12px;font-weight:700;color:#0f172a;}
+    .laundry-meta .w{font-size:11px;color:#64748b;}
+    .laundry-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:240px;gap:10px;text-align:center;color:#64748b;background:#fff;border:1px solid var(--border);border-radius:20px;}
+    .laundry-empty .i{font-size:42px;opacity:.45;}
+    @media(max-width:1180px){.laundry-hero,.laundry-sections{grid-template-columns:1fr;}}
+    @media(max-width:700px){.laundry-hero{padding:20px 18px;}.laundry-title{font-size:24px;}.laundry-kpis{grid-template-columns:1fr 1fr;}.laundry-item{grid-template-columns:1fr;align-items:flex-start;}.laundry-meta{align-items:flex-start;text-align:left;}}
     @media(max-width:980px){.artur-grid{grid-template-columns:1fr;}}
     .agata-table thead tr.agata-sum-row th{
       position:sticky;top:0;z-index:9;
@@ -608,6 +644,10 @@ const CONFIG={
   ksefRange:          'A2:O2000',
   agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
   agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
+  laundryApiKey:      localStorage.getItem('gs_laundry_api_key')||'',
+  laundrySpreadsheetId: localStorage.getItem('gs_laundry_spreadsheet_id')||'',
+  laundrySheet:       'Stan bieżący',
+  laundryRange:       'A1:F5000',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
   otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
   otvStartRow:        4,
@@ -1906,6 +1946,45 @@ async function loadAgataMonth(monthKey){
   return{totals,faktura,reservations,breakdown};
 }
 
+async function loadLaundryData(){
+  const apiKey=CONFIG.laundryApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.laundrySpreadsheetId;
+  if(!apiKey||!spreadsheetId)throw new Error('MISSING_LAUNDRY_CONFIG');
+  const enc=encodeURIComponent(`'${CONFIG.laundrySheet}'!${CONFIG.laundryRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(rows.length<2)throw new Error('NO_LAUNDRY_DATA');
+
+  const items=rows.slice(1).map(row=>({
+    id:String(row[0]||'').trim(),
+    typ:String(row[1]||'').trim(),
+    apartament:String(row[2]||'').trim(),
+    dataPrania:String(row[3]||'').trim(),
+    ktoPral:String(row[4]||'').trim(),
+    uwagi:String(row[5]||'').trim(),
+  })).filter(item=>item.id&&item.typ&&item.apartament);
+
+  if(!items.length)throw new Error('NO_LAUNDRY_DATA');
+
+  const apartments=[...new Set(items.map(item=>item.apartament).filter(Boolean))]
+    .sort((a,b)=>String(a).localeCompare(String(b),'pl',{numeric:true,sensitivity:'base'}));
+  const byApartment={};
+  items.forEach(item=>{
+    if(!byApartment[item.apartament])byApartment[item.apartament]=[];
+    byApartment[item.apartament].push(item);
+  });
+  Object.keys(byApartment).forEach(name=>{
+    byApartment[name].sort((a,b)=>{
+      const typeCmp=String(a.typ||'').localeCompare(String(b.typ||''),'pl',{numeric:true,sensitivity:'base'});
+      if(typeCmp!==0)return typeCmp;
+      return String(a.id||'').localeCompare(String(b.id||''),'pl',{numeric:true,sensitivity:'base'});
+    });
+  });
+
+  return{items,apartments,byApartment};
+}
+
 /* FORECAST */
 function calcForecast(days){
   const year=new Date().getFullYear();
@@ -3007,6 +3086,98 @@ function buildTasksView(){
   </div>`;
 }
 
+function setLaundryApartment(name){
+  _state.laundryApartment=String(name||'');
+  if(_state.section==='laundry-textiles')renderApp();
+}
+function setLaundrySearch(value){
+  _state.laundrySearch=String(value||'');
+  if(_state.section==='laundry-textiles')renderApp();
+}
+function buildLaundryTextilesView(){
+  const data=_state.data.laundry;
+  if(!data)return renderLoading('Ładowanie stanu tekstyliów…');
+  if(data.error)return renderError(data.error);
+
+  const apartments=Array.isArray(data.apartments)?data.apartments:[];
+  if(!apartments.length){
+    return `<div class="laundry-empty"><div class="i">🧺</div><strong>Brak danych tekstyliów</strong><div>W arkuszu nie znaleziono żadnych pozycji z przypisanym apartamentem.</div></div>`;
+  }
+  let selected=_state.laundryApartment;
+  if(!selected||!apartments.includes(selected))selected=apartments[0];
+  _state.laundryApartment=selected;
+
+  const search=String(_state.laundrySearch||'').trim().toLowerCase();
+  const baseItems=[...(data.byApartment?.[selected]||[])];
+  const items=search?baseItems.filter(item=>{
+    const hay=[item.id,item.typ,item.ktoPral,item.uwagi].join(' ').toLowerCase();
+    return hay.includes(search);
+  }):baseItems;
+
+  const typeMap={};
+  let latestWash=null;
+  const washers=new Set();
+  items.forEach(item=>{
+    typeMap[item.typ]=(typeMap[item.typ]||0)+1;
+    if(item.ktoPral)washers.add(item.ktoPral);
+    const d=parseDatePL(item.dataPrania)||parseDateDMY(item.dataPrania)||parseHKDate(item.dataPrania);
+    if(d&&(!latestWash||d>latestWash))latestWash=d;
+  });
+  const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
+  const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
+
+  const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
+  const toolbar=`<div class="laundry-toolbar">
+    <input class="laundry-search" type="text" placeholder="Szukaj po ID, typie, osobie albo uwagach…" value="${escapeHtml(_state.laundrySearch||'')}" oninput="setLaundrySearch(this.value)">
+  </div>`;
+  const typeCards=typeEntries.length?typeEntries.map(([type,count])=>`<div class="laundry-type-card"><div class="n">${escapeHtml(type)}</div><div class="c">${count}</div><div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div></div>`).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
+  const detailRows=items.length?items.map(item=>`<div class="laundry-item">
+    <div class="laundry-id">${escapeHtml(item.id)}</div>
+    <div class="laundry-main">
+      <div class="t">${escapeHtml(item.typ)}</div>
+      <div class="u">${item.uwagi?escapeHtml(item.uwagi):'Bez dodatkowych uwag'}</div>
+    </div>
+    <div class="laundry-meta">
+      <div class="d">${escapeHtml(item.dataPrania||'—')}</div>
+      <div class="w">${item.ktoPral?`Prał(a): ${escapeHtml(item.ktoPral)}`:'Brak osoby'}</div>
+    </div>
+  </div>`).join(''):`<div class="laundry-empty"><div class="i">🧺</div><strong>Brak pozycji</strong><div>Dla tego apartamentu nie ma tekstyliów pasujących do wpisanego filtra.</div></div>`;
+
+  return `<div class="laundry-shell">
+    <div class="laundry-hero">
+      <div>
+        <div class="laundry-eyebrow">Stan bieżący tekstyliów</div>
+        <h2 class="laundry-title">${escapeHtml(selected)}</h2>
+        <div class="laundry-desc">Sprawdzisz tutaj dokładnie, co znajduje się aktualnie w wybranym apartamencie: kołdry, podkłady, poduszki i pozostałe tekstylia wraz z ostatnią datą prania i osobą, która je prała.</div>
+      </div>
+      <div class="laundry-kpis">
+        <div class="laundry-kpi"><div class="k">Łącznie pozycji</div><div class="v">${items.length}</div><div class="s">Wszystkie sztuki przypisane do tego miejsca po uwzględnieniu filtra.</div></div>
+        <div class="laundry-kpi"><div class="k">Rodzaje tekstyliów</div><div class="v">${typeEntries.length}</div><div class="s">Ile różnych typów znajduje się aktualnie w lokalu.</div></div>
+        <div class="laundry-kpi"><div class="k">Ostatnie pranie</div><div class="v" style="font-size:20px">${latestWashLabel}</div><div class="s">Najnowsza data z pozycji przypisanych do tego apartamentu.</div></div>
+        <div class="laundry-kpi"><div class="k">Kto prał</div><div class="v" style="font-size:20px">${washers.size||0}</div><div class="s">${washers.size?[...washers].map(escapeHtml).join(', '):'Brak wpisanych osób przy tych pozycjach.'}</div></div>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="card-title">Wybór apartamentu</div>
+      <div class="card-subtitle">Kliknij lokal, aby zobaczyć jego aktualny stan tekstyliów na podstawie zakładki „Stan bieżący”.</div>
+      ${apartmentPills}
+      <div style="margin-top:14px">${toolbar}</div>
+    </div>
+    <div class="laundry-sections">
+      <div class="grid-card">
+        <div class="card-title">Co dokładnie znajduje się w apartamencie</div>
+        <div class="card-subtitle">Pełna lista sztuk przypisanych do wybranego lokalu.</div>
+        <div class="laundry-list">${detailRows}</div>
+      </div>
+      <div class="grid-card">
+        <div class="card-title">Rozbicie według typu</div>
+        <div class="card-subtitle">Szybki podgląd liczby sztuk w każdej kategorii tekstyliów.</div>
+        <div class="laundry-type-grid">${typeCards}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* STATE */
 let _state={
   section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
@@ -3021,6 +3192,8 @@ let _state={
   ksefSearch:'',
   agataMonth:getMonthKeyFromDate(new Date()),
   agataColumnPrefs:(()=>({osoby:true,partner:true,status:true,transakcja:true,prowizja:true,golaCena:true,cenaSystem:true,doplata:true,cenaCalkowita:true}))(),
+  laundryApartment:'',
+  laundrySearch:'',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -3047,7 +3220,7 @@ let _state={
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, ksef:null, weather:null, tasks:null
+    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, laundry:null, ksef:null, weather:null, tasks:null
   }
 };
 let _charts={};
@@ -3060,7 +3233,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','artur-payments','agata-faktura','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','agata-faktura','laundry-textiles','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -3071,6 +3244,7 @@ const DASHBOARD_MODULE_LABELS={
   housekeeping:'Housekeeping',
   otv:'Rezerwacje OTV',
   previo:'Previo',
+  'laundry-textiles':'Pranie / Tekstylia',
   'artur-payments':'Płatności Artur',
   'agata-faktura':'Agata Faktura',
   tasks:'Zadania',
@@ -3298,6 +3472,10 @@ function renderConfig(){
     <hr class="divider"/>
     <p class="section-label">🏨 Previo (Google Sheets API Key)</p>
     <div class="field"><label>Google API Key (do odczytu arkusza Previo)</label><input id="inp-previokey" type="text" placeholder="AIzaSy…" value="${CONFIG.previoApiKey||CONFIG.apiKey}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🧺 Pranie / Tekstylia</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-laundrykey" type="text" placeholder="AIzaSy…" value="${CONFIG.laundryApiKey||CONFIG.apiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza tekstyliów</label><input id="inp-laundrysheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.laundrySpreadsheetId}"/></div>
     <hr class="divider"/>
     <p class="section-label">📋 Arkusz rezerwacji OTV</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-otvkey" type="text" placeholder="AIzaSy…" value="${CONFIG.otvApiKey}"/></div>
@@ -9248,6 +9426,7 @@ async function init(){
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
   const needHousekeeping=hasModuleAccess('housekeeping')&&initialSection==='housekeeping';
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
+  const needLaundry=hasModuleAccess('laundry-textiles')&&initialSection==='laundry-textiles';
   const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout'])&&['previo','oblozenie','booking-payout','rental'].includes(initialSection);
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
   const needParking=hasModuleAccess('parking')&&(initialSection==='parking'||shouldShowTodayBanner());
@@ -9257,7 +9436,7 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},parking:null,ksef:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},laundry:null,parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;
   _backgroundPrefetchStarted=false;
   _previoSoftRefreshRequested={};
@@ -9303,12 +9482,13 @@ async function init(){
   const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Jeszcze chwila…');
-  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,parkingr]=await Promise.allSettled([
+  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,laundryr,parkingr]=await Promise.allSettled([
     needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(prevPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(nextPrevioKey):Promise.resolve(null),
     needAgata?loadAgataMonth(initAgataKey):Promise.resolve(null),
+    needLaundry?loadLaundryData():Promise.resolve(null),
     needParking?loadParkingData():Promise.resolve(null),
   ]);
   if(needRental)_state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
@@ -9318,6 +9498,7 @@ async function init(){
     if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
   }
   if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
+  if(needLaundry)_state.data.laundry=laundryr.status==='fulfilled'?laundryr.value:{error:laundryr.reason?.message||'Błąd'};
   if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   await delay(progressDelay);
@@ -9424,6 +9605,9 @@ async function prefetchSecondaryModules(){
       }
     });
   }
+  if(hasModuleAccess('laundry-textiles')&&section!=='laundry-textiles'&&_state.data.laundry===null){
+    jobs.push(()=>loadLaundryData().then(data=>{_state.data.laundry=data;}).catch(e=>{_state.data.laundry={error:e.message||'Błąd'};}));
+  }
   if(hasAnyModuleAccess(['ksef','artur-payments'])&&section!=='ksef'&&section!=='artur-payments'&&_state.data.ksef===null){
     jobs.push(()=>loadKsefData().then(rows=>{_state.data.ksef=rows;}).catch(e=>{_state.data.ksef={error:e.message||'Błąd'};}));
   }
@@ -9510,6 +9694,17 @@ function ensureSectionDataLoaded(section){
         _state.data.agata[key]={error:e.message||'Błąd'};
         if(_state.section==='agata-faktura'&&_state.agataMonth===key)renderApp();
       });
+    });
+    return true;
+  }
+  if(section==='laundry-textiles'&&_state.data.laundry===null){
+    renderApp();
+    loadLaundryData().then(data=>{
+      _state.data.laundry=data;
+      if(_state.section==='laundry-textiles')renderApp();
+    }).catch(e=>{
+      _state.data.laundry={error:e.message||'Błąd'};
+      if(_state.section==='laundry-textiles')renderApp();
     });
     return true;
   }
@@ -9679,6 +9874,7 @@ function renderApp(){
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
     ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
+    ${navButton('laundry-textiles','Pranie / Tekstylia','🧺','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
     ${navButton('tasks','Zadania','✅','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('booking-payout','Wypłaty','💰','background:#003580;border-color:#003580;color:#fff')}
@@ -9753,6 +9949,8 @@ function renderApp(){
     content=buildPrevioView();
   } else if(section==='agata-faktura'){
     content=buildAgataFakturaView();
+  } else if(section==='laundry-textiles'){
+    content=buildLaundryTextilesView();
   } else if(section==='artur-payments'){
     content=buildArturPaymentsView(data.ksef);
   } else if(section==='tasks'){
@@ -9814,6 +10012,10 @@ function saveConfig(){
   localStorage.setItem('gs_hk_api_key',hk);localStorage.setItem('gs_hk_spreadsheet_id',hs);
   const pk=document.getElementById('inp-previokey')?.value.trim()||'';
   CONFIG.previoApiKey=pk;localStorage.setItem('gs_previo_api_key',pk);
+  const lk=document.getElementById('inp-laundrykey')?.value.trim()||'';
+  const ls=document.getElementById('inp-laundrysheetid')?.value.trim()||'';
+  CONFIG.laundryApiKey=lk;CONFIG.laundrySpreadsheetId=ls;
+  localStorage.setItem('gs_laundry_api_key',lk);localStorage.setItem('gs_laundry_spreadsheet_id',ls);
   const su=document.getElementById('inp-syncurl')?.value.trim()||'';
   CONFIG.syncUrl=su;localStorage.setItem('sync_url',su);
   const ok=document.getElementById('inp-otvkey')?.value.trim()||'';
