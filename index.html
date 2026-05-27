@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root{
       --blue:#2563eb;--blue-light:#eff6ff;--blue-mid:#bfdbfe;
@@ -4611,7 +4610,7 @@ function buildAgataFakturaView(){
   </div>`;
   const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
     <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
-      📊 Pobierz Excel z rezerwacjami
+      📊 Pobierz CSV z rezerwacjami
     </button>
     <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📄 Eksportuj PDF dla Agaty
@@ -5057,10 +5056,6 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     alert('Brak danych Agata Faktura do eksportu.');
     return;
   }
-  if(typeof XLSX==='undefined'){
-    alert('Biblioteka Excel nie załadowała się jeszcze. Odśwież dashboard i spróbuj ponownie.');
-    return;
-  }
 
   const reservations=[...(data.reservations||[])].sort((a,b)=>{
     const ad=String(a.dataDo||'');
@@ -5091,23 +5086,28 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     Number((r.doplata||0).toFixed(2)),
     Number((r.cenaCalkowita||0).toFixed(2)),
   ]);
-  const aoa=[
+  const csvEscape=value=>{
+    const text=String(value??'');
+    if(/[;"\n\r]/.test(text))return `"${text.replace(/"/g,'""')}"`;
+    return text;
+  };
+  const fmtCsvMoney=value=>Number(value||0).toFixed(2).replace('.',',');
+  const lines=[
     [`Agata Faktura - rezerwacje miesiąca ${monthLabel}`],
     [],
     headers,
-    ...rows,
-  ];
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[
-    {wch:12},{wch:12},{wch:8},{wch:28},{wch:18},{wch:10},{wch:24},
-    {wch:14},{wch:14},{wch:14},{wch:16},{wch:12},{wch:16},
-  ];
-  ws['!autofilter']={ref:`A3:M${rows.length+3}`};
-  ws['!freeze']={xSplit:0,ySplit:3};
-
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Rezerwacje');
-  XLSX.writeFile(wb,`agata_rezerwacje_${monthKey}.xlsx`,{compression:true});
+    ...rows.map(row=>row.map((cell,idx)=>idx>=7?fmtCsvMoney(cell):cell)),
+  ].map(row=>row.map(csvEscape).join(';'));
+  const csv='\uFEFF'+lines.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`agata_rezerwacje_${monthKey}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 function openPrevioDrawer(date){
