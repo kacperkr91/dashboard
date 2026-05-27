@@ -822,10 +822,9 @@ function resolvePrevioMonthSheetName(monthKey, sheetNames){
   const meta=PREVIO_MONTHS.find(m=>m.key===monthKey);
   const [year,month]=monthKey.split('-');
   const monthNum=String(parseInt(month,10));
-  const candidates=[
+  const currentYear=String(new Date().getFullYear());
+  const yearAwareCandidates=[
     monthKey,
-    meta?.label,
-    meta?.short,
     `${month}.${year}`,
     `${month}/${year}`,
     `${month}-${year}`,
@@ -835,16 +834,38 @@ function resolvePrevioMonthSheetName(monthKey, sheetNames){
     `${year}-${monthNum}`,
     `${year}/${month}`,
     `${year}.${month}`,
+    meta?.label?`${meta.label} ${year}`:'',
+    meta?.label?`${meta.label}-${year}`:'',
+    meta?.label?`${meta.label}/${year}`:'',
+    meta?.short?`${meta.short} ${year}`:'',
+    meta?.short?`${meta.short}-${year}`:'',
+    meta?.short?`${meta.short}/${year}`:'',
+    meta?.label?`${year} ${meta.label}`:'',
+    meta?.short?`${year} ${meta.short}`:'',
   ].filter(Boolean);
-  const normalizedCandidates=[...new Set(candidates.map(normalizeSheetTitle).filter(Boolean))];
+  const normalizedYearAware=[...new Set(yearAwareCandidates.map(normalizeSheetTitle).filter(Boolean))];
 
   for(const name of sheetNames){
     const norm=normalizeSheetTitle(name);
-    if(normalizedCandidates.includes(norm))return name;
+    if(normalizedYearAware.includes(norm))return name;
   }
   for(const name of sheetNames){
     const norm=normalizeSheetTitle(name);
-    if(normalizedCandidates.some(c=>norm.includes(c)||c.includes(norm)))return name;
+    if(normalizedYearAware.some(c=>norm.includes(c)||c.includes(norm)))return name;
+  }
+
+  // Generic month-only tabs like "Maj" are safe only for the current year.
+  if(year===currentYear){
+    const genericCandidates=[meta?.label,meta?.short].filter(Boolean);
+    const normalizedGeneric=[...new Set(genericCandidates.map(normalizeSheetTitle).filter(Boolean))];
+    for(const name of sheetNames){
+      const norm=normalizeSheetTitle(name);
+      if(normalizedGeneric.includes(norm))return name;
+    }
+    for(const name of sheetNames){
+      const norm=normalizeSheetTitle(name);
+      if(normalizedGeneric.some(c=>norm.includes(c)||c.includes(norm)))return name;
+    }
   }
   return '';
 }
@@ -2192,7 +2213,7 @@ function parseDateDMY(str){
   // DD.MM.YYYY or D.M.YYYY
   m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if(m)return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
-  // Slash dates can come as DD/MM/YYYY or MM/DD/YYYY depending on sheet locale.
+  // Slash dates in this dashboard should prefer Polish DD/MM/YYYY.
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if(m){
     const a=parseInt(m[1],10);
@@ -2200,7 +2221,7 @@ function parseDateDMY(str){
     const y=parseInt(m[3],10);
     if(a>12&&b<=12)return new Date(y,b-1,a); // definitely DD/MM
     if(b>12&&a<=12)return new Date(y,a-1,b); // definitely MM/DD
-    return new Date(y,a-1,b); // default slash format to MM/DD for imported historical tabs
+    return new Date(y,b-1,a); // default ambiguous slash format to DD/MM
   }
   return null;
 }
