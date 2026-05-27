@@ -497,7 +497,7 @@
     .agata-status-badge{background:#e2e8f0;color:#475569;}
     .agata-status-badge.p{background:#dcfce7;color:#166534;}
     .agata-status-badge.s{background:#fee2e2;color:#b91c1c;}
-    .agata-guest{display:flex;flex-direction:column;gap:2px;}
+    .agata-guest{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center;}
     .agata-guest .meta{font-size:10px;color:var(--text-muted);}
     .agata-faktura-stack{display:grid;grid-template-columns:1fr;gap:10px;}
     .agata-faktura-line{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border-radius:12px;}
@@ -1864,7 +1864,20 @@ async function loadAgataMonth(monthKey){
     breakdownMap[key].vat+=r.vat;
   });
 
-  const breakdown=Object.values(breakdownMap).sort((a,b)=>(b.cenaCalkowita||0)-(a.cenaCalkowita||0));
+  const partnerSortRank=partner=>{
+    const p=String(partner||'').toLowerCase();
+    if(p.includes('booking'))return 0;
+    if(p.includes('airbnb'))return 1;
+    if(p.includes('profit'))return 2;
+    return 3;
+  };
+  const breakdown=Object.values(breakdownMap).sort((a,b)=>{
+    const aptCmp=String(a.apartament||'').localeCompare(String(b.apartament||''),'pl');
+    if(aptCmp!==0)return aptCmp;
+    const partnerCmp=partnerSortRank(a.partner)-partnerSortRank(b.partner);
+    if(partnerCmp!==0)return partnerCmp;
+    return String(a.partner||'').localeCompare(String(b.partner||''),'pl');
+  });
   return{totals,faktura,reservations,breakdown};
 }
 
@@ -4658,10 +4671,10 @@ function buildAgataFakturaView(){
       dataOd:`<td class="col-date ta-c">${escapeHtml(r.dataOd||'—')}</td>`,
       dataDo:`<td class="col-date ta-c">${escapeHtml(r.dataDo||'—')}</td>`,
       osoby:`<td class="col-count ta-c">${r.osoby||'—'}</td>`,
-      gosc:`<td class="col-guest ta-l"><div class="agata-guest"><div>${escapeHtml(r.gosc||'—')}</div><div class="meta">${escapeHtml(r.apartament||'—')}</div></div></td>`,
+      gosc:`<td class="col-guest ta-c"><div class="agata-guest"><div>${escapeHtml(r.gosc||'—')}</div><div class="meta">${escapeHtml(r.apartament||'—')}</div></div></td>`,
       partner:`<td class="col-partner ta-c">${partnerBadge(r.partner)}</td>`,
       status:`<td class="col-status ta-c">${statusBadge(r.status)}</td>`,
-      apartament:`<td class="col-apartment ta-l">${escapeHtml(r.apartament||'—')}</td>`,
+      apartament:`<td class="col-apartment ta-c">${escapeHtml(r.apartament||'—')}</td>`,
       transakcja:`<td class="col-money ta-r">${fmt(r.transakcja||0)} zł</td>`,
       prowizja:`<td class="col-money ta-r">${fmt(r.prowizja||0)} zł</td>`,
       golaCena:`<td class="col-money ta-r">${fmt(r.golaCena||0)} zł</td>`,
@@ -4678,7 +4691,7 @@ function buildAgataFakturaView(){
   }).join('');
 
   const breakdownRows=(data.breakdown||[]).map(r=>`<tr>
-    <td class="ta-l">${escapeHtml(r.apartament||'—')}</td>
+    <td class="ta-c">${escapeHtml(r.apartament||'—')}</td>
     <td class="ta-c">${partnerBadge(r.partner)}</td>
     <td class="ta-r">${fmt(r.transakcja||0)} zł</td>
     <td class="ta-r">${fmt(r.prowizja||0)} zł</td>
