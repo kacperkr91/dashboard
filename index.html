@@ -3090,57 +3090,25 @@ function setLaundryApartment(name){
   _state.laundryApartment=String(name||'');
   if(_state.section==='laundry-textiles')renderApp();
 }
-let _laundrySearchTimer=null;
-let _laundrySearchFocusState={active:false,start:null,end:null};
-function syncLaundrySearchCaret(input){
-  if(!input)return;
-  _laundrySearchFocusState={
-    active:true,
-    start:typeof input.selectionStart==='number'?input.selectionStart:null,
-    end:typeof input.selectionEnd==='number'?input.selectionEnd:null,
-  };
-}
-function applyLaundrySearch(value){
-  const nextValue=String((value ?? _state.laundrySearchDraft) || '');
-  _state.laundrySearchDraft=nextValue;
-  _state.laundrySearch=nextValue;
-  if(_state.section==='laundry-textiles')renderApp();
-}
 function setLaundrySearch(value){
-  _state.laundrySearchDraft=String(value||'');
-  if(_laundrySearchTimer)clearTimeout(_laundrySearchTimer);
-  _laundrySearchTimer=setTimeout(()=>applyLaundrySearch(_state.laundrySearchDraft),180);
-}
-function onLaundrySearchKeydown(event){
-  syncLaundrySearchCaret(event.target);
-  if(event.key==='Enter'){
-    event.preventDefault();
-    applyLaundrySearch(event.target?.value||'');
+  const scrollY=window.scrollY;
+  _state.laundrySearch=String(value||'');
+  if(_state.section==='laundry-textiles'){
+    renderApp();
+    requestAnimationFrame(()=>{
+      window.scrollTo(0,scrollY);
+      const input=document.getElementById('laundrySearchInput');
+      if(input){
+        input.focus();
+        const pos=String(value||'').length;
+        try{input.setSelectionRange(pos,pos);}catch(e){}
+      }
+    });
   }
-}
-function onLaundrySearchFocus(event){
-  syncLaundrySearchCaret(event.target);
-}
-function onLaundrySearchBlur(){
-  _laundrySearchFocusState.active=false;
 }
 function clearLaundrySearch(){
-  if(_laundrySearchTimer)clearTimeout(_laundrySearchTimer);
-  _state.laundrySearchDraft='';
   _state.laundrySearch='';
-  _laundrySearchFocusState={active:true,start:0,end:0};
   if(_state.section==='laundry-textiles')renderApp();
-}
-function restoreLaundrySearchFocus(){
-  if(_state.section!=='laundry-textiles'||!_laundrySearchFocusState.active)return;
-  const input=document.querySelector('.laundry-search');
-  if(!input)return;
-  input.focus({preventScroll:true});
-  const start=_laundrySearchFocusState.start;
-  const end=_laundrySearchFocusState.end;
-  if(typeof start==='number'&&typeof end==='number'){
-    try{input.setSelectionRange(start,end);}catch(e){}
-  }
 }
 function buildLaundryTextilesView(){
   const data=_state.data.laundry;
@@ -3180,11 +3148,9 @@ function buildLaundryTextilesView(){
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
 
   const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected&&!search?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
-  const searchValue=String((_state.laundrySearchDraft ?? _state.laundrySearch) || '');
   const toolbar=`<div class="laundry-toolbar">
-    <input class="laundry-search" type="text" placeholder="Szukaj po ID, typie, apartamencie, osobie albo uwagach…" value="${escapeHtml(searchValue)}" oninput="syncLaundrySearchCaret(this);setLaundrySearch(this.value)" onkeydown="onLaundrySearchKeydown(event)" onfocus="onLaundrySearchFocus(event)" onblur="onLaundrySearchBlur()">
-    <button class="laundry-pill active" style="padding:12px 18px" onclick="applyLaundrySearch(document.querySelector('.laundry-search')?.value||'')">Szukaj</button>
-    ${searchValue?`<button class="laundry-pill" style="padding:12px 18px" onclick="clearLaundrySearch()">Wyczyść</button>`:''}
+    <input id="laundrySearchInput" class="laundry-search" type="text" placeholder="Szukaj po ID, typie, apartamencie, osobie albo uwagach…" value="${escapeHtml(_state.laundrySearch||'')}" oninput="setLaundrySearch(this.value)">
+    ${_state.laundrySearch?`<button class="laundry-pill" style="padding:12px 18px" onclick="clearLaundrySearch()">Wyczyść</button>`:''}
   </div>`;
   const typeCards=typeEntries.length?typeEntries.map(([type,count])=>`<div class="laundry-type-card"><div class="n">${escapeHtml(type)}</div><div class="c">${count}</div><div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div></div>`).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
   const detailRows=items.length?items.map(item=>`<div class="laundry-item">
@@ -3250,7 +3216,6 @@ let _state={
   agataColumnPrefs:(()=>({osoby:true,partner:true,status:true,transakcja:true,prowizja:true,golaCena:true,cenaSystem:true,doplata:true,cenaCalkowita:true}))(),
   laundryApartment:'',
   laundrySearch:'',
-  laundrySearchDraft:'',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -10032,7 +9997,6 @@ function renderApp(){
 
   const todayBanner=shouldShowTodayBanner()?getTodayBanner():'';
   mount(header+navL1+(todayBanner?todayBanner:'')+navL2+content);
-  if(section==='laundry-textiles')setTimeout(restoreLaundrySearchFocus,0);
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
   if(section==='housekeeping')setTimeout(initHkChart,50);
