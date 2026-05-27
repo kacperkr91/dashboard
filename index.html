@@ -5017,27 +5017,119 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     r.partner||'',
     r.status||'',
     r.apartament||'',
-    fmt(r.transakcja||0)+' zł',
-    fmt(r.prowizja||0)+' zł',
-    fmt(r.golaCena||0)+' zł',
-    fmt(r.cenaSystem||0)+' zł',
-    fmt(r.doplata||0)+' zł',
-    fmt(r.cenaCalkowita||0)+' zł',
+    Number((r.transakcja||0).toFixed(2)),
+    Number((r.prowizja||0).toFixed(2)),
+    Number((r.golaCena||0).toFixed(2)),
+    Number((r.cenaSystem||0).toFixed(2)),
+    Number((r.doplata||0).toFixed(2)),
+    Number((r.cenaCalkowita||0).toFixed(2)),
   ]);
 
-  const tableRows=[
-    `<tr>${headers.map(h=>`<th style="background:#0f766e;color:#fff;padding:8px 10px;border:1px solid #cbd5e1;font-size:12px;font-weight:700;text-align:center">${escapeHtml(h)}</th>`).join('')}</tr>`,
-    ...rows.map(row=>`<tr>${row.map((cell,idx)=>`<td style="padding:7px 9px;border:1px solid #e2e8f0;font-size:12px;${idx>=7?'text-align:right':idx===2||idx===4||idx===5?'text-align:center':'text-align:left'}">${escapeHtml(String(cell??''))}</td>`).join('')}</tr>`)
-  ].join('');
+  const xmlEscape=value=>String(value??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+  const cellXml=(value,type='String',styleId='CellText')=>`<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${xmlEscape(value)}</Data></Cell>`;
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
-    <table>
-      <tr><td colspan="${headers.length}" style="font-size:16px;font-weight:700;padding:0 0 10px 0">Agata Faktura — rezerwacje miesiąca ${escapeHtml(monthLabel)}</td></tr>
-      ${tableRows}
-    </table>
-  </body></html>`;
+  const headerRow=`<Row>
+    ${headers.map(h=>cellXml(h,'String','Header')).join('')}
+  </Row>`;
+  const titleRow=`<Row>
+    <Cell ss:MergeAcross="${headers.length-1}" ss:StyleID="Title"><Data ss:Type="String">${xmlEscape(`Agata Faktura - rezerwacje miesiąca ${monthLabel}`)}</Data></Cell>
+  </Row>`;
+  const dataRows=rows.map(row=>`<Row>
+    ${row.map((cell,idx)=>{
+      if(idx>=7)return cellXml(cell,'Number','Money');
+      if(idx===2)return cellXml(cell,'Number','Center');
+      if(idx===4||idx===5)return cellXml(cell,'String','Center');
+      return cellXml(cell,'String','CellText');
+    }).join('')}
+  </Row>`).join('');
 
-  const blob=new Blob(['\ufeff',html],{type:'application/vnd.ms-excel;charset=utf-8;'});
+  const xml=`<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Vertical="Center"/>
+      <Borders/>
+      <Font ss:FontName="Calibri" ss:Size="11"/>
+      <Interior/>
+      <NumberFormat/>
+      <Protection/>
+    </Style>
+    <Style ss:ID="Title">
+      <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1"/>
+    </Style>
+    <Style ss:ID="Header">
+      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+      <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+      <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+        <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+        <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+        <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="CellText">
+      <Alignment ss:Vertical="Center"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="Center">
+      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+    </Style>
+    <Style ss:ID="Money">
+      <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+      <Borders>
+        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+      </Borders>
+      <NumberFormat ss:Format="#,##0.00 &quot;zł&quot;"/>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Rezerwacje">
+    <Table>
+      <Column ss:Width="78"/>
+      <Column ss:Width="78"/>
+      <Column ss:Width="44"/>
+      <Column ss:Width="140"/>
+      <Column ss:Width="86"/>
+      <Column ss:Width="64"/>
+      <Column ss:Width="130"/>
+      <Column ss:Width="76"/>
+      <Column ss:Width="76"/>
+      <Column ss:Width="82"/>
+      <Column ss:Width="92"/>
+      <Column ss:Width="76"/>
+      <Column ss:Width="92"/>
+      ${titleRow}
+      <Row/>
+      ${headerRow}
+      ${dataRows}
+    </Table>
+    <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+      <FreezePanes/>
+      <FrozenNoSplit/>
+      <SplitHorizontal>3</SplitHorizontal>
+      <TopRowBottomPane>3</TopRowBottomPane>
+      <ProtectObjects>False</ProtectObjects>
+      <ProtectScenarios>False</ProtectScenarios>
+    </WorksheetOptions>
+  </Worksheet>
+</Workbook>`;
+
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
