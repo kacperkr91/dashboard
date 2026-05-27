@@ -645,7 +645,7 @@ const CONFIG={
   agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
   agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
   laundryApiKey:      localStorage.getItem('gs_laundry_api_key')||'',
-  laundrySpreadsheetId: localStorage.getItem('gs_laundry_spreadsheet_id')||'',
+  laundrySpreadsheetId: localStorage.getItem('gs_laundry_spreadsheet_id')||'1TaH4uz8ty53CZtCZJkc9H-W27N_XBYS7EjMpp6QoX_o',
   laundrySheet:       'Stan bieżący',
   laundryRange:       'A1:F5000',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
@@ -3314,6 +3314,16 @@ function shouldShowTodayBanner(){
   const modules=Array.isArray(_state.authUser?.modules)?_state.authUser.modules:[];
   return modules.includes('*')||modules.includes('kalendarz');
 }
+function hasPrimaryDashboardConfig(){
+  return !!(CONFIG.apiKey&&CONFIG.spreadsheetId);
+}
+function hasLaundryDashboardConfig(){
+  return !!((CONFIG.laundryApiKey||CONFIG.apiKey)&&CONFIG.laundrySpreadsheetId);
+}
+function isLaundryOnlyUser(){
+  const modules=Array.isArray(_state.authUser?.modules)?_state.authUser.modules.filter(Boolean):[];
+  return !modules.includes('*')&&modules.length===1&&modules[0]==='laundry-textiles';
+}
 function ensureAllowedSection(){
   if(hasModuleAccess(_state.section))return;
   const fallback=getModuleOrder().find(hasModuleAccess);
@@ -3389,6 +3399,25 @@ function toggleAdminUserPermission(login,key){
     if(user.originalLogin!==login&&user.login!==login)return user;
     return{...user,permissions:{...user.permissions,[key]:!user.permissions?.[key]}};
   });
+  if(_state.section==='users-admin')renderApp();
+}
+function addDashboardUser(){
+  const existing=new Set(getAdminEditableUsers().map(user=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
+  let idx=1;
+  let login='nowy-uzytkownik';
+  while(existing.has(login)){
+    idx+=1;
+    login=`nowy-uzytkownik-${idx}`;
+  }
+  const nextUser=normalizeAdminUserForUi({
+    login,
+    displayName:'',
+    role:'user',
+    modules:['laundry-textiles'],
+    permissions:{canConfig:false,canEditKsef:false,canEditArturPayments:true},
+    active:true
+  });
+  _state.adminUsers=[...getAdminEditableUsers(),nextUser];
   if(_state.section==='users-admin')renderApp();
 }
 async function saveDashboardUsers(){
@@ -3562,7 +3591,10 @@ function buildDashboardUsersView(){
           <div class="card-title">Użytkownicy dashboardu</div>
           <div class="card-subtitle">Zakładka tylko dla admina. Tu ustawiasz widoczne moduły i dodatkowe uprawnienia.</div>
         </div>
-        <button class="btn-icon" onclick="saveDashboardUsers()">Zapisz użytkowników</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-secondary" onclick="addDashboardUser()">Dodaj użytkownika</button>
+          <button class="btn-icon" onclick="saveDashboardUsers()">Zapisz użytkowników</button>
+        </div>
       </div>
     </div>
     ${userCards||`<div class="empty-section"><div class="empty-icon">👤</div><p>Brak użytkowników do wyświetlenia</p></div>`}
@@ -3624,7 +3656,7 @@ async function logoutDashboard(){
 }
 
 async function bootDashboard(){
-  if(!CONFIG.apiKey||!CONFIG.spreadsheetId||!CONFIG.syncUrl){
+  if(!CONFIG.syncUrl){
     mount(renderConfig());
     return;
   }
@@ -9441,8 +9473,17 @@ async function init(){
     mount(renderLogin());
     return;
   }
-  if(!CONFIG.apiKey||!CONFIG.spreadsheetId){mount(renderConfig());return;}
+  ensureAllowedSection();
+  if(!_state.section)_state.section=isLaundryOnlyUser()?'laundry-textiles':'oblozenie';
   const initialSection=_state.section||'oblozenie';
+  const laundryOnlyUser=isLaundryOnlyUser();
+  const needsPrimaryConfig=hasAnyModuleAccess([
+    'oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo',
+    'artur-payments','agata-faktura','tasks','booking-payout','dyzury','noty','goscie','parking'
+  ]);
+  const needsLaundryConfig=hasModuleAccess('laundry-textiles');
+  if(needsPrimaryConfig&&!hasPrimaryDashboardConfig()){mount(renderConfig());return;}
+  if(needsLaundryConfig&&!hasLaundryDashboardConfig()){mount(renderConfig());return;}
   const needRental=hasModuleAccess('rental')&&initialSection==='rental';
   const needMedia=hasModuleAccess('media')&&initialSection==='media';
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
@@ -9453,7 +9494,7 @@ async function init(){
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
   const needParking=hasModuleAccess('parking')&&(initialSection==='parking'||shouldShowTodayBanner());
   const needKsef=hasAnyModuleAccess(['ksef','artur-payments'])&&['ksef','artur-payments'].includes(initialSection);
-  const progressDelay=_state.authUser?.role==='admin'?2000:120;
+  const progressDelay=laundryOnlyUser?0:(_state.authUser?.role==='admin'?2000:120);
   const userName=_state.authUser?.displayName||_state.authUser?.login||'Użytkowniku';
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
@@ -9486,7 +9527,7 @@ async function init(){
   };
 
   setProgress(5,'Jeszcze chwila…');
-  const syncPromise=CONFIG.syncUrl?syncPull():Promise.resolve();
+  const syncPromise=(CONFIG.syncUrl&&!laundryOnlyUser)?syncPull():Promise.resolve();
   await Promise.allSettled([
     needHousekeeping?detectHkMonths():Promise.resolve(),
     needOtv?detectOtvMonths():Promise.resolve(),
@@ -9522,6 +9563,13 @@ async function init(){
   if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
   if(needLaundry)_state.data.laundry=laundryr.status==='fulfilled'?laundryr.value:{error:laundryr.reason?.message||'Błąd'};
   if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
+
+  if(laundryOnlyUser){
+    setProgress(100,'Prawie gotowe…');
+    await syncPromise;
+    renderApp();
+    return;
+  }
 
   await delay(progressDelay);
 
