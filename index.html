@@ -3142,46 +3142,61 @@ function buildParkingCardsView(){
   const data=_state.data.parkingCards;
   if(!data)return renderLoading('Ładowanie kart parkingowych…');
   if(data.error)return renderError(data.error);
+  const latestParkingDate=_state.data.parking?.dateOrder?.[0]||'';
+  const latestParkingCards=_state.data.parking?.byDate?.[latestParkingDate]||[];
+  const latestByLast4={};
+  latestParkingCards.forEach(card=>{
+    const last4=String(card.bilet||'').slice(-4);
+    if(last4)latestByLast4[last4]=card;
+  });
 
-  const rows=(data.items||[]).map((item,idx)=>`<tr style="background:${idx%2===0?'#fff':'#f8fafc'}">
+  const rows=(data.items||[]).map((item,idx)=>{
+    const latest=latestByLast4[String(item.nrKarty||'').trim()]||null;
+    const statusHours=latest?(latest.typ==='miesięczny'?'miesięczny':`${latest.dni||0} dni ${latest.h||0}h`):'—';
+    const validTo=latest?.dataWaznosci||'—';
+    const ticketNo=latest?.bilet||'—';
+    return `<tr style="background:${idx%2===0?'#fff':'#f8fafc'}">
     <td style="padding:10px 12px;text-align:center;color:#64748b;font-weight:700">${idx+1}</td>
     <td style="padding:10px 12px;text-align:center;font-weight:700;color:#0f172a">${escapeHtml(item.apartament)}</td>
     <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:800;color:#0f766e;letter-spacing:0.04em">${escapeHtml(item.nrKarty)}</td>
-  </tr>`).join('');
+    <td style="padding:10px 12px;text-align:center;font-size:13px;color:#0f172a">${escapeHtml(validTo)}</td>
+    <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:700;color:#334155">${escapeHtml(ticketNo)}</td>
+    <td style="padding:10px 12px;text-align:center;font-size:13px;font-weight:700;color:${latest?.alert?'#dc2626':'#0f766e'}">${escapeHtml(statusHours)}</td>
+  </tr>`;
+  }).join('');
 
   return `<div class="laundry-shell">
     <div class="laundry-hero">
-      <div class="tasks-panel" style="background:rgba(255,255,255,0.72);border:1px solid rgba(148,163,184,0.18);box-shadow:none">
-        <div class="tasks-panel-inner" style="padding:0">
-          <div class="tasks-eyebrow" style="color:#0f766e">Stała lista kart parkingowych</div>
-          <h2 class="tasks-lead" style="font-size:22px;margin-bottom:8px">Karty przypisane do apartamentów</h2>
-          <div class="tasks-desc" style="max-width:760px">Podgląd z arkusza <strong>Lista</strong>. Szybko sprawdzisz, która karta parkingowa należy do konkretnego apartamentu lub rezerwy, bez wchodzenia do Arkuszy Google.</div>
-        </div>
-      </div>
-      <div class="laundry-kpis">
-        <div class="laundry-kpi"><span>Wszystkie pozycje</span><strong>${data.total||0}</strong></div>
-        <div class="laundry-kpi"><span>Apartamenty</span><strong>${data.apartmentCount||0}</strong></div>
-        <div class="laundry-kpi"><span>Rezerwy</span><strong>${data.reserveCount||0}</strong></div>
+      <div>
+        <div class="laundry-pill">Stała lista kart parkingowych</div>
+        <h2>Karty przypisane do apartamentów</h2>
+        <p>Podgląd z arkusza <strong>Lista</strong> połączony z najnowszym raportem z modułu <strong>Parking</strong>. Widzisz tu od razu numer karty, ważność i ostatni stan godzin.</p>
       </div>
     </div>
     <div class="grid-card" style="max-width:820px">
       <div class="line-chart-label">
         <div>
           <div class="card-title">Lista kart parkingowych</div>
-          <div class="card-subtitle">Kolejność pozycji jest identyczna jak w arkuszu Google.</div>
+          <div class="card-subtitle">Kolejność pozycji jest identyczna jak w arkuszu Google.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}</div>
         </div>
       </div>
       <div class="hk-table-wrap">
         <table class="hk-table" style="table-layout:fixed;width:100%">
           <colgroup>
             <col style="width:64px">
-            <col style="width:46%">
-            <col style="width:54%">
+            <col style="width:22%">
+            <col style="width:16%">
+            <col style="width:16%">
+            <col style="width:22%">
+            <col style="width:24%">
           </colgroup>
           <thead><tr>
             <th style="text-align:center">Lp.</th>
             <th style="text-align:center">Apartament</th>
             <th style="text-align:center">Nr karty</th>
+            <th style="text-align:center">Ważny do</th>
+            <th style="text-align:center">Nr biletu</th>
+            <th style="text-align:center">Ostatni stan</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -9634,7 +9649,7 @@ async function init(){
     needAgata?loadAgataMonth(initAgataKey):Promise.resolve(null),
     needLaundry?loadLaundryData():Promise.resolve(null),
     needParkingCards?loadParkingCardsData():Promise.resolve(null),
-    needParking?loadParkingData():Promise.resolve(null),
+    (needParking||needParkingCards)?loadParkingData():Promise.resolve(null),
   ]);
   if(needRental)_state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
   if(needPrevio){
@@ -9645,7 +9660,7 @@ async function init(){
   if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
   if(needLaundry)_state.data.laundry=laundryr.status==='fulfilled'?laundryr.value:{error:laundryr.reason?.message||'Błąd'};
   if(needParkingCards)_state.data.parkingCards=parkingCardsR.status==='fulfilled'?parkingCardsR.value:{error:parkingCardsR.reason?.message||'Błąd'};
-  if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
+  if(needParking||needParkingCards)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   if(laundryOnlyUser){
     setProgress(100,'Prawie gotowe…');
@@ -9866,8 +9881,12 @@ function ensureSectionDataLoaded(section){
   }
   if(section==='parking-cards'&&_state.data.parkingCards===null){
     renderApp();
-    loadParkingCardsData().then(data=>{
-      _state.data.parkingCards=data;
+    Promise.allSettled([
+      loadParkingCardsData(),
+      _state.data.parking===null?loadParkingData():Promise.resolve(_state.data.parking)
+    ]).then(([cardsRes,parkingRes])=>{
+      _state.data.parkingCards=cardsRes.status==='fulfilled'?cardsRes.value:{error:cardsRes.reason?.message||'Błąd'};
+      if(parkingRes.status==='fulfilled'&&parkingRes.value)_state.data.parking=parkingRes.value;
       if(_state.section==='parking-cards')renderApp();
     }).catch(e=>{
       _state.data.parkingCards={error:e.message||'Błąd'};
