@@ -3321,6 +3321,14 @@ function buildLaundryTextilesView(){
   });
   const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
+  const monthsSince=(value)=>{
+    const d=parseDatePL(value)||parseDateDMY(value)||parseHKDate(value);
+    if(!d)return null;
+    const now=new Date();
+    let months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+    if(now.getDate()<d.getDate())months-=1;
+    return Math.max(0,months);
+  };
 
   const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected&&!search?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
   const toolbar=`<div class="laundry-toolbar">
@@ -3328,17 +3336,32 @@ function buildLaundryTextilesView(){
     ${_state.laundrySearch?`<button class="laundry-pill" style="padding:12px 18px" onclick="clearLaundrySearch()">Wyczyść</button>`:''}
   </div>`;
   const typeCards=typeEntries.length?typeEntries.map(([type,count])=>`<div class="laundry-type-card"><div class="n">${escapeHtml(type)}</div><div class="c">${count}</div><div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div></div>`).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
-  const detailRows=items.length?items.map(item=>`<div class="laundry-item">
+  const detailRows=items.length?items.map(item=>{
+    const ageMonths=monthsSince(item.dataPrania);
+    const isRed=ageMonths!==null&&ageMonths>=6;
+    const isOrange=!isRed&&ageMonths!==null&&ageMonths>=5;
+    const ageBadge=isRed
+      ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800">6+ mies. od prania</div>`
+      : isOrange
+        ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#ffedd5;color:#c2410c;border:1px solid #fdba74;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800">5 mies. od prania</div>`
+        : '';
+    const itemStyle=isRed
+      ? 'background:#fff5f5;border-color:#fecaca;box-shadow:0 8px 18px rgba(220,38,38,0.08)'
+      : isOrange
+        ? 'background:#fff7ed;border-color:#fdba74;box-shadow:0 8px 18px rgba(249,115,22,0.08)'
+        : '';
+    return `<div class="laundry-item" style="${itemStyle}">
     <div class="laundry-id">${escapeHtml(item.id)}</div>
       <div class="laundry-main">
-        <div class="t">${escapeHtml(item.typ)}</div>
+        <div class="t" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${escapeHtml(item.typ)} ${ageBadge}</div>
         <div class="u">${search?`Apartament: ${escapeHtml(item.apartament)}${item.uwagi?` · ${escapeHtml(item.uwagi)}`:''}`:(item.uwagi?escapeHtml(item.uwagi):'Bez dodatkowych uwag')}</div>
       </div>
       <div class="laundry-meta">
         <div class="d">${escapeHtml(item.dataPrania||'—')}</div>
         <div class="w">${item.ktoPral?`Prał(a): ${escapeHtml(item.ktoPral)}`:'Brak osoby'}</div>
       </div>
-  </div>`).join(''):`<div class="laundry-empty"><div class="i">🧺</div><strong>Brak pozycji</strong><div>Dla tego apartamentu nie ma tekstyliów pasujących do wpisanego filtra.</div></div>`;
+  </div>`;
+  }).join(''):`<div class="laundry-empty"><div class="i">🧺</div><strong>Brak pozycji</strong><div>Dla tego apartamentu nie ma tekstyliów pasujących do wpisanego filtra.</div></div>`;
 
   return `<div class="laundry-shell">
     <div class="laundry-hero">
