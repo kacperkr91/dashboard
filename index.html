@@ -3334,7 +3334,18 @@ function buildLaundryTextilesView(){
     if(ageMonths!==null&&ageMonths>=6)typeAgeMap[item.typ].red+=1;
     else if(ageMonths!==null&&ageMonths>=5)typeAgeMap[item.typ].orange+=1;
   });
+  const globalTypeMap={};
+  (data.items||[]).forEach(item=>{
+    const key=String(item.typ||'').trim();
+    if(!key)return;
+    if(!globalTypeMap[key])globalTypeMap[key]={total:0,orange:0,red:0};
+    globalTypeMap[key].total+=1;
+    const ageMonths=monthsSince(item.dataPrania);
+    if(ageMonths!==null&&ageMonths>=6)globalTypeMap[key].red+=1;
+    else if(ageMonths!==null&&ageMonths>=5)globalTypeMap[key].orange+=1;
+  });
   const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
+  const globalTypeEntries=Object.entries(globalTypeMap).sort((a,b)=>b[1].total-a[1].total||a[0].localeCompare(b[0],'pl'));
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
 
   const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected&&!search?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
@@ -3354,6 +3365,15 @@ function buildLaundryTextilesView(){
       </div>
     </div>`;
   }).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
+  const globalTypeCards=globalTypeEntries.length?globalTypeEntries.map(([type,stats])=>`<div class="laundry-type-card">
+      <div class="n">${escapeHtml(type)}</div>
+      <div class="c">${stats.total}</div>
+      <div class="m">${stats.total===1?'1 sztuka':'Łącznie '+stats.total+' szt.'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800">5 mies.: ${stats.orange}</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#fff5f5;color:#b91c1c;border:1px solid #fca5a5;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800">6+ mies.: ${stats.red}</span>
+      </div>
+    </div>`).join(''):`<div class="laundry-empty"><div class="i">🧺</div><strong>Brak danych</strong><div>W arkuszu nie znaleziono tekstyliów do podsumowania.</div></div>`;
   const detailRows=items.length?items.map(item=>{
     const ageMonths=monthsSince(item.dataPrania);
     const isRed=ageMonths!==null&&ageMonths>=6;
@@ -3400,6 +3420,11 @@ function buildLaundryTextilesView(){
       <div class="card-subtitle">${search?'Masz aktywne wyszukiwanie globalne. Wyczyść frazę, aby wrócić do widoku pojedynczego apartamentu.':'Kliknij lokal, aby zobaczyć jego aktualny stan tekstyliów na podstawie zakładki „Stan bieżący”.'}</div>
       ${apartmentPills}
       <div style="margin-top:14px">${toolbar}</div>
+    </div>
+    <div class="grid-card">
+      <div class="card-title">Podsumowanie wszystkich apartamentów</div>
+      <div class="card-subtitle">Łączna liczba sztuk każdego rodzaju tekstyliów we wszystkich apartamentach razem oraz ile z nich było brane 5 miesięcy temu i 6+ miesięcy temu.</div>
+      <div class="laundry-type-grid">${globalTypeCards}</div>
     </div>
     <div class="laundry-sections">
       <div class="grid-card">
