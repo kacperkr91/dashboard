@@ -3138,6 +3138,26 @@ function clearLaundrySearch(){
   _state.laundrySearch='';
   if(_state.section==='laundry-textiles')renderApp();
 }
+function setParkingCardsSearch(value){
+  const scrollY=window.scrollY;
+  _state.parkingCardsSearch=String(value||'');
+  if(_state.section==='parking-cards'){
+    renderApp();
+    requestAnimationFrame(()=>{
+      window.scrollTo(0,scrollY);
+      const input=document.getElementById('parkingCardsSearchInput');
+      if(input){
+        input.focus();
+        const pos=String(value||'').length;
+        try{input.setSelectionRange(pos,pos);}catch(e){}
+      }
+    });
+  }
+}
+function clearParkingCardsSearch(){
+  _state.parkingCardsSearch='';
+  if(_state.section==='parking-cards')renderApp();
+}
 function buildParkingCardsView(){
   const data=_state.data.parkingCards;
   if(!data)return renderLoading('Ładowanie kart parkingowych…');
@@ -3149,16 +3169,32 @@ function buildParkingCardsView(){
     const last4=String(card.bilet||'').slice(-4);
     if(last4)latestByLast4[last4]=card;
   });
+  const search=String(_state.parkingCardsSearch||'').trim();
+  const highlight=(text,query)=>{
+    const safe=escapeHtml(text||'');
+    if(!query)return safe;
+    const idx=String(text||'').toLowerCase().indexOf(String(query).toLowerCase());
+    if(idx===-1)return safe;
+    const raw=String(text||'');
+    return `${escapeHtml(raw.slice(0,idx))}<mark style="background:#fef08a;color:#111827;padding:0 3px;border-radius:4px">${escapeHtml(raw.slice(idx,idx+query.length))}</mark>${escapeHtml(raw.slice(idx+query.length))}`;
+  };
 
-  const rows=(data.items||[]).map((item,idx)=>{
+  const filteredItems=(data.items||[]).filter(item=>{
+    if(!search)return true;
+    return String(item.nrKarty||'').toLowerCase().includes(search.toLowerCase());
+  });
+
+  const rows=filteredItems.map((item,idx)=>{
     const latest=latestByLast4[String(item.nrKarty||'').trim()]||null;
     const statusHours=latest?(latest.typ==='miesięczny'?'miesięczny':`${latest.dni||0} dni ${latest.h||0}h`):'—';
     const validTo=latest?.dataWaznosci||'—';
     const ticketNo=latest?.bilet||'—';
+    const abonamentNo=latest?.lp??'—';
     return `<tr style="background:${idx%2===0?'#fff':'#f8fafc'}">
     <td style="padding:10px 12px;text-align:center;color:#64748b;font-weight:700">${idx+1}</td>
     <td style="padding:10px 12px;text-align:center;font-weight:700;color:#0f172a">${escapeHtml(item.apartament)}</td>
-    <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:800;color:#0f766e;letter-spacing:0.04em">${escapeHtml(item.nrKarty)}</td>
+    <td style="padding:10px 12px;text-align:center;color:#334155;font-weight:700">${escapeHtml(String(abonamentNo))}</td>
+    <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:800;color:#0f766e;letter-spacing:0.04em">${highlight(item.nrKarty,search)}</td>
     <td style="padding:10px 12px;text-align:center;font-size:13px;color:#0f172a">${escapeHtml(validTo)}</td>
     <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:700;color:#334155">${escapeHtml(ticketNo)}</td>
     <td style="padding:10px 12px;text-align:center;font-size:13px;font-weight:700;color:${latest?.alert?'#dc2626':'#0f766e'}">${escapeHtml(statusHours)}</td>
@@ -3173,11 +3209,15 @@ function buildParkingCardsView(){
         <p>Podgląd z arkusza <strong>Lista</strong> połączony z najnowszym raportem z modułu <strong>Parking</strong>. Widzisz tu od razu numer karty, ważność i ostatni stan godzin.</p>
       </div>
     </div>
-    <div class="grid-card" style="max-width:820px">
+    <div class="laundry-toolbar" style="max-width:960px">
+      <input id="parkingCardsSearchInput" class="laundry-search" type="text" inputmode="numeric" placeholder="Szukaj po 4 cyfrach numeru karty…" value="${escapeHtml(_state.parkingCardsSearch||'')}" oninput="setParkingCardsSearch(this.value)">
+      ${_state.parkingCardsSearch?`<button class="laundry-pill" style="padding:12px 18px" onclick="clearParkingCardsSearch()">Wyczyść</button>`:''}
+    </div>
+    <div class="grid-card" style="max-width:960px">
       <div class="line-chart-label">
         <div>
           <div class="card-title">Lista kart parkingowych</div>
-          <div class="card-subtitle">Kolejność pozycji jest identyczna jak w arkuszu Google.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}</div>
+          <div class="card-subtitle">Kolejność pozycji jest identyczna jak w arkuszu Google.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}${search?` Wyniki: ${filteredItems.length}.`:''}</div>
         </div>
       </div>
       <div class="hk-table-wrap">
@@ -3185,14 +3225,16 @@ function buildParkingCardsView(){
           <colgroup>
             <col style="width:64px">
             <col style="width:22%">
+            <col style="width:12%">
+            <col style="width:14%">
             <col style="width:16%">
-            <col style="width:16%">
-            <col style="width:22%">
-            <col style="width:24%">
+            <col style="width:18%">
+            <col style="width:18%">
           </colgroup>
           <thead><tr>
             <th style="text-align:center">Lp.</th>
             <th style="text-align:center">Apartament</th>
+            <th style="text-align:center">Abon.</th>
             <th style="text-align:center">Nr karty</th>
             <th style="text-align:center">Ważny do</th>
             <th style="text-align:center">Nr biletu</th>
@@ -3310,6 +3352,7 @@ let _state={
   agataColumnPrefs:(()=>({osoby:true,partner:true,status:true,transakcja:true,prowizja:true,golaCena:true,cenaSystem:true,doplata:true,cenaCalkowita:true}))(),
   laundryApartment:'',
   laundrySearch:'',
+  parkingCardsSearch:'',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
