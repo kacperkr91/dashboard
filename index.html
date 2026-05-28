@@ -3182,6 +3182,15 @@ function buildParkingCardsView(){
   const filteredItems=(data.items||[]).filter(item=>{
     if(!search)return true;
     return String(item.nrKarty||'').toLowerCase().includes(search.toLowerCase());
+  }).sort((a,b)=>{
+    const aLatest=latestByLast4[String(a.nrKarty||'').trim()]||null;
+    const bLatest=latestByLast4[String(b.nrKarty||'').trim()]||null;
+    const aDate=parseDateDMY(aLatest?.dataWaznosci||'')||parseDatePL(aLatest?.dataWaznosci||'');
+    const bDate=parseDateDMY(bLatest?.dataWaznosci||'')||parseDatePL(bLatest?.dataWaznosci||'');
+    if(aDate&&bDate&&aDate.getTime()!==bDate.getTime())return aDate-bDate;
+    if(aDate&&!bDate)return -1;
+    if(!aDate&&bDate)return 1;
+    return String(a.apartament||'').localeCompare(String(b.apartament||''),'pl',{numeric:true,sensitivity:'base'});
   });
 
   const rows=filteredItems.map((item,idx)=>{
@@ -3204,9 +3213,8 @@ function buildParkingCardsView(){
   return `<div class="laundry-shell">
     <div class="laundry-hero">
       <div>
-        <div class="laundry-pill">Stała lista kart parkingowych</div>
         <h2>Karty przypisane do apartamentów</h2>
-        <p>Podgląd z arkusza <strong>Lista</strong> połączony z najnowszym raportem z modułu <strong>Parking</strong>. Widzisz tu od razu numer karty, ważność i ostatni stan godzin.</p>
+        <p>Podgląd z arkusza <strong>Lista</strong> połączony z najnowszym raportem z modułu <strong>Parking</strong>. Widzisz tu numer karty, numer abonamentu, ważność oraz ostatni stan godzin.</p>
       </div>
     </div>
     <div class="laundry-toolbar" style="max-width:960px">
@@ -3217,7 +3225,7 @@ function buildParkingCardsView(){
       <div class="line-chart-label">
         <div>
           <div class="card-title">Lista kart parkingowych</div>
-          <div class="card-subtitle">Kolejność pozycji jest identyczna jak w arkuszu Google.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}${search?` Wyniki: ${filteredItems.length}.`:''}</div>
+          <div class="card-subtitle">Posortowane po ważności od najbliższej daty.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}${search?` Wyniki: ${filteredItems.length}.`:''}</div>
         </div>
       </div>
       <div class="hk-table-wrap">
