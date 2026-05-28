@@ -3319,6 +3319,13 @@ function buildLaundryTextilesView(){
     const d=parseDatePL(item.dataPrania)||parseDateDMY(item.dataPrania)||parseHKDate(item.dataPrania);
     if(d&&(!latestWash||d>latestWash))latestWash=d;
   });
+  const typeAgeMap={};
+  items.forEach(item=>{
+    const ageMonths=monthsSince(item.dataPrania);
+    if(!typeAgeMap[item.typ])typeAgeMap[item.typ]={orange:0,red:0};
+    if(ageMonths!==null&&ageMonths>=6)typeAgeMap[item.typ].red+=1;
+    else if(ageMonths!==null&&ageMonths>=5)typeAgeMap[item.typ].orange+=1;
+  });
   const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
   const monthsSince=(value)=>{
@@ -3335,7 +3342,18 @@ function buildLaundryTextilesView(){
     <input id="laundrySearchInput" class="laundry-search" type="text" placeholder="Szukaj po ID, typie, apartamencie, osobie albo uwagach…" value="${escapeHtml(_state.laundrySearch||'')}" oninput="setLaundrySearch(this.value)">
     ${_state.laundrySearch?`<button class="laundry-pill" style="padding:12px 18px" onclick="clearLaundrySearch()">Wyczyść</button>`:''}
   </div>`;
-  const typeCards=typeEntries.length?typeEntries.map(([type,count])=>`<div class="laundry-type-card"><div class="n">${escapeHtml(type)}</div><div class="c">${count}</div><div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div></div>`).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
+  const typeCards=typeEntries.length?typeEntries.map(([type,count])=>{
+    const stale=typeAgeMap[type]||{orange:0,red:0};
+    return `<div class="laundry-type-card">
+      <div class="n">${escapeHtml(type)}</div>
+      <div class="c">${count}</div>
+      <div class="m">${count===1?'1 sztuka':'Łącznie '+count+' szt.'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800">5 mies.: ${stale.orange}</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#fff5f5;color:#b91c1c;border:1px solid #fca5a5;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800">6+ mies.: ${stale.red}</span>
+      </div>
+    </div>`;
+  }).join(''):`<div class="laundry-empty"><div class="i">🔎</div><strong>Nic nie pasuje do filtra</strong><div>Wyczyść wyszukiwanie albo wybierz inny apartament.</div></div>`;
   const detailRows=items.length?items.map(item=>{
     const ageMonths=monthsSince(item.dataPrania);
     const isRed=ageMonths!==null&&ageMonths>=6;
@@ -3391,7 +3409,7 @@ function buildLaundryTextilesView(){
       </div>
       <div class="grid-card">
         <div class="card-title">Rozbicie według typu</div>
-        <div class="card-subtitle">Szybki podgląd liczby sztuk w każdej kategorii tekstyliów.</div>
+        <div class="card-subtitle">Łączna liczba sztuk każdego rodzaju oraz ile z nich było brane 5 miesięcy temu i 6+ miesięcy temu.</div>
         <div class="laundry-type-grid">${typeCards}</div>
       </div>
     </div>
