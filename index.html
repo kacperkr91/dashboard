@@ -648,6 +648,9 @@ const CONFIG={
   laundrySpreadsheetId: localStorage.getItem('gs_laundry_spreadsheet_id')||'1TaH4uz8ty53CZtCZJkc9H-W27N_XBYS7EjMpp6QoX_o',
   laundrySheet:       'Stan bieżący',
   laundryRange:       'A1:F5000',
+  parkingCardsSpreadsheetId:'183XOD7fCb5j-fJVNjUUSc1LYIptp301XxOjftyyMITk',
+  parkingCardsSheet:  'Lista',
+  parkingCardsRange:  'A1:B500',
   otvApiKey:          localStorage.getItem('gs_otv_api_key')||'',
   otvSpreadsheetId:   localStorage.getItem('gs_otv_spreadsheet_id')||'',
   otvStartRow:        4,
@@ -1985,6 +1988,33 @@ async function loadLaundryData(){
   return{items,apartments,byApartment};
 }
 
+async function loadParkingCardsData(){
+  const apiKey=CONFIG.apiKey;
+  const spreadsheetId=CONFIG.parkingCardsSpreadsheetId;
+  if(!apiKey||!spreadsheetId)throw new Error('MISSING_PARKING_CARDS_CONFIG');
+  const enc=encodeURIComponent(`'${CONFIG.parkingCardsSheet}'!${CONFIG.parkingCardsRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(rows.length<2)throw new Error('NO_PARKING_CARDS_DATA');
+
+  const items=rows.slice(1).map(row=>({
+    apartament:String(row[0]||'').trim(),
+    nrKarty:String(row[1]||'').trim(),
+  })).filter(item=>item.apartament&&item.nrKarty);
+
+  if(!items.length)throw new Error('NO_PARKING_CARDS_DATA');
+
+  items.sort((a,b)=>String(a.apartament||'').localeCompare(String(b.apartament||''),'pl',{numeric:true,sensitivity:'base'}));
+
+  return{
+    items,
+    total:items.length,
+    apartmentCount:items.filter(item=>!/^rezerwa/i.test(item.apartament)).length,
+    reserveCount:items.filter(item=>/^rezerwa/i.test(item.apartament)).length,
+  };
+}
+
 /* FORECAST */
 function calcForecast(days){
   const year=new Date().getFullYear();
@@ -3110,6 +3140,55 @@ function clearLaundrySearch(){
   _state.laundrySearch='';
   if(_state.section==='laundry-textiles')renderApp();
 }
+function buildParkingCardsView(){
+  const data=_state.data.parkingCards;
+  if(!data)return renderLoading('Ładowanie kart parkingowych…');
+  if(data.error)return renderError(data.error);
+
+  const rows=(data.items||[]).map((item,idx)=>`<tr style="background:${idx%2===0?'#fff':'#f8fafc'}">
+    <td style="padding:12px 14px;text-align:center;color:#64748b;font-weight:700">${idx+1}</td>
+    <td style="padding:12px 14px;text-align:center;font-weight:700;color:#0f172a">${escapeHtml(item.apartament)}</td>
+    <td style="padding:12px 14px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:800;color:#0f766e;letter-spacing:0.04em">${escapeHtml(item.nrKarty)}</td>
+  </tr>`).join('');
+
+  return `<div class="laundry-shell">
+    <div class="laundry-hero">
+      <div>
+        <div class="laundry-pill">Stała lista kart parkingowych</div>
+        <h2>Karty przypisane do apartamentów</h2>
+        <p>Podgląd z arkusza <strong>Lista</strong>. Szybko sprawdzisz, która karta parkingowa należy do konkretnego apartamentu lub rezerwy.</p>
+      </div>
+      <div class="laundry-kpis">
+        <div class="laundry-kpi"><span>Wszystkie pozycje</span><strong>${data.total||0}</strong></div>
+        <div class="laundry-kpi"><span>Apartamenty</span><strong>${data.apartmentCount||0}</strong></div>
+        <div class="laundry-kpi"><span>Rezerwy</span><strong>${data.reserveCount||0}</strong></div>
+      </div>
+    </div>
+    <div class="grid-card">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title">Lista kart parkingowych</div>
+          <div class="card-subtitle">Źródło: arkusz Google przypięty na stałe do modułu.</div>
+        </div>
+      </div>
+      <div class="hk-table-wrap">
+        <table class="hk-table" style="table-layout:fixed;width:100%">
+          <colgroup>
+            <col style="width:70px">
+            <col style="width:50%">
+            <col style="width:50%">
+          </colgroup>
+          <thead><tr>
+            <th style="text-align:center">Lp.</th>
+            <th style="text-align:center">Apartament</th>
+            <th style="text-align:center">Nr karty</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
 function buildLaundryTextilesView(){
   const data=_state.data.laundry;
   if(!data)return renderLoading('Ładowanie stanu tekstyliów…');
@@ -3255,7 +3334,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','agata-faktura','laundry-textiles','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','agata-faktura','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -3267,6 +3346,7 @@ const DASHBOARD_MODULE_LABELS={
   otv:'Rezerwacje OTV',
   previo:'Previo',
   'laundry-textiles':'Pranie / Tekstylia',
+  'parking-cards':'Karty parkingowe',
   'artur-payments':'Płatności Artur',
   'agata-faktura':'Agata Faktura',
   tasks:'Zadania',
@@ -9490,6 +9570,7 @@ async function init(){
   const needHousekeeping=hasModuleAccess('housekeeping')&&initialSection==='housekeeping';
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
   const needLaundry=hasModuleAccess('laundry-textiles')&&initialSection==='laundry-textiles';
+  const needParkingCards=hasModuleAccess('parking-cards')&&initialSection==='parking-cards';
   const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout'])&&['previo','oblozenie','booking-payout','rental'].includes(initialSection);
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
   const needParking=hasModuleAccess('parking')&&(initialSection==='parking'||shouldShowTodayBanner());
@@ -9499,7 +9580,7 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},laundry:null,parking:null,ksef:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},laundry:null,parkingCards:null,parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;
   _backgroundPrefetchStarted=false;
   _previoSoftRefreshRequested={};
@@ -9545,13 +9626,14 @@ async function init(){
   const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Jeszcze chwila…');
-  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,laundryr,parkingr]=await Promise.allSettled([
+  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,laundryr,parkingCardsR,parkingr]=await Promise.allSettled([
     needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(prevPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(nextPrevioKey):Promise.resolve(null),
     needAgata?loadAgataMonth(initAgataKey):Promise.resolve(null),
     needLaundry?loadLaundryData():Promise.resolve(null),
+    needParkingCards?loadParkingCardsData():Promise.resolve(null),
     needParking?loadParkingData():Promise.resolve(null),
   ]);
   if(needRental)_state.data[initRentalKey]=rentalCurrentR.status==='fulfilled'?rentalCurrentR.value:{error:rentalCurrentR.reason?.message||'Błąd'};
@@ -9562,6 +9644,7 @@ async function init(){
   }
   if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
   if(needLaundry)_state.data.laundry=laundryr.status==='fulfilled'?laundryr.value:{error:laundryr.reason?.message||'Błąd'};
+  if(needParkingCards)_state.data.parkingCards=parkingCardsR.status==='fulfilled'?parkingCardsR.value:{error:parkingCardsR.reason?.message||'Błąd'};
   if(needParking)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
 
   if(laundryOnlyUser){
@@ -9678,6 +9761,9 @@ async function prefetchSecondaryModules(){
   if(hasModuleAccess('laundry-textiles')&&section!=='laundry-textiles'&&_state.data.laundry===null){
     jobs.push(()=>loadLaundryData().then(data=>{_state.data.laundry=data;}).catch(e=>{_state.data.laundry={error:e.message||'Błąd'};}));
   }
+  if(hasModuleAccess('parking-cards')&&section!=='parking-cards'&&_state.data.parkingCards===null){
+    jobs.push(()=>loadParkingCardsData().then(data=>{_state.data.parkingCards=data;}).catch(e=>{_state.data.parkingCards={error:e.message||'Błąd'};}));
+  }
   if(hasAnyModuleAccess(['ksef','artur-payments'])&&section!=='ksef'&&section!=='artur-payments'&&_state.data.ksef===null){
     jobs.push(()=>loadKsefData().then(rows=>{_state.data.ksef=rows;}).catch(e=>{_state.data.ksef={error:e.message||'Błąd'};}));
   }
@@ -9775,6 +9861,17 @@ function ensureSectionDataLoaded(section){
     }).catch(e=>{
       _state.data.laundry={error:e.message||'Błąd'};
       if(_state.section==='laundry-textiles')renderApp();
+    });
+    return true;
+  }
+  if(section==='parking-cards'&&_state.data.parkingCards===null){
+    renderApp();
+    loadParkingCardsData().then(data=>{
+      _state.data.parkingCards=data;
+      if(_state.section==='parking-cards')renderApp();
+    }).catch(e=>{
+      _state.data.parkingCards={error:e.message||'Błąd'};
+      if(_state.section==='parking-cards')renderApp();
     });
     return true;
   }
@@ -9945,6 +10042,7 @@ function renderApp(){
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
     ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
     ${navButton('laundry-textiles','Pranie / Tekstylia','🧺','background:#0f766e;border-color:#0f766e;color:#fff')}
+    ${navButton('parking-cards','Karty parkingowe','🪪','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
     ${navButton('tasks','Zadania','✅','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('booking-payout','Wypłaty','💰','background:#003580;border-color:#003580;color:#fff')}
@@ -10021,6 +10119,8 @@ function renderApp(){
     content=buildAgataFakturaView();
   } else if(section==='laundry-textiles'){
     content=buildLaundryTextilesView();
+  } else if(section==='parking-cards'){
+    content=buildParkingCardsView();
   } else if(section==='artur-payments'){
     content=buildArturPaymentsView(data.ksef);
   } else if(section==='tasks'){
