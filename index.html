@@ -3319,6 +3319,14 @@ function buildLaundryTextilesView(){
     const d=parseDatePL(item.dataPrania)||parseDateDMY(item.dataPrania)||parseHKDate(item.dataPrania);
     if(d&&(!latestWash||d>latestWash))latestWash=d;
   });
+  const monthsSince=(value)=>{
+    const d=parseDatePL(value)||parseDateDMY(value)||parseHKDate(value);
+    if(!d)return null;
+    const now=new Date();
+    let months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
+    if(now.getDate()<d.getDate())months-=1;
+    return Math.max(0,months);
+  };
   const typeAgeMap={};
   items.forEach(item=>{
     const ageMonths=monthsSince(item.dataPrania);
@@ -3328,14 +3336,6 @@ function buildLaundryTextilesView(){
   });
   const typeEntries=Object.entries(typeMap).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pl'));
   const latestWashLabel=latestWash?`${String(latestWash.getDate()).padStart(2,'0')}.${String(latestWash.getMonth()+1).padStart(2,'0')}.${latestWash.getFullYear()}`:'Brak daty';
-  const monthsSince=(value)=>{
-    const d=parseDatePL(value)||parseDateDMY(value)||parseHKDate(value);
-    if(!d)return null;
-    const now=new Date();
-    let months=(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth());
-    if(now.getDate()<d.getDate())months-=1;
-    return Math.max(0,months);
-  };
 
   const apartmentPills=`<div class="laundry-pill-row">${apartments.map(name=>`<button class="laundry-pill ${name===selected&&!search?'active':''}" onclick="setLaundryApartment(${JSON.stringify(name).replace(/"/g,'&quot;')})">${escapeHtml(name)}</button>`).join('')}</div>`;
   const toolbar=`<div class="laundry-toolbar">
