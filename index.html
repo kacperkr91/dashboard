@@ -1998,7 +1998,8 @@ async function loadParkingCardsData(){
   const rows=data.values||[];
   if(rows.length<2)throw new Error('NO_PARKING_CARDS_DATA');
 
-  const items=rows.slice(1).map(row=>({
+  const items=rows.slice(1).map((row,idx)=>({
+    order:idx+1,
     apartament:String(row[0]||'').trim(),
     nrKarty:String(row[1]||'').trim(),
   })).filter(item=>item.apartament&&item.nrKarty);
@@ -3158,6 +3159,16 @@ function clearParkingCardsSearch(){
   _state.parkingCardsSearch='';
   if(_state.section==='parking-cards')renderApp();
 }
+function setParkingCardsSort(key){
+  if(!key)return;
+  if(_state.parkingCardsSortKey===key){
+    _state.parkingCardsSortDir=_state.parkingCardsSortDir==='asc'?'desc':'asc';
+  }else{
+    _state.parkingCardsSortKey=key;
+    _state.parkingCardsSortDir='asc';
+  }
+  if(_state.section==='parking-cards')renderApp();
+}
 function buildParkingCardsView(){
   const data=_state.data.parkingCards;
   if(!data)return renderLoading('Ładowanie kart parkingowych…');
@@ -3182,25 +3193,45 @@ function buildParkingCardsView(){
   const filteredItems=(data.items||[]).filter(item=>{
     if(!search)return true;
     return String(item.nrKarty||'').toLowerCase().includes(search.toLowerCase());
-  }).sort((a,b)=>{
+  });
+  const sortKey=_state.parkingCardsSortKey||'sheet';
+  const sortDir=_state.parkingCardsSortDir==='desc'?-1:1;
+  const sortedItems=[...filteredItems].sort((a,b)=>{
     const aLatest=latestByLast4[String(a.nrKarty||'').trim()]||null;
     const bLatest=latestByLast4[String(b.nrKarty||'').trim()]||null;
     const aDate=parseDateDMY(aLatest?.dataWaznosci||'')||parseDatePL(aLatest?.dataWaznosci||'');
     const bDate=parseDateDMY(bLatest?.dataWaznosci||'')||parseDatePL(bLatest?.dataWaznosci||'');
-    if(aDate&&bDate&&aDate.getTime()!==bDate.getTime())return aDate-bDate;
-    if(aDate&&!bDate)return -1;
-    if(!aDate&&bDate)return 1;
-    return String(a.apartament||'').localeCompare(String(b.apartament||''),'pl',{numeric:true,sensitivity:'base'});
+    const aAbon=Number.isFinite(Number(aLatest?.lp))?Number(aLatest.lp):Infinity;
+    const bAbon=Number.isFinite(Number(bLatest?.lp))?Number(bLatest.lp):Infinity;
+    const aRemain=aLatest?(aLatest.typ==='miesięczny'?999999:((Number(aLatest.dni)||0)*24+(Number(aLatest.h)||0))):-1;
+    const bRemain=bLatest?(bLatest.typ==='miesięczny'?999999:((Number(bLatest.dni)||0)*24+(Number(bLatest.h)||0))):-1;
+    if(sortKey==='sheet')return (a.order-b.order)*sortDir;
+    if(sortKey==='abon'){
+      if(aAbon!==bAbon)return (aAbon-bAbon)*sortDir;
+      return (a.order-b.order);
+    }
+    if(sortKey==='validTo'){
+      if(aDate&&bDate&&aDate.getTime()!==bDate.getTime())return (aDate-bDate)*sortDir;
+      if(aDate&&!bDate)return -1*sortDir;
+      if(!aDate&&bDate)return 1*sortDir;
+      return (a.order-b.order);
+    }
+    if(sortKey==='remaining'){
+      if(aRemain!==bRemain)return (aRemain-bRemain)*sortDir;
+      return (a.order-b.order);
+    }
+    return (a.order-b.order)*sortDir;
   });
+  const sortArrow=key=>_state.parkingCardsSortKey===key?(_state.parkingCardsSortDir==='asc'?' ↑':' ↓'):'';
 
-  const rows=filteredItems.map((item,idx)=>{
+  const rows=sortedItems.map((item,idx)=>{
     const latest=latestByLast4[String(item.nrKarty||'').trim()]||null;
     const statusHours=latest?(latest.typ==='miesięczny'?'miesięczny':`${latest.dni||0} dni ${latest.h||0}h`):'—';
     const validTo=latest?.dataWaznosci||'—';
     const ticketNo=latest?.bilet||'—';
     const abonamentNo=latest?.lp??'—';
     return `<tr style="background:${idx%2===0?'#fff':'#f8fafc'}">
-    <td style="padding:10px 12px;text-align:center;color:#64748b;font-weight:700">${idx+1}</td>
+    <td style="padding:10px 12px;text-align:center;color:#64748b;font-weight:700">${item.order}</td>
     <td style="padding:10px 12px;text-align:center;font-weight:700;color:#0f172a">${escapeHtml(item.apartament)}</td>
     <td style="padding:10px 12px;text-align:center;color:#334155;font-weight:700">${escapeHtml(String(abonamentNo))}</td>
     <td style="padding:10px 12px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:800;color:#0f766e;letter-spacing:0.04em">${highlight(item.nrKarty,search)}</td>
@@ -3225,7 +3256,7 @@ function buildParkingCardsView(){
       <div class="line-chart-label">
         <div>
           <div class="card-title">Lista kart parkingowych</div>
-          <div class="card-subtitle">Posortowane po ważności od najbliższej daty.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}${search?` Wyniki: ${filteredItems.length}.`:''}</div>
+          <div class="card-subtitle">Domyślnie kolejność z arkusza. Kliknij nagłówek, aby sortować.${latestParkingDate?` Ostatni raport parkingu: ${escapeHtml(latestParkingDate)}.`:''}${search?` Wyniki: ${filteredItems.length}.`:''}</div>
         </div>
       </div>
       <div class="hk-table-wrap">
@@ -3240,13 +3271,13 @@ function buildParkingCardsView(){
             <col style="width:18%">
           </colgroup>
           <thead><tr>
-            <th style="text-align:center">Lp.</th>
+            <th style="text-align:center;cursor:pointer" onclick="setParkingCardsSort('sheet')">Lp.${sortArrow('sheet')}</th>
             <th style="text-align:center">Apartament</th>
-            <th style="text-align:center">Abon.</th>
+            <th style="text-align:center;cursor:pointer" onclick="setParkingCardsSort('abon')">Abon.${sortArrow('abon')}</th>
             <th style="text-align:center">Nr karty</th>
-            <th style="text-align:center">Ważny do</th>
+            <th style="text-align:center;cursor:pointer" onclick="setParkingCardsSort('validTo')">Ważny do${sortArrow('validTo')}</th>
             <th style="text-align:center">Nr biletu</th>
-            <th style="text-align:center">Ostatni stan</th>
+            <th style="text-align:center;cursor:pointer" onclick="setParkingCardsSort('remaining')">Ostatni stan${sortArrow('remaining')}</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -3361,6 +3392,8 @@ let _state={
   laundryApartment:'',
   laundrySearch:'',
   parkingCardsSearch:'',
+  parkingCardsSortKey:'sheet',
+  parkingCardsSortDir:'asc',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
