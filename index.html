@@ -5293,7 +5293,22 @@ function openAgataMailto(monthKey, monthLabel){
     sender||'Old Town Vistula'
   ];
   const href=`mailto:losar@losar.pl?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join('\n'))}`;
-  window.location.href=href;
+  try{
+    const a=document.createElement('a');
+    a.href=href;
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>{
+      if(document.hasFocus()){
+        console.info('Mailto attempted:', href);
+      }
+    },300);
+  }catch(err){
+    console.warn('Mailto open failed:', err);
+    prompt('Skopiuj ten link do maila:', href);
+  }
 }
 
 function exportAgataPdf(monthKey, monthLabel){
