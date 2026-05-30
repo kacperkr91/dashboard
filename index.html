@@ -1867,6 +1867,7 @@ async function loadAgataMonth(monthKey){
   };
 
   let section='';
+  let doplatyAnchor=null;
   for(let r=0;r<vals.length;r++){
     for(let c=0;c<24;c++){
       const raw=cell(r,c);
@@ -1874,7 +1875,10 @@ async function loadAgataMonth(monthKey){
       if(!raw)continue;
       if(key.includes('faktura'))section='faktura';
       else if(key.includes('odliczenia'))section='odliczenia';
-      else if(key.includes('dopłaty inne')||key.includes('doplaty inne'))section='doplaty';
+      else if(key.includes('dopłaty inne')||key.includes('doplaty inne')){
+        section='doplaty';
+        doplatyAnchor={r,c};
+      }
 
       if(key.includes('kwota netto'))faktura.netto=money(r,c+1)||money(r,c+2);
       else if(key.includes('kwota brutto'))faktura.brutto=money(r,c+1)||money(r,c+2);
@@ -1884,7 +1888,16 @@ async function loadAgataMonth(monthKey){
       else if(key==='yieldplanet')faktura.odliczenia.yieldplanet=money(r,c+1)||money(r,c+2);
       else if(key.includes('karta sim'))faktura.odliczenia.kartaSim=money(r,c+1)||money(r,c+2);
       else if(key==='suma'&&section==='odliczenia')faktura.odliczenia.suma=money(r,c+1)||money(r,c+2);
-      else if(key==='suma'&&section==='doplaty')faktura.doplatyInneSuma=money(r,c+1)||money(r,c+2);
+      else if(
+        key==='suma'&&
+        section==='doplaty'&&
+        doplatyAnchor&&
+        Math.abs(r-doplatyAnchor.r)<=2&&
+        Math.abs(c-doplatyAnchor.c)<=2
+      ){
+        faktura.doplatyInneSuma=money(r,c+1)||money(r,c+2);
+        section='';
+      }
     }
   }
 
