@@ -5086,6 +5086,9 @@ function buildAgataFakturaView(){
     ${AGATA_MONTHS.map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setAgataMonth('${m.key}')">${m.short}</button>`).join('')}
   </div>`;
   const exportBtn=`<div class="hk-export-btn" style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <button onclick="openAgataMailto('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#1d4ed8;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
+      ✉️ Wyślij do Agaty
+    </button>
     <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📊 Pobierz CSV z rezerwacjami
     </button>
@@ -5275,6 +5278,22 @@ function buildAgataFakturaView(){
   </div>`;
 
   return monthNav+exportBtn+kpis+summary+tables;
+}
+
+function openAgataMailto(monthKey, monthLabel){
+  const safeMonth=String(monthLabel||monthKey||'').trim();
+  const sender=String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
+  const subject=`Zestawienie Agata – ${safeMonth}`;
+  const bodyLines=[
+    'Cześć,',
+    '',
+    `w załączeniu przesyłam zestawienie za ${safeMonth}.`,
+    '',
+    'Pozdrawiam,',
+    sender||'Old Town Vistula'
+  ];
+  const href=`mailto:losar@losar.pl?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join('\n'))}`;
+  window.location.href=href;
 }
 
 function exportAgataPdf(monthKey, monthLabel){
