@@ -1647,10 +1647,10 @@ async function loadHousekeepingMonth(monthKey){
   if(!result.length)throw new Error('NO_HK_DATA');
   console.log(`HK ${monthKey}: ${result.length} wierszy, ${result.filter(r=>r.cancelled).length} anulowanych`);
 
-  // Fetch pracownicy (N9:P12) and faktura (N15:O19) from same sheet
+  // Fetch pracownicy (N9:Q12) and faktura block (N14:Q19) from same sheet
   const paramsS=new URLSearchParams({key:hkApiKey,valueRenderOption:'FORMATTED_VALUE'});
   paramsS.append('ranges',`'${monthKey}'!N9:Q12`);  // pracownicy
-  paramsS.append('ranges',`'${monthKey}'!N15:O19`); // faktura
+  paramsS.append('ranges',`'${monthKey}'!N14:Q19`); // faktura + odjęcia
   const sumData=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${hkSpreadsheetId}/values:batchGet?${paramsS}`);
   const pracVals=sumData.valueRanges?.[0]?.values||[];
   const faktVals=sumData.valueRanges?.[1]?.values||[];
@@ -1665,15 +1665,27 @@ async function loadHousekeepingMonth(monthKey){
 
   // Parse faktura
   const faktura={};
-  faktVals.forEach(r=>{
-    const key=String(r[0]||'').trim().toLowerCase();
-    const val=String(r[1]||'').trim();
-    if(key.includes('suma'))faktura.suma=val;
-    else if(key.includes('pracow'))faktura.pracownicy=val;
-    else if(key.includes('netto'))faktura.kwotaNetto=val;
-    else if(key.includes('vat'))faktura.vat=val;
-    else if(key.includes('brutto'))faktura.kwotaBrutto=val;
-  });
+  const fv=(r,c)=>String(faktVals[r]?.[c]||'').trim();
+  const headerFaktura=fv(0,0).toLowerCase();
+  const headerOdjecia=fv(0,2).toLowerCase();
+  if(headerFaktura.includes('faktura')||headerOdjecia.includes('odjęcia')||headerOdjecia.includes('odjecia')){
+    faktura.suma=fv(1,1);
+    faktura.odjecia=fv(1,3);
+    faktura.pracownicy=fv(2,1);
+    faktura.kwotaNetto=fv(3,1);
+    faktura.vat=fv(4,1);
+    faktura.kwotaBrutto=fv(5,1);
+  }else{
+    faktVals.forEach(r=>{
+      const key=String(r[0]||'').trim().toLowerCase();
+      const val=String(r[1]||'').trim();
+      if(key.includes('suma'))faktura.suma=val;
+      else if(key.includes('pracow'))faktura.pracownicy=val;
+      else if(key.includes('netto'))faktura.kwotaNetto=val;
+      else if(key.includes('vat'))faktura.vat=val;
+      else if(key.includes('brutto'))faktura.kwotaBrutto=val;
+    });
+  }
 
   return{rows:result,pracownicy,faktura};
 }
@@ -4739,6 +4751,7 @@ function buildHousekeepingView(){
         <div style="display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Suma (dashboard)</span><span style="font-weight:700">${fmt(totalSuma)} zł</span></div>
           ${faktura.pracownicy?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Pracownicy</span><span style="font-weight:600">${faktura.pracownicy}</span></div>`:''}
+          ${faktura.odjecia?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted)">Odjęcia</span><span style="font-weight:600;color:#7c2d12">${faktura.odjecia}</span></div>`:''}
           ${(()=>{
             const pracVal=parseFloat(String(faktura.pracownicy||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
             const netto=totalSuma-pracVal;
@@ -6789,6 +6802,7 @@ function exportHkPdf(monthKey, monthLabel){
         <div class="faktura-box">
           <div class="frow"><span class="lbl">Suma</span><span style="font-weight:600">${fmt(totalSuma)} zł</span></div>
           ${pracVal>0?`<div class="frow"><span class="lbl">Pracownicy</span><span style="font-weight:600">${fmt(pracVal)} zł</span></div>`:''}
+          ${faktura.odjecia?`<div class="frow"><span class="lbl">Odjęcia</span><span style="font-weight:600;color:#7c2d12">${escapeHtml(faktura.odjecia)}</span></div>`:''}
           <div class="frow"><span class="lbl">Kwota netto</span><span style="font-weight:700;color:#1e40af">${fmt(netto)} zł</span></div>
           <div class="frow"><span class="lbl">VAT 23%</span><span>${fmt(vat)} zł</span></div>
           <div class="frow total"><span class="lbl">Kwota brutto</span><span>${fmt(brutto)} zł</span></div>
@@ -9726,6 +9740,7 @@ function exportHkPdf(monthKey, monthLabel){
         <div class="faktura-box">
           <div class="frow"><span class="lbl">Suma</span><span style="font-weight:600">${fmt(totalSuma)} zł</span></div>
           ${pracVal>0?`<div class="frow"><span class="lbl">Pracownicy</span><span style="font-weight:600">${fmt(pracVal)} zł</span></div>`:''}
+          ${faktura.odjecia?`<div class="frow"><span class="lbl">Odjęcia</span><span style="font-weight:600;color:#7c2d12">${escapeHtml(faktura.odjecia)}</span></div>`:''}
           <div class="frow"><span class="lbl">Kwota netto</span><span style="font-weight:700;color:#1e40af">${fmt(netto)} zł</span></div>
           <div class="frow"><span class="lbl">VAT 23%</span><span>${fmt(vat)} zł</span></div>
           <div class="frow total"><span class="lbl">Kwota brutto</span><span>${fmt(brutto)} zł</span></div>
