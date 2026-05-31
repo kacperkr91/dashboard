@@ -4393,6 +4393,32 @@ function buildKsefView(rows){
   const dueSoon=rows.filter(r=>r.status==='due-soon' || r.status==='partial').sort((a,b)=>(a.daysToDue||999)-(b.daysToDue||999));
   const paid=rows.filter(r=>r.status==='paid');
   const missing=rows.filter(r=>r.status==='missing');
+  const currentMonthKey=getMonthKeyFromDate(new Date());
+  const issuedByMonthMap={};
+  rows.forEach(item=>{
+    const parsed=parseDateDMY(item.issueDate)||parseDatePL(item.issueDate)||parseHKDate(item.issueDate);
+    const mk=parsed?getMonthKeyFromDate(parsed):'bez-daty';
+    if(!issuedByMonthMap[mk])issuedByMonthMap[mk]={count:0,total:0};
+    issuedByMonthMap[mk].count+=1;
+    issuedByMonthMap[mk].total+=(item.bruttoValue||0);
+  });
+  const issuedMonths=Object.entries(issuedByMonthMap)
+    .filter(([key])=>key&&key!=='bez-daty')
+    .sort((a,b)=>b[0].localeCompare(a[0]));
+  const issuedCurrent=issuedByMonthMap[currentMonthKey]||{count:0,total:0};
+  const issuedPrevious=issuedMonths
+    .filter(([key])=>key<currentMonthKey)
+    .reduce((acc,[,meta])=>{
+      acc.count+=meta.count||0;
+      acc.total+=meta.total||0;
+      return acc;
+    },{count:0,total:0});
+  const issuedMonthChips=issuedMonths.slice(0,12).map(([key,meta])=>`
+    <div class="ksef-pill total" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:800">${formatMonthKeyShort(key)}</span>
+      <span>${meta.count} · ${fmt(meta.total)} zł</span>
+    </div>
+  `).join('');
   const newest=[...rows].sort((a,b)=>{
     const ad=(a.issueDate||'').slice(0,10);
     const bd=(b.issueDate||'').slice(0,10);
@@ -4454,6 +4480,10 @@ function buildKsefView(rows){
             <span class="ksef-pill total">Otwarte: ${rows.length-missing.length-paid.length} · ${fmt(totalOpen)} zł</span>
             <span class="ksef-pill paid">Opłacone: ${paid.length} · ${fmt(paidTotal)} zł</span>
           </div>
+          <div class="ksef-stats" style="margin-top:10px">
+            <span class="ksef-pill total">Wystawione w ${formatMonthKeyShort(currentMonthKey)}: ${issuedCurrent.count} · ${fmt(issuedCurrent.total)} zł</span>
+            <span class="ksef-pill total">Wystawione wcześniej: ${issuedPrevious.count} · ${fmt(issuedPrevious.total)} zł</span>
+          </div>
         </div>
       </div>
     </div>
@@ -4463,6 +4493,14 @@ function buildKsefView(rows){
       <div class="kpi-card c-orange"><div class="label">Najbliższe 7 dni</div><div class="value">${dueSoon.length}</div><div class="sub">${fmt(dueSoonTotal)} zł zaplanowanych</div></div>
       <div class="kpi-card c-blue"><div class="label">Otwarte faktury</div><div class="value">${rows.length-missing.length-paid.length}</div><div class="sub">${fmt(totalOpen)} zł brutto</div></div>
       <div class="kpi-card c-green"><div class="label">Opłacone / kupione od razu</div><div class="value">${paid.length}</div><div class="sub">${fmt(paidTotal)} zł łącznie</div></div>
+    </div>
+
+    <div class="grid-card" style="margin-bottom:18px">
+      <div class="card-title">Wystawione wg miesięcy</div>
+      <div class="card-subtitle">Suma brutto po dacie wystawienia faktury, także dla poprzednich miesięcy.</div>
+      <div class="ksef-stats" style="margin-top:12px">
+        ${issuedMonthChips||'<span class="ksef-pill total">Brak dat wystawienia</span>'}
+      </div>
     </div>
 
     <div class="ksef-section-grid">
