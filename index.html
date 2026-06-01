@@ -648,6 +648,9 @@ const CONFIG={
   laundrySpreadsheetId: localStorage.getItem('gs_laundry_spreadsheet_id')||'1TaH4uz8ty53CZtCZJkc9H-W27N_XBYS7EjMpp6QoX_o',
   laundrySheet:       'Stan bieżący',
   laundryRange:       'A1:F5000',
+  czynszeApiKey:      localStorage.getItem('gs_czynsze_api_key')||'',
+  czynszeSpreadsheetId: localStorage.getItem('gs_czynsze_spreadsheet_id')||'',
+  czynszeRange:       'A1:K200',
   parkingCardsSpreadsheetId:'183XOD7fCb5j-fJVNjUUSc1LYIptp301XxOjftyyMITk',
   parkingCardsSheet:  'Lista',
   parkingCardsRange:  'A1:B500',
@@ -1442,6 +1445,11 @@ let AGATA_MONTHS=[
   {key:'2026-05',label:'Maj 2026',     short:'Maj 26'},
 ];
 
+let CZYNSZE_MONTHS=[
+  {key:'2026-05',label:'Maj 2026',     short:'Maj 26'},
+  {key:'2026-06',label:'Czerwiec 2026',short:'Cze 26'},
+];
+
 const MONTH_NAMES_PL=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
 const MONTH_SHORT_PL=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
 const ARTUR_PAYMENT_NIP='6771000478';
@@ -1527,6 +1535,7 @@ function shiftMonthKey(monthKey, delta){
 let _hkMonthsDetected=false;
 let _otvMonthsDetected=false;
 let _agataMonthsDetected=false;
+let _czynszeMonthsDetected=false;
 
 async function detectHkMonths(){
   if(_hkMonthsDetected)return; // tylko raz na sesję
@@ -1577,6 +1586,24 @@ async function detectAgataMonths(){
       if(!months.find(m=>m.key===_state.agataMonth)||_state.agataMonth!==preferredKey)_state.agataMonth=preferredKey;
     }
   }catch(e){console.warn('detectAgataMonths failed:',e);}
+}
+
+async function detectCzynszeMonths(){
+  if(_czynszeMonthsDetected)return;
+  const apiKey=CONFIG.czynszeApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.czynszeSpreadsheetId;
+  if(!apiKey||!spreadsheetId)return;
+  try{
+    const names=await fetchSheetNames(spreadsheetId,apiKey);
+    const months=buildMonthList(names);
+    if(months.length>0){
+      CZYNSZE_MONTHS=months;
+      _czynszeMonthsDetected=true;
+      const currentKey=getMonthKeyFromDate(new Date());
+      const preferredKey=months.find(m=>m.key===currentKey)?currentKey:months[months.length-1].key;
+      if(!months.find(m=>m.key===_state.czynszeMonth)||_state.czynszeMonth!==preferredKey)_state.czynszeMonth=preferredKey;
+    }
+  }catch(e){console.warn('detectCzynszeMonths failed:',e);}
 }
 
 
@@ -2011,6 +2038,48 @@ async function loadLaundryData(){
   });
 
   return{items,apartments,byApartment};
+}
+
+async function loadCzynszeMonth(monthKey){
+  const apiKey=CONFIG.czynszeApiKey||CONFIG.apiKey;
+  const spreadsheetId=CONFIG.czynszeSpreadsheetId;
+  if(!apiKey||!spreadsheetId)throw new Error('MISSING_CZYNSZE_CONFIG');
+  const enc=encodeURIComponent(`'${monthKey}'!${CONFIG.czynszeRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  if(rows.length<2)throw new Error('NO_CZYNSZE_DATA');
+
+  const items=rows.slice(1).map((row,idx)=>({
+    order:idx+1,
+    apartament:String(row[0]||'').trim(),
+    oplata23Netto:parseMoneyValue(row[1]||0),
+    oplata23Brutto:parseMoneyValue(row[2]||0),
+    czynsz8Netto:parseMoneyValue(row[3]||0),
+    czynsz8Brutto:parseMoneyValue(row[4]||0),
+    czynsz23Netto:parseMoneyValue(row[5]||0),
+    czynsz23Brutto:parseMoneyValue(row[6]||0),
+    sumaCzynszNetto:parseMoneyValue(row[7]||0),
+    sumaCzynszBrutto:parseMoneyValue(row[8]||0),
+    caloscNetto:parseMoneyValue(row[9]||0),
+    caloscBrutto:parseMoneyValue(row[10]||0),
+  })).filter(item=>item.apartament);
+
+  if(!items.length)throw new Error('NO_CZYNSZE_DATA');
+
+  const summary=items.reduce((acc,item)=>{
+    acc.oplatyNetto+=item.oplata23Netto;
+    acc.oplatyBrutto+=item.oplata23Brutto;
+    acc.zaliczkiNetto+=item.sumaCzynszNetto;
+    acc.zaliczkiBrutto+=item.sumaCzynszBrutto;
+    acc.caloscNetto+=item.caloscNetto;
+    acc.caloscBrutto+=item.caloscBrutto;
+    if(item.caloscBrutto>0||item.caloscNetto>0)acc.aktywne++;
+    else acc.zero++;
+    return acc;
+  },{oplatyNetto:0,oplatyBrutto:0,zaliczkiNetto:0,zaliczkiBrutto:0,caloscNetto:0,caloscBrutto:0,aktywne:0,zero:0});
+
+  return{items,summary};
 }
 
 async function loadParkingCardsData(){
@@ -3184,6 +3253,12 @@ function clearParkingCardsSearch(){
   _state.parkingCardsSearch='';
   if(_state.section==='parking-cards')renderApp();
 }
+function toggleCzynszeApartment(apartament){
+  const key=String(apartament||'').trim();
+  if(!key)return;
+  _state.czynszeExpanded={...(_state.czynszeExpanded||{}),[key]:!_state.czynszeExpanded?.[key]};
+  if(_state.section==='czynsze')renderApp();
+}
 function setParkingCardsSort(key){
   if(!key)return;
   if(_state.parkingCardsSortKey===key){
@@ -3193,6 +3268,97 @@ function setParkingCardsSort(key){
     _state.parkingCardsSortDir='asc';
   }
   if(_state.section==='parking-cards')renderApp();
+}
+function setCzynszeMonth(key){
+  _state.czynszeMonth=key;
+  if(!_state.data.czynsze[key]){
+    _state.data.czynsze[key]=null;
+    renderApp();
+    loadCzynszeMonth(key).then(data=>{
+      _state.data.czynsze[key]=data;
+      if(_state.section==='czynsze'&&_state.czynszeMonth===key)renderApp();
+    }).catch(e=>{
+      _state.data.czynsze[key]={error:e.message||'Błąd'};
+      if(_state.section==='czynsze'&&_state.czynszeMonth===key)renderApp();
+    });
+    return;
+  }
+  if(_state.section==='czynsze')renderApp();
+}
+function buildCzynszeView(){
+  const monthKey=_state.czynszeMonth;
+  const monthMeta=(CZYNSZE_MONTHS||[]).find(m=>m.key===monthKey);
+  const monthNav=`<div class="hk-month-nav">${(CZYNSZE_MONTHS||[]).map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setCzynszeMonth('${m.key}')">${m.short}</button>`).join('')}</div>`;
+  const payload=_state.data.czynsze[monthKey];
+  if(!payload)return monthNav+renderLoading('Ładowanie czynszów…');
+  if(payload.error)return monthNav+renderError(payload.error);
+  const items=payload.items||[];
+  const summary=payload.summary||{};
+  const rows=items.map(item=>{
+    const isZero=item.caloscNetto===0&&item.caloscBrutto===0;
+    const expanded=!!_state.czynszeExpanded?.[item.apartament];
+    const tone=isZero?'background:#fff5f5;border-color:#fecaca':'background:#f8fffb;border-color:#d1fae5';
+    return `
+      <tr onclick="toggleCzynszeApartment('${escapeHtml(item.apartament).replace(/'/g,"&#39;")}')" style="cursor:pointer;${tone}">
+        <td style="font-weight:700">${escapeHtml(item.apartament)}</td>
+        <td class="num">${fmt(item.oplata23Netto)} zł</td>
+        <td class="num">${fmt(item.oplata23Brutto)} zł</td>
+        <td class="num">${fmt(item.sumaCzynszNetto)} zł</td>
+        <td class="num">${fmt(item.sumaCzynszBrutto)} zł</td>
+        <td class="num" style="font-weight:700;color:#0f766e">${fmt(item.caloscNetto)} zł</td>
+        <td class="num" style="font-weight:800">${fmt(item.caloscBrutto)} zł</td>
+      </tr>
+      ${expanded?`<tr style="background:#f8fafc"><td colspan="7" style="padding:0">
+        <div style="padding:14px 16px;border-top:1px solid #e2e8f0">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+            <div class="mini-stat"><div class="k">Opłata 23%</div><div class="v">${fmt(item.oplata23Netto)} zł</div><div class="s">Brutto: ${fmt(item.oplata23Brutto)} zł</div></div>
+            <div class="mini-stat"><div class="k">Czynsz 8%</div><div class="v">${fmt(item.czynsz8Netto)} zł</div><div class="s">Brutto: ${fmt(item.czynsz8Brutto)} zł</div></div>
+            <div class="mini-stat"><div class="k">Czynsz 23%</div><div class="v">${fmt(item.czynsz23Netto)} zł</div><div class="s">Brutto: ${fmt(item.czynsz23Brutto)} zł</div></div>
+            <div class="mini-stat"><div class="k">Suma zaliczek</div><div class="v">${fmt(item.sumaCzynszNetto)} zł</div><div class="s">Brutto: ${fmt(item.sumaCzynszBrutto)} zł</div></div>
+          </div>
+        </div>
+      </td></tr>`:''}
+    `;
+  }).join('');
+
+  return `${monthNav}
+  <div class="hero-card" style="margin-bottom:16px">
+    <div class="tasks-panel" style="min-height:auto">
+      <div class="tasks-panel-inner">
+        <div class="tasks-eyebrow">Miesięczne rozliczenia</div>
+        <h2 class="tasks-lead">Czynsze i zaliczki apartamentów</h2>
+        <div class="tasks-desc">Domyślnie widzisz prosty podgląd netto i brutto. Kliknij wybrany apartament, aby rozwinąć pełne rozbicie opłaty 23%, czynszu 8%, czynszu 23% i sumy zaliczek.</div>
+      </div>
+    </div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi-card c-blue"><div class="label">Łącznie netto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscNetto||0)}</div><div class="sub">${monthMeta?.label||monthKey}</div></div>
+    <div class="kpi-card c-purple"><div class="label">Łącznie brutto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscBrutto||0)}</div><div class="sub">Wszystkie lokale</div></div>
+    <div class="kpi-card c-green"><div class="label">Aktywne lokale</div><div class="value">${summary.aktywne||0}</div><div class="sub">Z kwotą do rozliczenia</div></div>
+    <div class="kpi-card c-red"><div class="label">Lokale 0 zł</div><div class="value">${summary.zero||0}</div><div class="sub">Nieaktywne lub zerowe</div></div>
+  </div>
+  <div class="grid-card">
+    <div class="line-chart-label">
+      <div>
+        <div class="card-title">Lista czynszów</div>
+        <div class="card-subtitle">Widok uproszczony na start, szczegóły po kliknięciu w wiersz apartamentu.</div>
+      </div>
+    </div>
+    <div class="hk-table-wrap">
+      <table class="hk-table">
+        <thead><tr>
+          <th>Apartament</th>
+          <th class="num">Opłaty netto</th>
+          <th class="num">Opłaty brutto</th>
+          <th class="num">Zaliczki netto</th>
+          <th class="num">Zaliczki brutto</th>
+          <th class="num">Całość netto</th>
+          <th class="num">Całość brutto</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 function buildParkingCardsView(){
   const data=_state.data.parkingCards;
@@ -3480,6 +3646,8 @@ let _state={
   ksefSearch:'',
   agataMonth:getMonthKeyFromDate(new Date()),
   agataColumnPrefs:(()=>({osoby:true,partner:true,status:true,transakcja:true,prowizja:true,golaCena:true,cenaSystem:true,doplata:true,cenaCalkowita:true}))(),
+  czynszeMonth:getMonthKeyFromDate(new Date()),
+  czynszeExpanded:{},
   laundryApartment:'',
   laundrySearch:'',
   parkingCardsSearch:'',
@@ -3511,7 +3679,7 @@ let _state={
   mediaYear:'2026',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, laundry:null, ksef:null, weather:null, tasks:null
+    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
   }
 };
 let _charts={};
@@ -3524,7 +3692,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','agata-faktura','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -3536,6 +3704,7 @@ const DASHBOARD_MODULE_LABELS={
   otv:'Rezerwacje OTV',
   previo:'Previo',
   'laundry-textiles':'Pranie / Tekstylia',
+  czynsze:'Czynsze',
   'parking-cards':'Karty parkingowe',
   'artur-payments':'Płatności Artur',
   'agata-faktura':'Agata Faktura',
@@ -3589,6 +3758,9 @@ function hasPrimaryDashboardConfig(){
 }
 function hasLaundryDashboardConfig(){
   return !!((CONFIG.laundryApiKey||CONFIG.apiKey)&&CONFIG.laundrySpreadsheetId);
+}
+function hasCzynszeDashboardConfig(){
+  return !!((CONFIG.czynszeApiKey||CONFIG.apiKey)&&CONFIG.czynszeSpreadsheetId);
 }
 function isLaundryOnlyUser(){
   const modules=Array.isArray(_state.authUser?.modules)?_state.authUser.modules.filter(Boolean):[];
@@ -3797,6 +3969,10 @@ function renderConfig(){
     <p class="section-label">🧺 Pranie / Tekstylia</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-laundrykey" type="text" placeholder="AIzaSy…" value="${CONFIG.laundryApiKey||CONFIG.apiKey}"/></div>
     <div class="field"><label>Spreadsheet ID arkusza tekstyliów</label><input id="inp-laundrysheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.laundrySpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🏢 Czynsze</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-czynszekey" type="text" placeholder="AIzaSy…" value="${CONFIG.czynszeApiKey||CONFIG.apiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza czynszów</label><input id="inp-czynszesheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.czynszeSpreadsheetId}"/></div>
     <hr class="divider"/>
     <p class="section-label">📋 Arkusz rezerwacji OTV</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-otvkey" type="text" placeholder="AIzaSy…" value="${CONFIG.otvApiKey}"/></div>
@@ -9870,17 +10046,20 @@ async function init(){
   const laundryOnlyUser=isLaundryOnlyUser();
   const needsPrimaryConfig=hasAnyModuleAccess([
     'oblozenie','rental','media','ksef','apartments','housekeeping','otv','previo',
-    'artur-payments','agata-faktura','tasks','booking-payout','dyzury','noty','goscie','parking'
+    'artur-payments','agata-faktura','czynsze','tasks','booking-payout','dyzury','noty','goscie','parking'
   ]);
   const needsLaundryConfig=hasModuleAccess('laundry-textiles');
+  const needsCzynszeConfig=hasModuleAccess('czynsze');
   if(needsPrimaryConfig&&!hasPrimaryDashboardConfig()){mount(renderConfig());return;}
   if(needsLaundryConfig&&!hasLaundryDashboardConfig()){mount(renderConfig());return;}
+  if(needsCzynszeConfig&&!hasCzynszeDashboardConfig()){mount(renderConfig());return;}
   const needRental=hasModuleAccess('rental')&&initialSection==='rental';
   const needMedia=hasModuleAccess('media')&&initialSection==='media';
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
   const needHousekeeping=hasModuleAccess('housekeeping')&&initialSection==='housekeeping';
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
   const needLaundry=hasModuleAccess('laundry-textiles')&&initialSection==='laundry-textiles';
+  const needCzynsze=hasModuleAccess('czynsze')&&initialSection==='czynsze';
   const needParkingCards=hasModuleAccess('parking-cards')&&initialSection==='parking-cards';
   const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout'])&&['previo','oblozenie','booking-payout','rental'].includes(initialSection);
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
@@ -9891,7 +10070,7 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},laundry:null,parkingCards:null,parking:null,ksef:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},czynsze:{},laundry:null,parkingCards:null,parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;
   _backgroundPrefetchStarted=false;
   _previoSoftRefreshRequested={};
@@ -9924,11 +10103,13 @@ async function init(){
     needHousekeeping?detectHkMonths():Promise.resolve(),
     needOtv?detectOtvMonths():Promise.resolve(),
     needAgata?detectAgataMonths():Promise.resolve(),
+    needCzynsze?detectCzynszeMonths():Promise.resolve(),
   ]);
 
   const initHkKey=_state.hkMonth;
   const initOtvKey=_state.otvMonth;
   const initAgataKey=_state.agataMonth;
+  const initCzynszeKey=_state.czynszeMonth;
   const initPrevioKey=_state.previoMonth;
   const initRentalKey=_state.rentalMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
@@ -9937,12 +10118,13 @@ async function init(){
   const nextPrevioKey=shiftMonthKey(initPrevioKey,1);
 
   setProgress(15,'Jeszcze chwila…');
-  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,laundryr,parkingCardsR,parkingr]=await Promise.allSettled([
+  const [rentalCurrentR,previor,previoPrevR,previoNextR,agatar,czynszer,laundryr,parkingCardsR,parkingr]=await Promise.allSettled([
     needRental?loadRentalMonthDataByKey(initRentalKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(initPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(prevPrevioKey):Promise.resolve(null),
     needPrevio?loadPrevioMonth(nextPrevioKey):Promise.resolve(null),
     needAgata?loadAgataMonth(initAgataKey):Promise.resolve(null),
+    needCzynsze?loadCzynszeMonth(initCzynszeKey):Promise.resolve(null),
     needLaundry?loadLaundryData():Promise.resolve(null),
     needParkingCards?loadParkingCardsData():Promise.resolve(null),
     (needParking||needParkingCards)?loadParkingData():Promise.resolve(null),
@@ -9954,6 +10136,7 @@ async function init(){
     if(nextPrevioKey)_state.data.previo[nextPrevioKey]=previoNextR.status==='fulfilled'?previoNextR.value:{error:previoNextR.reason?.message||'Błąd'};
   }
   if(needAgata)_state.data.agata[initAgataKey]=agatar.status==='fulfilled'?agatar.value:{error:agatar.reason?.message||'Błąd'};
+  if(needCzynsze)_state.data.czynsze[initCzynszeKey]=czynszer.status==='fulfilled'?czynszer.value:{error:czynszer.reason?.message||'Błąd'};
   if(needLaundry)_state.data.laundry=laundryr.status==='fulfilled'?laundryr.value:{error:laundryr.reason?.message||'Błąd'};
   if(needParkingCards)_state.data.parkingCards=parkingCardsR.status==='fulfilled'?parkingCardsR.value:{error:parkingCardsR.reason?.message||'Błąd'};
   if(needParking||needParkingCards)_state.data.parking=parkingr.status==='fulfilled'?parkingr.value:null;
@@ -10069,6 +10252,15 @@ async function prefetchSecondaryModules(){
       }
     });
   }
+  if(hasModuleAccess('czynsze')&&section!=='czynsze'){
+    jobs.push(async ()=>{
+      await detectCzynszeMonths();
+      const key=_state.czynszeMonth;
+      if(key&&!_state.data.czynsze[key]){
+        _state.data.czynsze[key]=await loadCzynszeMonth(key);
+      }
+    });
+  }
   if(hasModuleAccess('laundry-textiles')&&section!=='laundry-textiles'&&_state.data.laundry===null){
     jobs.push(()=>loadLaundryData().then(data=>{_state.data.laundry=data;}).catch(e=>{_state.data.laundry={error:e.message||'Błąd'};}));
   }
@@ -10160,6 +10352,21 @@ function ensureSectionDataLoaded(section){
       }).catch(e=>{
         _state.data.agata[key]={error:e.message||'Błąd'};
         if(_state.section==='agata-faktura'&&_state.agataMonth===key)renderApp();
+      });
+    });
+    return true;
+  }
+  if(section==='czynsze'){
+    detectCzynszeMonths().then(()=>{
+      const key=_state.czynszeMonth;
+      if(!key||_state.data.czynsze[key]){ if(_state.section==='czynsze')renderApp(); return; }
+      renderApp();
+      loadCzynszeMonth(key).then(data=>{
+        _state.data.czynsze[key]=data;
+        if(_state.section==='czynsze'&&_state.czynszeMonth===key)renderApp();
+      }).catch(e=>{
+        _state.data.czynsze[key]={error:e.message||'Błąd'};
+        if(_state.section==='czynsze'&&_state.czynszeMonth===key)renderApp();
       });
     });
     return true;
@@ -10356,6 +10563,7 @@ function renderApp(){
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
     ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
+    ${navButton('czynsze','Czynsze','🏢','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('laundry-textiles','Pranie / Tekstylia','🧺','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('parking-cards','Karty parkingowe','🪪','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('artur-payments','Płatności Artur','💳','background:#334155;border-color:#334155;color:#fff')}
@@ -10432,6 +10640,8 @@ function renderApp(){
     content=buildPrevioView();
   } else if(section==='agata-faktura'){
     content=buildAgataFakturaView();
+  } else if(section==='czynsze'){
+    content=buildCzynszeView();
   } else if(section==='laundry-textiles'){
     content=buildLaundryTextilesView();
   } else if(section==='parking-cards'){
@@ -10501,6 +10711,10 @@ function saveConfig(){
   const ls=document.getElementById('inp-laundrysheetid')?.value.trim()||'';
   CONFIG.laundryApiKey=lk;CONFIG.laundrySpreadsheetId=ls;
   localStorage.setItem('gs_laundry_api_key',lk);localStorage.setItem('gs_laundry_spreadsheet_id',ls);
+  const ck=document.getElementById('inp-czynszekey')?.value.trim()||'';
+  const cs=document.getElementById('inp-czynszesheetid')?.value.trim()||'';
+  CONFIG.czynszeApiKey=ck;CONFIG.czynszeSpreadsheetId=cs;
+  localStorage.setItem('gs_czynsze_api_key',ck);localStorage.setItem('gs_czynsze_spreadsheet_id',cs);
   const su=document.getElementById('inp-syncurl')?.value.trim()||'';
   CONFIG.syncUrl=su;localStorage.setItem('sync_url',su);
   const ok=document.getElementById('inp-otvkey')?.value.trim()||'';
