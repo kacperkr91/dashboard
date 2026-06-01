@@ -1486,22 +1486,70 @@ const WEATHER_CODE_MAP={
 };
 
 function buildMonthList(sheetNames){
-  // Szuka zakładek w formacie YYYY-MM
-  const regex=/^(\d{4})-(\d{2})$/;
+  const monthNameMap={
+    styczeń:'01',styczen:'01',
+    luty:'02',
+    marzec:'03',
+    kwiecień:'04',kwiecien:'04',
+    maj:'05',
+    czerwiec:'06',
+    lipiec:'07',
+    sierpień:'08',sierpien:'08',
+    wrzesień:'09',wrzesien:'09',
+    październik:'10',pazdziernik:'10',
+    listopad:'11',
+    grudzień:'12',grudzien:'12'
+  };
+  const normalizeSheetMonthKey=name=>{
+    const n=String(name||'').trim();
+    let m=n.match(/^(\d{4})-(\d{2})$/);
+    if(m)return `${m[1]}-${m[2]}`;
+    m=n.match(/^(\d{2})\/(\d{4})$/);
+    if(m)return `${m[2]}-${m[1]}`;
+    m=n.match(/^.+[_\s](\d{2})\/(\d{2})$/);
+    if(m)return `20${m[2]}-${m[1]}`;
+    m=n.toLowerCase().match(/^([a-ząćęłńóśźż]+)\s+(\d{4})$/i);
+    if(m){
+      const mo=monthNameMap[m[1]];
+      if(mo)return `${m[2]}-${mo}`;
+    }
+    return '';
+  };
   return sheetNames
-    .filter(n=>regex.test(n))
+    .map(n=>({name:n,key:normalizeSheetMonthKey(n)}))
+    .filter(item=>!!item.key)
     .map(n=>{
-      const[,yr,mo]=n.match(regex);
+      const[,yr,mo]=n.key.match(/^(\d{4})-(\d{2})$/);
       const moIdx=parseInt(mo)-1;
       const yr2=yr.slice(2);
       return{
-        key:n,
+        key:n.key,
         label:`${MONTH_NAMES_PL[moIdx]} ${yr}`,
         short:`${MONTH_SHORT_PL[moIdx]} ${yr2}`,
-        sortKey:n
+        sortKey:n.key
       };
     })
+    .filter((item,idx,arr)=>arr.findIndex(x=>x.key===item.key)===idx)
     .sort((a,b)=>a.sortKey.localeCompare(b.sortKey));
+}
+
+function resolveMonthSheetName(monthKey,sheetNames){
+  const key=String(monthKey||'').trim();
+  if(!key)return '';
+  const [year,month]=key.split('-');
+  const monthIdx=parseInt(month,10)-1;
+  const monthNames=[
+    MONTH_NAMES_PL[monthIdx]||'',
+    (MONTH_NAMES_PL[monthIdx]||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  ].filter(Boolean);
+  const candidates=[
+    key,
+    `${month}/${year}`,
+    `${String(month).padStart(2,'0')}/${year}`,
+    `Opłaty za mieszkania_${String(month).padStart(2,'0')}/${String(year).slice(2)}`,
+    ...monthNames.map(name=>`${name} ${year}`)
+  ];
+  return sheetNames.find(name=>candidates.includes(String(name||'').trim()))||'';
 }
 
 function getMonthKeyFromDate(dateObj){
@@ -2044,7 +2092,10 @@ async function loadCzynszeMonth(monthKey){
   const apiKey=CONFIG.czynszeApiKey||CONFIG.apiKey;
   const spreadsheetId=CONFIG.czynszeSpreadsheetId;
   if(!apiKey||!spreadsheetId)throw new Error('MISSING_CZYNSZE_CONFIG');
-  const enc=encodeURIComponent(`'${monthKey}'!${CONFIG.czynszeRange}`);
+  const sheetNames=await fetchSheetNames(spreadsheetId,apiKey);
+  const sheetName=resolveMonthSheetName(monthKey,sheetNames);
+  if(!sheetName)throw new Error(`Brak zakładki dla miesiąca ${formatMonthKeyLabel(monthKey)}.`);
+  const enc=encodeURIComponent(`'${sheetName}'!${CONFIG.czynszeRange}`);
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${apiKey}`;
   const data=await apiFetch(url);
   const rows=data.values||[];
