@@ -2114,7 +2114,12 @@ async function loadCzynszeMonth(monthKey){
     sumaCzynszBrutto:parseMoneyValue(row[8]||0),
     caloscNetto:parseMoneyValue(row[9]||0),
     caloscBrutto:parseMoneyValue(row[10]||0),
-  })).filter(item=>item.apartament);
+  })).filter(item=>{
+    const apartament=String(item.apartament||'').trim().toLowerCase();
+    if(!apartament)return false;
+    if(apartament==='suma'||apartament==='łącznie'||apartament==='lacznie'||apartament==='razem')return false;
+    return true;
+  });
 
   if(!items.length)throw new Error('NO_CZYNSZE_DATA');
 
@@ -3379,6 +3384,9 @@ function buildCzynszeView(){
         <div class="tasks-eyebrow">Miesięczne rozliczenia</div>
         <h2 class="tasks-lead">Czynsze i zaliczki apartamentów</h2>
         <div class="tasks-desc">Domyślnie widzisz prosty podgląd netto i brutto. Kliknij wybrany apartament, aby rozwinąć pełne rozbicie opłaty 23%, czynszu 8%, czynszu 23% i sumy zaliczek.</div>
+        ${canConfig()?`<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-primary" style="width:auto;padding:10px 16px" onclick="createNextCzynszeMonth()">Utwórz następny miesiąc</button>
+        </div>`:''}
       </div>
     </div>
   </div>
@@ -10773,6 +10781,47 @@ function saveConfig(){
   CONFIG.otvApiKey=ok;CONFIG.otvSpreadsheetId=os;
   localStorage.setItem('gs_otv_api_key',ok);localStorage.setItem('gs_otv_spreadsheet_id',os);
   bootDashboard();
+}
+
+async function createNextCzynszeMonth(){
+  if(!CONFIG.syncUrl){ alert('Brak Sync URL w konfiguracji.'); return; }
+  if(!CONFIG.czynszeSpreadsheetId){ alert('Brak Spreadsheet ID arkusza czynszów.'); return; }
+  const sourceMonthKey=_state.czynszeMonth||getMonthKeyFromDate(new Date());
+  const sourceLabel=formatMonthKeyLabel(sourceMonthKey);
+  const nextLabel=formatMonthKeyLabel(shiftMonthKey(sourceMonthKey,1));
+  if(!confirm(`Utworzyć nową zakładkę czynszów?\n\nŹródło: ${sourceLabel}\nNowy miesiąc: ${nextLabel}\n\nZakładka zostanie skopiowana 1:1 bez czyszczenia danych.`))return;
+  try{
+    const resp=await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({
+        action:'createCzynszeMonth',
+        token:_state.authToken,
+        spreadsheetId:CONFIG.czynszeSpreadsheetId,
+        sourceMonthKey
+      })
+    });
+    const data=await resp.json();
+    if(!resp.ok||data.error)throw new Error(data.error||'Nie udało się utworzyć nowego miesiąca.');
+    _czynszeMonthsDetected=false;
+    await detectCzynszeMonths();
+    if(data.targetMonthKey){
+      _state.czynszeMonth=data.targetMonthKey;
+      _state.data.czynsze[data.targetMonthKey]=null;
+      renderApp();
+      try{
+        _state.data.czynsze[data.targetMonthKey]=await loadCzynszeMonth(data.targetMonthKey);
+      }catch(e){
+        _state.data.czynsze[data.targetMonthKey]={error:e.message||'Błąd'};
+      }
+    }
+    renderApp();
+    alert(data.created===false
+      ? `Zakładka już istniała: ${data.targetSheetName}`
+      : `Utworzono nową zakładkę: ${data.targetSheetName}`);
+  }catch(e){
+    alert(e.message||'Nie udało się utworzyć nowego miesiąca czynszów.');
+  }
 }
 
 function ensureKsefLoaded(){
