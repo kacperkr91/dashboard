@@ -851,9 +851,27 @@ async function apiFetch(url){
     clearTimeout(timer);
   }
 }
+const _sheetNamesCache={};
 async function fetchSheetNames(id,key){
+  const cacheKey=`sheet_names_${id}`;
+  const now=Date.now();
+  const mem=_sheetNamesCache[cacheKey];
+  if(mem&&Array.isArray(mem.names)&&(now-mem.ts)<5*60*1000)return mem.names.slice();
+  try{
+    const raw=localStorage.getItem(cacheKey);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      if(parsed&&Array.isArray(parsed.names)&&(now-parsed.ts)<5*60*1000){
+        _sheetNamesCache[cacheKey]={ts:parsed.ts,names:parsed.names.slice()};
+        return parsed.names.slice();
+      }
+    }
+  }catch(e){}
   const d=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title&key=${key}`);
-  return d.sheets.map(s=>s.properties.title);
+  const names=(d.sheets||[]).map(s=>s.properties.title);
+  _sheetNamesCache[cacheKey]={ts:now,names:names.slice()};
+  try{localStorage.setItem(cacheKey,JSON.stringify({ts:now,names}));}catch(e){}
+  return names;
 }
 
 function normalizeSheetTitle(title){
@@ -10271,6 +10289,7 @@ async function init(){
 
 function maybeStartBackgroundPrefetch(){
   if(_backgroundPrefetchStarted||!_state.authUser)return;
+  if(_state.authUser?.role==='admin')return;
   _backgroundPrefetchStarted=true;
   setTimeout(()=>{prefetchSecondaryModules().catch(e=>console.warn('prefetchSecondaryModules failed:',e));},450);
 }
