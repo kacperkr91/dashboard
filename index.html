@@ -1911,7 +1911,7 @@ async function loadOtvMonth(monthKey){
     const apt=v(8,i); // K=apartament
     if(!apt)continue;
     // Exclude non-OTV apartments
-    if(otvExclude.some(ex=>apt.toLowerCase().includes(ex.toLowerCase())))continue;
+    if(!isForcedOtvApartment(apt)&&otvExclude.some(ex=>apt.toLowerCase().includes(ex.toLowerCase())))continue;
     const cenaCalk=n(11,i); // Q=cena całkowita
     if(cenaCalk===0)continue;
     result.push({
@@ -2394,6 +2394,11 @@ function sortByDefaultOrder(apts){
     if(ai!==bi)return ai-bi;
     return a.localeCompare(b,'pl');
   });
+}
+
+function isForcedOtvApartment(apt){
+  const value=String(apt||'').toLowerCase();
+  return value.includes('l25');
 }
 
 
@@ -9103,7 +9108,10 @@ function buildOblozenieLive(){
   });
   const currentMonthTotal=currentMonthRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const currentMonthPrevioForecast=calcPrevioForecast(currentMonthKey);
-  const isAgataApartment=apt=>ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
+  const isAgataApartment=apt=>{
+    if(isForcedOtvApartment(apt))return false;
+    return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
+  };
   const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
   const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
   const currentMonthAgataTotal=currentMonthAgataRows.reduce((sum,row)=>sum+(row.cena||0),0);
@@ -11009,7 +11017,10 @@ function generateHKMessage(){
 
   // Zawsze tylko OTV — twarda lista wykluczeń niezależna od filtra w widoku
   const WYKLUCZ=['wawel','zamkowa','bronowicka','plac szczepański','orzeszkowej'];
-  const isWykluczone=apt=>WYKLUCZ.some(w=>apt.toLowerCase().includes(w));
+  const isWykluczone=apt=>{
+    if(isForcedOtvApartment(apt))return false;
+    return WYKLUCZ.some(w=>apt.toLowerCase().includes(w));
+  };
 
   const allRows=[];
   Object.values(_state.data.previo||{}).forEach(month=>{
