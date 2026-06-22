@@ -6255,7 +6255,16 @@ function buildBookingPayoutView(){
   </div>`;
 
   // Group by property object
+  function isL25PremiumApartment(apt){
+    const raw=String(apt||'').trim();
+    const m=raw.match(/l25\s*\/\s*(\d{1,2})/i);
+    if(!m)return false;
+    const num=parseInt(m[1],10);
+    return num>=18&&num<=24;
+  }
+
   function getPropertyGroup(apt){
+    if(isL25PremiumApartment(apt))return'L25 Premium Apartments';
     const a=apt.toLowerCase();
     if(a.includes('plac szczep'))return'Plac Szczepański';
     if(a.includes('wawel ii')||a.includes('wawel 2'))return'Wawel II';
@@ -6280,7 +6289,7 @@ function buildBookingPayoutView(){
   });
 
   // Sort: OTV first, then alphabetically
-  const groupOrder=['Old Town Vistula Premium Apartments','Wawel','Wawel II','Plac Szczepański','Katowicka','Stawowa','Zamkowa','Bronowicka','Orzeszkowej'];
+  const groupOrder=['Old Town Vistula Premium Apartments','L25 Premium Apartments','Wawel','Wawel II','Plac Szczepański','Katowicka','Stawowa','Zamkowa','Bronowicka','Orzeszkowej'];
   const sortedGroups=Object.keys(groups).sort((a,b)=>{
     const ai=groupOrder.indexOf(a),bi=groupOrder.indexOf(b);
     return (ai===-1?99:ai)-(bi===-1?99:bi);
