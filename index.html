@@ -3714,6 +3714,24 @@ function buildLaundryTextilesView(){
   </div>`;
 }
 
+function normalizeDyzuryPayload(payload){
+  const data=payload&&typeof payload==='object'?payload:{};
+  const overrides=data.overrides&&typeof data.overrides==='object'?data.overrides:{};
+  const vacations=data.vacations&&typeof data.vacations==='object'?data.vacations:{};
+  const out={overrides:{},vacations:{}};
+  Object.keys(overrides).forEach(key=>{
+    const value=String(overrides[key]||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(key))return;
+    if(value!=='Kacper'&&value!=='Artur')return;
+    out.overrides[key]=value;
+  });
+  Object.keys(vacations).forEach(key=>{
+    if(!/^\d{4}-\d{2}-\d{2}__(Kacper|Artur)$/.test(key))return;
+    out.vacations[key]=true;
+  });
+  return out;
+}
+
 /* STATE */
 let _state={
   section:'oblozenie',        // 'rental' | 'media' | 'apartments' | 'housekeeping'
@@ -6331,11 +6349,23 @@ function buildBookingPayoutView(){
 
 /* DYŻURY */
 function getVacations(){
-  try{return JSON.parse(localStorage.getItem('dyzury_vacations')||'{}');}
-  catch(e){return{};}
+  if(_dyzuryCache&&typeof _dyzuryCache==='object'&&_dyzuryCache.vacations)return _dyzuryCache.vacations;
+  try{
+    const local=normalizeDyzuryPayload({
+      overrides:{},
+      vacations:JSON.parse(localStorage.getItem('dyzury_vacations')||'{}')
+    });
+    _dyzuryCache={overrides:{},vacations:local.vacations};
+    return _dyzuryCache.vacations;
+  }catch(e){
+    _dyzuryCache={overrides:{},vacations:{}};
+    return _dyzuryCache.vacations;
+  }
 }
 function saveVacations(v){
-  localStorage.setItem('dyzury_vacations',JSON.stringify(v));
+  const current=getSharedDyzury();
+  current.vacations=normalizeDyzuryPayload({overrides:current.overrides,vacations:v}).vacations;
+  saveSharedDyzury(current);
 }
 function toggleVacation(dateStr, person){
   const v=getVacations();
@@ -6353,13 +6383,36 @@ function isOnVacation(dateStr, person){
 
 // Dyżury state — stored in localStorage
 function getDyzuryState(){
-  try{
-    const s=localStorage.getItem('dyzury_state');
-    return s?JSON.parse(s):{};
-  }catch(e){return{};}
+  return getSharedDyzury().overrides||{};
 }
 function saveDyzuryState(state){
-  localStorage.setItem('dyzury_state',JSON.stringify(state));
+  const current=getSharedDyzury();
+  current.overrides=normalizeDyzuryPayload({overrides:state,vacations:current.vacations}).overrides;
+  saveSharedDyzury(current);
+}
+
+function getLocalDyzuryFallback(){
+  try{
+    const overrides=JSON.parse(localStorage.getItem('dyzury_state')||'{}')||{};
+    const vacations=JSON.parse(localStorage.getItem('dyzury_vacations')||'{}')||{};
+    return normalizeDyzuryPayload({overrides,vacations});
+  }catch(e){
+    return {overrides:{},vacations:{}};
+  }
+}
+
+function getSharedDyzury(){
+  if(_dyzuryCache&&typeof _dyzuryCache==='object')return _dyzuryCache;
+  const local=getLocalDyzuryFallback();
+  _dyzuryCache={overrides:local.overrides||{},vacations:local.vacations||{}};
+  return _dyzuryCache;
+}
+
+function saveSharedDyzury(payload){
+  _dyzuryCache=normalizeDyzuryPayload(payload);
+  localStorage.setItem('dyzury_state',JSON.stringify(_dyzuryCache.overrides||{}));
+  localStorage.setItem('dyzury_vacations',JSON.stringify(_dyzuryCache.vacations||{}));
+  syncPushDyzury(_dyzuryCache);
 }
 
 // Calculate who is on duty for a given date
@@ -7398,6 +7451,7 @@ let _paidCache=null;
 let _ksefPaidCache=null;
 let _arturPaymentsCache=null;
 let _tasksCache=null;
+let _dyzuryCache=null;
 let _backgroundPrefetchStarted=false;
 let _previoSoftRefreshRequested={};
 
@@ -7412,6 +7466,7 @@ async function syncPull(){
       fetch(`${CONFIG.syncUrl}?action=getKsefPaid${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getArturPayments${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getTasks${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getDyzury${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getAssignableUsers${tokenParam}`).then(r=>r.json()),
     ]);
     const kalData=results[0].status==='fulfilled'?results[0].value:null;
@@ -7420,7 +7475,8 @@ async function syncPull(){
     const ksefPaidData=results[3].status==='fulfilled'?results[3].value:null;
     const arturPaymentsData=results[4].status==='fulfilled'?results[4].value:null;
     const tasksData=results[5].status==='fulfilled'?results[5].value:null;
-    const assignableUsersData=results[6].status==='fulfilled'?results[6].value:null;
+    const dyzuryData=results[6].status==='fulfilled'?results[6].value:null;
+    const assignableUsersData=results[7].status==='fulfilled'?results[7].value:null;
     if(kalData?.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
@@ -7455,6 +7511,18 @@ async function syncPull(){
       _tasksCache=tasksData.tasks;
       if(!Array.isArray(_tasksCache.items))_tasksCache.items=[];
       localStorage.setItem('dashboard_tasks',JSON.stringify(_tasksCache));
+    }
+    if(dyzuryData&&typeof dyzuryData.dyzury==='object'&&dyzuryData.dyzury!==null){
+      const remoteDyzury=normalizeDyzuryPayload(dyzuryData.dyzury);
+      const localDyzury=getLocalDyzuryFallback();
+      const hasRemoteDyzury=Object.keys(remoteDyzury.overrides||{}).length>0||Object.keys(remoteDyzury.vacations||{}).length>0;
+      const hasLocalDyzury=Object.keys(localDyzury.overrides||{}).length>0||Object.keys(localDyzury.vacations||{}).length>0;
+      _dyzuryCache=hasRemoteDyzury?remoteDyzury:localDyzury;
+      if(!hasRemoteDyzury&&hasLocalDyzury){
+        syncPushDyzury(localDyzury);
+      }
+      localStorage.setItem('dyzury_state',JSON.stringify(_dyzuryCache.overrides||{}));
+      localStorage.setItem('dyzury_vacations',JSON.stringify(_dyzuryCache.vacations||{}));
     }
     if(assignableUsersData&&Array.isArray(assignableUsersData.users)){
       _state.assignableUsers=assignableUsersData.users.map(user=>({
@@ -7571,6 +7639,18 @@ async function syncPushTasks(tasks){
       body:JSON.stringify({action:'saveTasks',token:_state.authToken,tasks}),
     });
   }catch(e){console.warn('syncPushTasks failed:',e);}
+}
+
+async function syncPushDyzury(dyzury){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveDyzury',token:_state.authToken,dyzury:normalizeDyzuryPayload(dyzury)}),
+    });
+  }catch(e){console.warn('syncPushDyzury failed:',e);}
 }
 
 function getKalEvents(){
@@ -10165,7 +10245,7 @@ async function init(){
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},czynsze:{},laundry:null,parkingCards:null,parking:null,ksef:null};
-  _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;
+  _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;_dyzuryCache=null;
   _backgroundPrefetchStarted=false;
   _previoSoftRefreshRequested={};
 
