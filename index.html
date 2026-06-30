@@ -5431,7 +5431,7 @@ function buildAgataFakturaView(){
       ✉️ Wyślij do Agaty
     </button>
     <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
-      📊 Pobierz CSV z rezerwacjami
+      📊 Pobierz XLS z rezerwacjami
     </button>
     <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📄 Eksportuj PDF dla Agaty
@@ -5981,24 +5981,93 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     Number((r.doplata||0).toFixed(2)),
     Number((r.cenaCalkowita||0).toFixed(2)),
   ]);
-  const csvEscape=value=>{
-    const text=String(value??'');
-    if(/[;"\n\r]/.test(text))return `"${text.replace(/"/g,'""')}"`;
-    return text;
-  };
-  const fmtCsvMoney=value=>Number(value||0).toFixed(2).replace('.',',');
-  const lines=[
-    [`Agata Faktura - rezerwacje miesiąca ${monthLabel}`],
-    [],
-    headers,
-    ...rows.map(row=>row.map((cell,idx)=>idx>=7?fmtCsvMoney(cell):cell)),
-  ].map(row=>row.map(csvEscape).join(';'));
-  const csv='\uFEFF'+lines.join('\r\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const xmlEscape=value=>String(value??'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+  const buildCell=(value,type='String',style='')=>(
+    `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="${type}">${xmlEscape(value)}</Data></Cell>`
+  );
+  const titleRow=
+    `<Row ss:AutoFitHeight="0" ss:Height="24">`+
+      `<Cell ss:MergeAcross="${headers.length-1}" ss:StyleID="title"><Data ss:Type="String">${xmlEscape(`Agata Faktura - rezerwacje miesiąca ${monthLabel}`)}</Data></Cell>`+
+    `</Row>`;
+  const blankRow='<Row ss:Height="8"></Row>';
+  const headerRow=`<Row ss:StyleID="header">${headers.map(h=>buildCell(h,'String','header')).join('')}</Row>`;
+  const dataRows=rows.map(row=>(
+    `<Row>`+
+      row.map((cell,idx)=>{
+        if(idx>=7){
+          return buildCell(Number(cell||0).toFixed(2),'Number','money');
+        }
+        if(idx===2){
+          return buildCell(cell===''?'':Number(cell),'Number','center');
+        }
+        return buildCell(cell,'String',idx===4||idx===5?'center':'');
+      }).join('')+
+    `</Row>`
+  )).join('');
+  const worksheetXml=`<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#111827"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="title">
+   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="header">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="money">
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <NumberFormat ss:Format="#,##0.00"/>
+  </Style>
+  <Style ss:ID="center">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Rezerwacje">
+  <Table>
+   <Column ss:AutoFitWidth="0" ss:Width="84"/>
+   <Column ss:AutoFitWidth="0" ss:Width="84"/>
+   <Column ss:AutoFitWidth="0" ss:Width="48"/>
+   <Column ss:AutoFitWidth="0" ss:Width="180"/>
+   <Column ss:AutoFitWidth="0" ss:Width="104"/>
+   <Column ss:AutoFitWidth="0" ss:Width="64"/>
+   <Column ss:AutoFitWidth="0" ss:Width="142"/>
+   <Column ss:AutoFitWidth="0" ss:Width="84"/>
+   <Column ss:AutoFitWidth="0" ss:Width="84"/>
+   <Column ss:AutoFitWidth="0" ss:Width="96"/>
+   <Column ss:AutoFitWidth="0" ss:Width="104"/>
+   <Column ss:AutoFitWidth="0" ss:Width="84"/>
+   <Column ss:AutoFitWidth="0" ss:Width="108"/>
+   ${titleRow}
+   ${blankRow}
+   ${headerRow}
+   ${dataRows}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+  const blob=new Blob([worksheetXml],{type:'application/vnd.ms-excel;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
-  a.download=`agata_rezerwacje_${monthKey}.csv`;
+  a.download=`agata_rezerwacje_${monthKey}.xls`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
