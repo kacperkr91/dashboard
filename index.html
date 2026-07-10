@@ -6162,6 +6162,11 @@ const BOOKING_GROUPS=[
     match: apt=>apt.toLowerCase().startsWith('apt'),
   },
   {
+    name:'L25 Premium Apartments',
+    commission:0.18,
+    match: apt=>isL25PremiumApartment(apt),
+  },
+  {
     name:'Wawel II',
     commission:0.18,
     match: apt=>apt.toLowerCase().includes('wawel ii'),
@@ -6204,7 +6209,18 @@ const BOOKING_GROUPS=[
 ];
 const BOOKING_TRANSACTION_FEE=0.014;
 
+function isL25PremiumApartment(apt){
+  const raw=String(apt||'').trim();
+  const m=raw.match(/l25\s*\/\s*(\d{1,2})/i);
+  if(!m)return false;
+  const num=parseInt(m[1],10);
+  return num>=18&&num<=24;
+}
+
 function getBookingGroup(apt){
+  if(isL25PremiumApartment(apt)){
+    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.18};
+  }
   for(const g of BOOKING_GROUPS){
     if(g.match(apt))return g;
   }
@@ -6681,12 +6697,12 @@ function buildAirbnbPayoutView(){
   const today=new Date();today.setHours(0,0,0,0);
   const fmt2=d=>d.toLocaleDateString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  // Group by check-in date (dataOd) — payout = day after check-in
+  // Group by normalized check-in date (dataOd) — payout = day after check-in
   const byCheckin={};
   allAirbnb.forEach(r=>{
-    const d=parseDateDMY(r.dataOd);
+    const d=parsePrevioRowDate(r,'dataOd');
     if(!d)return;
-    const key=r.dataOd;
+    const key=dateKey(d);
     if(!byCheckin[key]){byCheckin[key]={date:d,rows:[]};}
     byCheckin[key].rows.push(r);
   });
@@ -6758,6 +6774,37 @@ function buildAirbnbPayoutView(){
     grouped[g.name].count+=1;
   });
 
+  // Informational weekly overview: aggregate daily Airbnb payouts into Booking-like weekly windows
+  const weeklyBuckets={};
+  allAirbnb.forEach(r=>{
+    const checkin=parsePrevioRowDate(r,'dataOd');
+    if(!checkin)return;
+    const payout=new Date(checkin);
+    payout.setDate(payout.getDate()+1);
+    const period=getBookingPeriod(payout);
+    const weekKey=getPeriodKey(period.from);
+    const netto=r.cenaNetto!=null?r.cenaNetto:Math.round(r.cena*0.845*100)/100;
+    if(!weeklyBuckets[weekKey]){
+      weeklyBuckets[weekKey]={from:period.from,to:period.to,totalNetto:0,count:0,payoutDays:new Set()};
+    }
+    weeklyBuckets[weekKey].totalNetto+=netto;
+    weeklyBuckets[weekKey].count+=1;
+    weeklyBuckets[weekKey].payoutDays.add(dateKey(payout));
+  });
+  const selectedWeekKey=getPeriodKey(getBookingPeriod(payoutDate).from);
+  const weeklyRows=Object.entries(weeklyBuckets)
+    .sort((a,b)=>b[1].from-a[1].from)
+    .slice(0,8)
+    .map(([key,w],i)=>{
+      const isSelected=key===selectedWeekKey;
+      return `<tr style="background:${isSelected?'rgba(255,90,95,0.08)':i%2===0?'var(--white)':'#fafbfc'}">
+        <td style="font-weight:${isSelected?800:700};font-size:13px">${fmt2(w.from)} – ${fmt2(w.to)}</td>
+        <td class="num" style="font-size:12px;color:var(--text-muted)">${w.payoutDays.size} dni</td>
+        <td class="num" style="font-size:12px;color:var(--text-muted)">${w.count} rez.</td>
+        <td class="num" style="font-size:13px;font-weight:700;color:#FF5A5F">${fmt(w.totalNetto)} zł</td>
+      </tr>`;
+    }).join('');
+
   const header=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div>
@@ -6791,8 +6838,16 @@ function buildAirbnbPayoutView(){
       <tr class="hk-total"><td colspan="2">ŁĄCZNIE</td><td class="num">${fmt(totalNetto)} zł</td></tr>
     </table></div>
   </div>`;
+  const weeklyTable=`<div class="grid-card" style="animation:fadeUp 0.4s 0.16s ease both">
+    <div class="card-title">Tygodniowy podgląd wypłat Airbnb</div>
+    <div class="card-subtitle">Informacyjnie — Airbnb wypłaca codziennie, ale tu widzisz sumę pełnych tygodni w układzie podobnym do Booking.com.</div>
+    <div class="hk-table-wrap"><table class="hk-table">
+      <thead><tr><th>Okres tygodnia</th><th class="num">Dni wypłat</th><th class="num">Rezerwacje</th><th class="num">Netto</th></tr></thead>
+      <tbody>${weeklyRows||'<tr><td colspan="4" class="num">Brak danych</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
 
-  return`<div class="hk-month-nav" style="flex-wrap:wrap">${periodBtns}</div>${header}${kpis}${table}`;
+  return`<div class="hk-month-nav" style="flex-wrap:wrap">${periodBtns}</div>${header}${kpis}${table}${weeklyTable}`;
 }
 
 function setAirbnbPayout(key){_state.airbnbPayoutKey=key;renderApp();}
