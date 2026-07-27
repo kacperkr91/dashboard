@@ -9517,6 +9517,8 @@ function buildOblozenieLive(){
   const rezCard=(r,accent)=>{
     const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
     const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
+    const reservationNo=String(r.voucher||r.resId||r.nr||'').trim();
+    const pricePlain=Number.isFinite(Number(r.cena))?Number(r.cena).toFixed(2).replace('.',','):String(fmt(r.cena||0)).trim();
     const phoneBadge=showPhones && r.telefon
       ? `<a href="tel:${r.telefon}" style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid var(--border);color:var(--text-mid);font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-decoration:none">📞 ${r.telefon}</a>`
       : '';
@@ -9531,7 +9533,7 @@ function buildOblozenieLive(){
     return`<div style="background:${r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)'};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
-        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}${reservationNo?`<button onclick='copyTextToClipboard(${JSON.stringify(reservationNo)},this)' title="Kopiuj numer rezerwacji" style="border:1px solid var(--border);background:#fff;color:var(--text-mid);border-radius:999px;padding:2px 7px;font-size:9px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">Nr ${escapeHtml(reservationNo)}</button>`:''}<button onclick='copyTextToClipboard(${JSON.stringify(pricePlain)},this)' title="Kopiuj kwotę bez zł" style="border:1px solid ${accent};background:#fff;color:${accent};border-radius:999px;padding:2px 7px;font-size:10px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif'>${fmt(r.cena)} zł</button></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
