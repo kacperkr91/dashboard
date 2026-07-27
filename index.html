@@ -2351,6 +2351,24 @@ function calcPrevioForecast(monthKey){
     estNewBookings=additionalNightCount*currentAdrPerNight;
   }
 
+  // In the last few days of a live month, the year-over-year model can flatten
+  // to zero even though single-night bookings still tend to land. Keep a small
+  // last-minute floor based on remaining free inventory and historical last-7-day share.
+  if(
+    monthKey===currentMonthKey &&
+    daysLeft>0 &&
+    daysLeft<=5 &&
+    estNewBookings<=0 &&
+    possibleFutureNightCount>0 &&
+    currentAdrPerNight>0
+  ){
+    const freeFutureNightCount=Math.max(possibleFutureNightCount-confirmedFutureNightCount,0);
+    const lastMinuteShareFloor=clamp((avgLast7Pct||0.233)*(daysLeft/7), 0.03, 0.16);
+    const floorNightCount=Math.max(Math.round(freeFutureNightCount*lastMinuteShareFloor),0);
+    const floorRevenue=floorNightCount*currentAdrPerNight;
+    estNewBookings=Math.max(estNewBookings,floorRevenue);
+  }
+
   const forecastTotal=currentBookedTotal+estNewBookings;
 
   // Occupied apts
