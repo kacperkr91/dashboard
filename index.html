@@ -2387,6 +2387,72 @@ function calcPrevioForecast(monthKey){
   };
 }
 
+function calcPrevioApartmentForecasts(monthKey){
+  const rows=_state.data.previo[monthKey];
+  if(!rows||rows.error||!Array.isArray(rows))return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  if(monthKey!==currentMonthKey)return null;
+
+  const pf=calcPrevioForecast(monthKey);
+  if(!pf)return null;
+
+  const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const keyOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const averageNightValue=(sourceRows)=>{
+    const bookedNights=(sourceRows||[]).reduce((s,r)=>s+(parseInt(r.noce,10)||0),0);
+    const bookedValue=(sourceRows||[]).reduce((s,r)=>s+(+r.cena||0),0);
+    return bookedNights>0?bookedValue/bookedNights:0;
+  };
+
+  const [yr,mo]=monthKey.split('-').map(Number);
+  const monthEnd=new Date(yr,mo,0);
+  const active=rows.filter(r=>!r.cancelled&&(r.dataDo||'').slice(0,7)===monthKey&&String(r.apt||'').trim());
+  const futureStart=addDays(today,1);
+  const daysLeft=Math.max(monthEnd.getDate()-today.getDate(),0);
+  if(!active.length)return {};
+
+  const byApt={};
+  active.forEach(r=>{
+    const apt=String(r.apt||'').trim();
+    if(!byApt[apt])byApt[apt]=[];
+    byApt[apt].push(r);
+  });
+
+  const aptTotals={};
+  const aptWeights={};
+  const overallAdr=averageNightValue(active)||0;
+  const estPool=Math.max(pf.estNewBookings||0,0);
+
+  Object.entries(byApt).forEach(([apt,aptRows])=>{
+    const totalBooked=aptRows.reduce((s,r)=>s+(+r.cena||0),0);
+    aptTotals[apt]=totalBooked;
+
+    const occupiedFutureDates=new Set();
+    aptRows.forEach(r=>{
+      const from=parsePrevioRowDate(r,'dataOd');
+      const to=parsePrevioRowDate(r,'dataDo');
+      if(!from||!to)return;
+      let cur=new Date(from);
+      while(cur<to){
+        if(cur>=futureStart&&cur<=monthEnd)occupiedFutureDates.add(keyOf(cur));
+        cur=addDays(cur,1);
+      }
+    });
+    const freeFutureNights=Math.max(daysLeft-occupiedFutureDates.size,0);
+    const aptAdr=averageNightValue(aptRows)||overallAdr||0;
+    aptWeights[apt]=freeFutureNights*Math.max(aptAdr,0);
+  });
+
+  const totalWeight=Object.values(aptWeights).reduce((s,v)=>s+v,0);
+  const forecasts={};
+  Object.keys(aptTotals).forEach(apt=>{
+    const extra=estPool>0&&totalWeight>0?(estPool*(aptWeights[apt]||0)/totalWeight):0;
+    forecasts[apt]=aptTotals[apt]+extra;
+  });
+  return forecasts;
+}
+
 /* FORMATTERS */
 
 /* DEFAULT APARTMENT ORDER */
@@ -4246,6 +4312,8 @@ async function bootDashboard(){
 /* RENTAL MONTH VIEW */
 function buildMonthView(days,opts={}){
   const{showForecast=false,monthLabel='',otvMonthKey=null,previoMonthKey=null}=opts;
+  const liveCurrentMonthKey=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  const showApartmentForecast=previoMonthKey===liveCurrentMonthKey;
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
@@ -4344,10 +4412,13 @@ function buildMonthView(days,opts={}){
   allApts.forEach(a=>{
     monthlyAptTotals[a]=enriched.reduce((s,d)=>(d.aptBreakdown||{})[a]?s+(d.aptBreakdown[a]||0):s,0);
   });
+  const apartmentForecastsRaw=showApartmentForecast&&previoMonthKey?calcPrevioApartmentForecasts(previoMonthKey):null;
   const otvApts=allApts.filter(isRevenueOtvApartment);
   const filteredApts=summaryFilter==='otv'?otvApts:allApts;
   const filteredMonthlyTotals={};
   filteredApts.forEach(a=>{filteredMonthlyTotals[a]=monthlyAptTotals[a]||0;});
+  const filteredApartmentForecasts={};
+  filteredApts.forEach(a=>{filteredApartmentForecasts[a]=apartmentForecastsRaw?.[a]||0;});
   const otvGrandTotal=otvApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
   const filteredGrandTotal=filteredApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
 
@@ -4407,6 +4478,7 @@ function buildMonthView(days,opts={}){
         <thead><tr>
           <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')" title="Kliknij aby sortować">Apartament ↕</th>
           <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')" title="Kliknij aby sortować">Przychód ↕</th>
+          ${showApartmentForecast?'<th style="text-align:right">Przewidywany</th>':''}
           <th style="text-align:right">Udział</th>
           <th></th>
         </tr></thead>
@@ -4417,6 +4489,7 @@ function buildMonthView(days,opts={}){
 
   let monthlyViewTotals={...filteredMonthlyTotals};
   let monthlyViewApts=[...filteredApts];
+  let monthlyViewForecasts={...filteredApartmentForecasts};
   if(summaryFilter==='otv'&&_state.previoOtvTotalExpanded){
     const groupedTotals={
       'L25 Premium Apartments':0,
@@ -4424,21 +4497,39 @@ function buildMonthView(days,opts={}){
       'Katowicka':0,
       'Old Town Vistula Premium Apartments':0
     };
+    const groupedForecasts={
+      'L25 Premium Apartments':0,
+      'Stawowa':0,
+      'Katowicka':0,
+      'Old Town Vistula Premium Apartments':0
+    };
     filteredApts.forEach(apt=>{
       const total=filteredMonthlyTotals[apt]||0;
+      const forecast=filteredApartmentForecasts[apt]||0;
       const aptLower=String(apt||'').toLowerCase();
-      if(aptLower.includes('l25'))groupedTotals['L25 Premium Apartments']+=total;
-      else if(aptLower.includes('stawowa'))groupedTotals['Stawowa']+=total;
-      else if(aptLower.includes('katowicka'))groupedTotals['Katowicka']+=total;
-      else groupedTotals['Old Town Vistula Premium Apartments']+=total;
+      if(aptLower.includes('l25')){
+        groupedTotals['L25 Premium Apartments']+=total;
+        groupedForecasts['L25 Premium Apartments']+=forecast;
+      }else if(aptLower.includes('stawowa')){
+        groupedTotals['Stawowa']+=total;
+        groupedForecasts['Stawowa']+=forecast;
+      }else if(aptLower.includes('katowicka')){
+        groupedTotals['Katowicka']+=total;
+        groupedForecasts['Katowicka']+=forecast;
+      }else{
+        groupedTotals['Old Town Vistula Premium Apartments']+=total;
+        groupedForecasts['Old Town Vistula Premium Apartments']+=forecast;
+      }
     });
     monthlyViewTotals=Object.fromEntries(Object.entries(groupedTotals).filter(([,v])=>v>0));
+    monthlyViewForecasts=Object.fromEntries(Object.entries(groupedForecasts).filter(([,v])=>v>0));
     monthlyViewApts=['Old Town Vistula Premium Apartments','L25 Premium Apartments','Stawowa','Katowicka'].filter(name=>monthlyViewTotals[name]>0);
   }
 
   // store monthly data globally for re-sorting
   window._monthlyAptTotals = monthlyViewTotals;
   window._monthlyAllApts = monthlyViewApts;
+  window._monthlyAptForecasts = showApartmentForecast?monthlyViewForecasts:null;
   window._grandTotal = filteredGrandTotal;
   window._monthlySortOrder = 'default'; // default: custom order
 
@@ -7451,6 +7542,8 @@ function renderDrawerBody(day){
 function renderMonthlyTable(){
   const totals=window._monthlyAptTotals||{};
   const apts=window._monthlyAllApts||[];
+  const forecasts=window._monthlyAptForecasts||null;
+  const showForecastCol=!!forecasts;
   const grand=window._grandTotal||0;
   const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
@@ -7476,13 +7569,15 @@ function renderMonthlyTable(){
     const rowBg=isTop?'var(--green-light)':isBot?'var(--red-light)':'';
     const valColor=isTop?'var(--green)':isBot?'var(--red)':'var(--blue)';
     const badge=isTop?'<span style="font-size:10px;margin-left:5px">🟢</span>':isBot?'<span style="font-size:10px;margin-left:5px">🔴</span>':'';
+    const forecastVal=showForecastCol?(forecasts[apt]||0):0;
     return`<tr style="background:${rowBg}">
       <td style="font-weight:600">${apt}${badge}</td>
       <td style="text-align:right;font-weight:700;color:${valColor};font-variant-numeric:tabular-nums">${fmt(total)} zł</td>
+      ${showForecastCol?`<td style="text-align:right;font-weight:700;color:#0f766e;font-variant-numeric:tabular-nums">${fmt(forecastVal)} zł</td>`:''}
       <td style="text-align:right;color:var(--text-muted);font-variant-numeric:tabular-nums">${pct}%</td>
       <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px"><div style="height:100%;width:${barW}%;background:${isTop?'var(--green)':isBot?'var(--red)':'var(--blue)'};border-radius:3px"></div></div></td>
     </tr>`;
-  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
+  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td>${showForecastCol?`<td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(Object.values(forecasts).reduce((s,v)=>s+(+v||0),0))} zł</td>`:''}<td style="text-align:right">100%</td><td></td></tr>`;
 }
 
 function sortMonthlyTable(by){
