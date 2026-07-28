@@ -4456,8 +4456,8 @@ function buildMonthView(days,opts={}){
 
   // monthly summary (stays below grid)
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
-    <div class="card-title">Podsumowanie miesięczne per apartament</div>
-    <div class="card-subtitle">Łączny przychód · kliknij nagłówek kolumny aby sortować</div>
+    <div class="card-title">Podsumowanie miesięczne przychodów</div>
+    <div class="card-subtitle">${showApartmentForecast?'Zaklepane przychody i przewidywany wynik dla bieżącego miesiąca. Kliknij nagłówek kolumny, aby sortować.':'Zaklepane przychody dla wybranego miesiąca. Kliknij nagłówek kolumny, aby sortować.'}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="_state.previoSummaryFilter='all';renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='all'?'#475569':'var(--border)'};background:${summaryFilter==='all'?'#475569':'var(--white)'};color:${summaryFilter==='all'?'#fff':'var(--text-mid)'}">Wszystkie</button>
@@ -4468,8 +4468,8 @@ function buildMonthView(days,opts={}){
     </div>
     ${_state.previoOtvTotalExpanded?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
-        <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Zgrupowany widok OTV + L25</div>
-        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a reszta wpada do OTV.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, OTV tworzy jedną grupę, a pozostałe apartamenty wpadają do Agaty.'}</div>
+        <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Zgrupowany widok obiektów</div>
+        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a pozostałe lokale OTV wpadają do grupy Old Town Vistula Premium Apartments.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, lokale OTV wpadają do grupy Old Town Vistula Premium Apartments, a zewnętrzne apartamenty do Agaty.'}</div>
       </div>
       <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(summaryFilter==='otv'?otvGrandTotal:filteredGrandTotal)} zł</div>
     </div>`:''}
@@ -4478,8 +4478,8 @@ function buildMonthView(days,opts={}){
         <thead><tr>
           <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')" title="Kliknij aby sortować">Apartament ↕</th>
           <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')" title="Kliknij aby sortować">Przychód ↕</th>
-          ${showApartmentForecast?'<th style="text-align:right">Przewidywany</th>':''}
-          <th style="text-align:right">Udział</th>
+          ${showApartmentForecast?'<th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable(\'forecast\')" title="Kliknij aby sortować">Przewidywany ↕</th>':''}
+          <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable(\'share\')" title="Kliknij aby sortować">Udział ↕</th>
           <th></th>
         </tr></thead>
         <tbody id="monthlyAptBody"></tbody>
@@ -7553,6 +7553,12 @@ function renderMonthlyTable(){
   const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
   if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
+  else if(sort==='forecast'&&showForecastCol)sorted.sort((a,b)=>(forecasts[b]||0)-(forecasts[a]||0));
+  else if(sort==='share')sorted.sort((a,b)=>{
+    const ap=grand>0?((totals[a]||0)/grand):0;
+    const bp=grand>0?((totals[b]||0)/grand):0;
+    return bp-ap;
+  });
   else if(sort==='name')sorted.sort((a,b)=>a.localeCompare(b,'pl'));
   else sorted=sortByDefaultOrder(sorted);
 
@@ -7586,10 +7592,12 @@ function renderMonthlyTable(){
 }
 
 function sortMonthlyTable(by){
-  // cycle: total → name → default
+  // cycle between selected sort and default
   const current=window._monthlySortOrder||'default';
   if(by==='name') window._monthlySortOrder= current==='name'?'default':'name';
   else if(by==='total') window._monthlySortOrder= current==='total'?'default':'total';
+  else if(by==='forecast') window._monthlySortOrder= current==='forecast'?'default':'forecast';
+  else if(by==='share') window._monthlySortOrder= current==='share'?'default':'share';
   else window._monthlySortOrder='default';
   renderMonthlyTable();
 }
