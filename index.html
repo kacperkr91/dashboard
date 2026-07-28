@@ -4466,12 +4466,12 @@ function buildMonthView(days,opts={}){
       </div>
       <div style="font-size:12px;color:var(--text-muted)">Widok: <strong style="color:var(--text)">${summaryFilter==='otv'?'OTV + L25':'Wszystkie apartamenty'}</strong> · ${filteredApts.length} apt.</div>
     </div>
-    ${_state.previoOtvTotalExpanded&&summaryFilter==='otv'?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    ${_state.previoOtvTotalExpanded?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Zgrupowany widok OTV + L25</div>
-        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a reszta wpada do OTV.</div>
+        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a reszta wpada do OTV.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, OTV tworzy jedną grupę, a pozostałe apartamenty wpadają do Agaty.'}</div>
       </div>
-      <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(otvGrandTotal)} zł</div>
+      <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(summaryFilter==='otv'?otvGrandTotal:filteredGrandTotal)} zł</div>
     </div>`:''}
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
@@ -4490,18 +4490,20 @@ function buildMonthView(days,opts={}){
   let monthlyViewTotals={...filteredMonthlyTotals};
   let monthlyViewApts=[...filteredApts];
   let monthlyViewForecasts={...filteredApartmentForecasts};
-  if(summaryFilter==='otv'&&_state.previoOtvTotalExpanded){
+  if(_state.previoOtvTotalExpanded){
     const groupedTotals={
       'L25 Premium Apartments':0,
       'Stawowa':0,
       'Katowicka':0,
-      'Old Town Vistula Premium Apartments':0
+      'Old Town Vistula Premium Apartments':0,
+      'Agata':0
     };
     const groupedForecasts={
       'L25 Premium Apartments':0,
       'Stawowa':0,
       'Katowicka':0,
-      'Old Town Vistula Premium Apartments':0
+      'Old Town Vistula Premium Apartments':0,
+      'Agata':0
     };
     filteredApts.forEach(apt=>{
       const total=filteredMonthlyTotals[apt]||0;
@@ -4516,14 +4518,17 @@ function buildMonthView(days,opts={}){
       }else if(aptLower.includes('katowicka')){
         groupedTotals['Katowicka']+=total;
         groupedForecasts['Katowicka']+=forecast;
-      }else{
+      }else if(summaryFilter==='otv' || isRevenueOtvApartment(apt)){
         groupedTotals['Old Town Vistula Premium Apartments']+=total;
         groupedForecasts['Old Town Vistula Premium Apartments']+=forecast;
+      }else{
+        groupedTotals['Agata']+=total;
+        groupedForecasts['Agata']+=forecast;
       }
     });
     monthlyViewTotals=Object.fromEntries(Object.entries(groupedTotals).filter(([,v])=>v>0));
     monthlyViewForecasts=Object.fromEntries(Object.entries(groupedForecasts).filter(([,v])=>v>0));
-    monthlyViewApts=['Old Town Vistula Premium Apartments','L25 Premium Apartments','Stawowa','Katowicka'].filter(name=>monthlyViewTotals[name]>0);
+    monthlyViewApts=['Old Town Vistula Premium Apartments','L25 Premium Apartments','Stawowa','Katowicka','Agata'].filter(name=>monthlyViewTotals[name]>0);
   }
 
   // store monthly data globally for re-sorting
