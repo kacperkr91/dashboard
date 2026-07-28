@@ -2419,6 +2419,14 @@ function isForcedOtvApartment(apt){
   return value.includes('l25');
 }
 
+function isRevenueOtvApartment(apt){
+  const value=String(apt||'').trim();
+  if(!value)return false;
+  if(WYLACZONE_APT.some(name=>value.includes(name)))return false;
+  if(isForcedOtvApartment(value))return true;
+  return !ZEWNETRZNE_APT.some(name=>value.includes(name));
+}
+
 
 
 /* POLISH HOLIDAYS & DAY HELPERS */
@@ -3771,6 +3779,8 @@ let _state={
   parkingCardsSearch:'',
   parkingCardsSortKey:'sheet',
   parkingCardsSortDir:'asc',
+  previoSummaryFilter:'all',
+  previoOtvTotalExpanded:false,
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -4327,13 +4337,19 @@ function buildMonthView(days,opts={}){
   // ── Per-apt daily breakdown table ──
   // Collect all unique apt names across all days
   const allApts=sortByDefaultOrder([...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))]);
+  const summaryFilter=_state.previoSummaryFilter||'all';
 
   // Monthly totals per apt
   const monthlyAptTotals={};
   allApts.forEach(a=>{
     monthlyAptTotals[a]=enriched.reduce((s,d)=>(d.aptBreakdown||{})[a]?s+(d.aptBreakdown[a]||0):s,0);
   });
-  const aptsSortedByTotal=[...allApts].sort((a,b)=>monthlyAptTotals[b]-monthlyAptTotals[a]);
+  const otvApts=allApts.filter(isRevenueOtvApartment);
+  const filteredApts=summaryFilter==='otv'?otvApts:allApts;
+  const filteredMonthlyTotals={};
+  filteredApts.forEach(a=>{filteredMonthlyTotals[a]=monthlyAptTotals[a]||0;});
+  const otvGrandTotal=otvApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
+  const filteredGrandTotal=filteredApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
 
   // channel totals for pie chart
   const channelTotals={};
@@ -4343,8 +4359,7 @@ function buildMonthView(days,opts={}){
     });
   });
   window._channelTotals=channelTotals;
-  const grandTotal=aptsSortedByTotal.reduce((s,a)=>s+monthlyAptTotals[a],0);
-  const maxAptTotal=monthlyAptTotals[aptsSortedByTotal[0]]||1;
+  const maxAptTotal=Math.max(...filteredApts.map(a=>filteredMonthlyTotals[a]||0),1);
 
   // Daily breakdown table: rows=apartments, cols=days
 
@@ -4372,6 +4387,21 @@ function buildMonthView(days,opts={}){
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
     <div class="card-title">Podsumowanie miesięczne per apartament</div>
     <div class="card-subtitle">Łączny przychód · kliknij nagłówek kolumny aby sortować</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="_state.previoSummaryFilter='all';renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='all'?'#475569':'var(--border)'};background:${summaryFilter==='all'?'#475569':'var(--white)'};color:${summaryFilter==='all'?'#fff':'var(--text-mid)'}">Wszystkie</button>
+        <button onclick="_state.previoSummaryFilter='otv';renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='otv'?'#0369a1':'var(--border)'};background:${summaryFilter==='otv'?'#0369a1':'var(--white)'};color:${summaryFilter==='otv'?'#fff':'var(--text-mid)'}">Tylko OTV + L25</button>
+        <button onclick="_state.previoOtvTotalExpanded=!_state.previoOtvTotalExpanded;renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${_state.previoOtvTotalExpanded?'#0f766e':'var(--border)'};background:${_state.previoOtvTotalExpanded?'#ecfeff':'var(--white)'};color:${_state.previoOtvTotalExpanded?'#0f766e':'var(--text-mid)'}">Suma OTV + L25</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted)">Widok: <strong style="color:var(--text)">${summaryFilter==='otv'?'OTV + L25':'Wszystkie apartamenty'}</strong> · ${filteredApts.length} apt.</div>
+    </div>
+    ${_state.previoOtvTotalExpanded?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Suma apartamentów OTV + L25</div>
+        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">Łączny przychód dla lokali zaliczanych do OTV wraz z L25.</div>
+      </div>
+      <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(otvGrandTotal)} zł</div>
+    </div>`:''}
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
         <thead><tr>
@@ -4386,9 +4416,9 @@ function buildMonthView(days,opts={}){
   </div>`;
 
   // store monthly data globally for re-sorting
-  window._monthlyAptTotals = monthlyAptTotals;
-  window._allApts = allApts;
-  window._grandTotal = grandTotal;
+  window._monthlyAptTotals = filteredMonthlyTotals;
+  window._monthlyAllApts = filteredApts;
+  window._grandTotal = filteredGrandTotal;
   window._monthlySortOrder = 'default'; // default: custom order
 
   const drawer=`<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
@@ -7399,7 +7429,7 @@ function renderDrawerBody(day){
 
 function renderMonthlyTable(){
   const totals=window._monthlyAptTotals||{};
-  const apts=window._allApts||[];
+  const apts=window._monthlyAllApts||[];
   const grand=window._grandTotal||0;
   const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
