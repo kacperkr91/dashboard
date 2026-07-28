@@ -4460,16 +4460,16 @@ function buildMonthView(days,opts={}){
     <div class="card-subtitle">${showApartmentForecast?'Zaklepane przychody i przewidywany wynik dla bieżącego miesiąca. Kliknij nagłówek kolumny, aby sortować.':'Zaklepane przychody dla wybranego miesiąca. Kliknij nagłówek kolumny, aby sortować.'}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button onclick="_state.previoSummaryFilter='all';renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='all'?'#475569':'var(--border)'};background:${summaryFilter==='all'?'#475569':'var(--white)'};color:${summaryFilter==='all'?'#fff':'var(--text-mid)'}">Wszystkie</button>
-        <button onclick="_state.previoSummaryFilter='otv';renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='otv'?'#0369a1':'var(--border)'};background:${summaryFilter==='otv'?'#0369a1':'var(--white)'};color:${summaryFilter==='otv'?'#fff':'var(--text-mid)'}">Tylko OTV + L25</button>
-        <button onclick="_state.previoOtvTotalExpanded=!_state.previoOtvTotalExpanded;renderApp()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${_state.previoOtvTotalExpanded?'#0f766e':'var(--border)'};background:${_state.previoOtvTotalExpanded?'#ecfeff':'var(--white)'};color:${_state.previoOtvTotalExpanded?'#0f766e':'var(--text-mid)'}">Grupy OTV + L25</button>
+        <button onclick="setPrevioSummaryFilter('all')" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='all'?'#475569':'var(--border)'};background:${summaryFilter==='all'?'#475569':'var(--white)'};color:${summaryFilter==='all'?'#fff':'var(--text-mid)'}">Wszystkie obiekty</button>
+        <button onclick="setPrevioSummaryFilter('otv')" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='otv'?'#0369a1':'var(--border)'};background:${summaryFilter==='otv'?'#0369a1':'var(--white)'};color:${summaryFilter==='otv'?'#fff':'var(--text-mid)'}">Portfolio OTV + L25</button>
+        <button onclick="togglePrevioGroupedSummary()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${_state.previoOtvTotalExpanded?'#0f766e':'var(--border)'};background:${_state.previoOtvTotalExpanded?'#ecfeff':'var(--white)'};color:${_state.previoOtvTotalExpanded?'#0f766e':'var(--text-mid)'}">${summaryFilter==='otv'?'Grupy OTV / L25':'Grupy OTV / L25 / Agata'}</button>
       </div>
-      <div style="font-size:12px;color:var(--text-muted)">Widok: <strong style="color:var(--text)">${summaryFilter==='otv'?'OTV + L25':'Wszystkie apartamenty'}</strong> · ${filteredApts.length} apt.</div>
+      <div style="font-size:12px;color:var(--text-muted)">Widok: <strong style="color:var(--text)">${summaryFilter==='otv'?'Portfolio OTV + L25':'Wszystkie obiekty'}</strong> · ${filteredApts.length} apt.</div>
     </div>
     ${_state.previoOtvTotalExpanded?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Zgrupowany widok obiektów</div>
-        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a pozostałe lokale OTV wpadają do grupy Old Town Vistula Premium Apartments.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, lokale OTV wpadają do grupy Old Town Vistula Premium Apartments, a zewnętrzne apartamenty do Agaty.'}</div>
+        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a pozostałe lokale wpadają do grupy OTV główne.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, lokale OTV wpadają do grupy OTV główne, a zewnętrzne apartamenty do Agaty.'}</div>
       </div>
       <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(summaryFilter==='otv'?otvGrandTotal:filteredGrandTotal)} zł</div>
     </div>`:''}
@@ -4495,14 +4495,14 @@ function buildMonthView(days,opts={}){
       'L25 Premium Apartments':0,
       'Stawowa':0,
       'Katowicka':0,
-      'Old Town Vistula Premium Apartments':0,
+      'OTV główne':0,
       'Agata':0
     };
     const groupedForecasts={
       'L25 Premium Apartments':0,
       'Stawowa':0,
       'Katowicka':0,
-      'Old Town Vistula Premium Apartments':0,
+      'OTV główne':0,
       'Agata':0
     };
     filteredApts.forEach(apt=>{
@@ -4519,8 +4519,8 @@ function buildMonthView(days,opts={}){
         groupedTotals['Katowicka']+=total;
         groupedForecasts['Katowicka']+=forecast;
       }else if(summaryFilter==='otv' || isRevenueOtvApartment(apt)){
-        groupedTotals['Old Town Vistula Premium Apartments']+=total;
-        groupedForecasts['Old Town Vistula Premium Apartments']+=forecast;
+        groupedTotals['OTV główne']+=total;
+        groupedForecasts['OTV główne']+=forecast;
       }else{
         groupedTotals['Agata']+=total;
         groupedForecasts['Agata']+=forecast;
@@ -4528,7 +4528,7 @@ function buildMonthView(days,opts={}){
     });
     monthlyViewTotals=Object.fromEntries(Object.entries(groupedTotals).filter(([,v])=>v>0));
     monthlyViewForecasts=Object.fromEntries(Object.entries(groupedForecasts).filter(([,v])=>v>0));
-    monthlyViewApts=['Old Town Vistula Premium Apartments','L25 Premium Apartments','Stawowa','Katowicka','Agata'].filter(name=>monthlyViewTotals[name]>0);
+    monthlyViewApts=['OTV główne','L25 Premium Apartments','Stawowa','Katowicka','Agata'].filter(name=>monthlyViewTotals[name]>0);
   }
 
   // store monthly data globally for re-sorting
@@ -7589,6 +7589,18 @@ function renderMonthlyTable(){
       <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px"><div style="height:100%;width:${barW}%;background:${isTop?'var(--green)':isBot?'var(--red)':'var(--blue)'};border-radius:3px"></div></div></td>
     </tr>`;
   }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td>${showForecastCol?`<td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(Object.values(forecasts).reduce((s,v)=>s+(+v||0),0))} zł</td>`:''}<td style="text-align:right">100%</td><td></td></tr>`;
+}
+
+function setPrevioSummaryFilter(mode){
+  _state.previoSummaryFilter=mode==='otv'?'otv':'all';
+  window._monthlySortOrder='default';
+  if(_state.section==='rental')renderApp();
+}
+
+function togglePrevioGroupedSummary(){
+  _state.previoOtvTotalExpanded=!_state.previoOtvTotalExpanded;
+  window._monthlySortOrder='default';
+  if(_state.section==='rental')renderApp();
 }
 
 function sortMonthlyTable(by){
