@@ -6328,7 +6328,7 @@ const BOOKING_GROUPS=[
   },
   {
     name:'L25 Premium Apartments',
-    commission:0.18,
+    commission:0.15,
     match: apt=>isL25PremiumApartment(apt),
   },
   {
@@ -6384,7 +6384,7 @@ function isL25PremiumApartment(apt){
 
 function getBookingGroup(apt){
   if(isL25PremiumApartment(apt)){
-    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.18};
+    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.15};
   }
   for(const g of BOOKING_GROUPS){
     if(g.match(apt))return g;
