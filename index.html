@@ -2387,72 +2387,6 @@ function calcPrevioForecast(monthKey){
   };
 }
 
-function calcPrevioApartmentForecasts(monthKey){
-  const rows=_state.data.previo[monthKey];
-  if(!rows||rows.error||!Array.isArray(rows))return null;
-  const today=new Date();today.setHours(0,0,0,0);
-  const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  if(monthKey!==currentMonthKey)return null;
-
-  const pf=calcPrevioForecast(monthKey);
-  if(!pf)return null;
-
-  const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
-  const keyOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const averageNightValue=(sourceRows)=>{
-    const bookedNights=(sourceRows||[]).reduce((s,r)=>s+(parseInt(r.noce,10)||0),0);
-    const bookedValue=(sourceRows||[]).reduce((s,r)=>s+(+r.cena||0),0);
-    return bookedNights>0?bookedValue/bookedNights:0;
-  };
-
-  const [yr,mo]=monthKey.split('-').map(Number);
-  const monthEnd=new Date(yr,mo,0);
-  const active=rows.filter(r=>!r.cancelled&&(r.dataDo||'').slice(0,7)===monthKey&&String(r.apt||'').trim());
-  const futureStart=addDays(today,1);
-  const daysLeft=Math.max(monthEnd.getDate()-today.getDate(),0);
-  if(!active.length)return {};
-
-  const byApt={};
-  active.forEach(r=>{
-    const apt=String(r.apt||'').trim();
-    if(!byApt[apt])byApt[apt]=[];
-    byApt[apt].push(r);
-  });
-
-  const aptTotals={};
-  const aptWeights={};
-  const overallAdr=averageNightValue(active)||0;
-  const estPool=Math.max(pf.estNewBookings||0,0);
-
-  Object.entries(byApt).forEach(([apt,aptRows])=>{
-    const totalBooked=aptRows.reduce((s,r)=>s+(+r.cena||0),0);
-    aptTotals[apt]=totalBooked;
-
-    const occupiedFutureDates=new Set();
-    aptRows.forEach(r=>{
-      const from=parsePrevioRowDate(r,'dataOd');
-      const to=parsePrevioRowDate(r,'dataDo');
-      if(!from||!to)return;
-      let cur=new Date(from);
-      while(cur<to){
-        if(cur>=futureStart&&cur<=monthEnd)occupiedFutureDates.add(keyOf(cur));
-        cur=addDays(cur,1);
-      }
-    });
-    const freeFutureNights=Math.max(daysLeft-occupiedFutureDates.size,0);
-    const aptAdr=averageNightValue(aptRows)||overallAdr||0;
-    aptWeights[apt]=freeFutureNights*Math.max(aptAdr,0);
-  });
-
-  const totalWeight=Object.values(aptWeights).reduce((s,v)=>s+v,0);
-  const forecasts={};
-  Object.keys(aptTotals).forEach(apt=>{
-    const extra=estPool>0&&totalWeight>0?(estPool*(aptWeights[apt]||0)/totalWeight):0;
-    forecasts[apt]=aptTotals[apt]+extra;
-  });
-  return forecasts;
-}
-
 /* FORMATTERS */
 
 /* DEFAULT APARTMENT ORDER */
@@ -2483,14 +2417,6 @@ function sortByDefaultOrder(apts){
 function isForcedOtvApartment(apt){
   const value=String(apt||'').toLowerCase();
   return value.includes('l25');
-}
-
-function isRevenueOtvApartment(apt){
-  const value=String(apt||'').trim();
-  if(!value)return false;
-  if(WYLACZONE_APT.some(name=>value.includes(name)))return false;
-  if(isForcedOtvApartment(value))return true;
-  return !ZEWNETRZNE_APT.some(name=>value.includes(name));
 }
 
 
@@ -3845,8 +3771,6 @@ let _state={
   parkingCardsSearch:'',
   parkingCardsSortKey:'sheet',
   parkingCardsSortDir:'asc',
-  previoSummaryFilter:'all',
-  previoOtvTotalExpanded:false,
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -4312,8 +4236,6 @@ async function bootDashboard(){
 /* RENTAL MONTH VIEW */
 function buildMonthView(days,opts={}){
   const{showForecast=false,monthLabel='',otvMonthKey=null,previoMonthKey=null}=opts;
-  const liveCurrentMonthKey=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-  const showApartmentForecast=previoMonthKey===liveCurrentMonthKey;
   const enriched=days.map(d=>{const date=tabToDate(d.name);return{...d,date,dow:date.getDay(),isWeekend:isWeekend(date),aptBreakdown:d.aptBreakdown||{},chanBreakdown:d.chanBreakdown||{}};});
   const withVal=enriched.filter(d=>d.value!==null);
   const total=withVal.reduce((s,d)=>s+d.value,0);
@@ -4405,22 +4327,13 @@ function buildMonthView(days,opts={}){
   // ── Per-apt daily breakdown table ──
   // Collect all unique apt names across all days
   const allApts=sortByDefaultOrder([...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))]);
-  const summaryFilter=_state.previoSummaryFilter||'all';
 
   // Monthly totals per apt
   const monthlyAptTotals={};
   allApts.forEach(a=>{
     monthlyAptTotals[a]=enriched.reduce((s,d)=>(d.aptBreakdown||{})[a]?s+(d.aptBreakdown[a]||0):s,0);
   });
-  const apartmentForecastsRaw=showApartmentForecast&&previoMonthKey?calcPrevioApartmentForecasts(previoMonthKey):null;
-  const otvApts=allApts.filter(isRevenueOtvApartment);
-  const filteredApts=summaryFilter==='otv'?otvApts:allApts;
-  const filteredMonthlyTotals={};
-  filteredApts.forEach(a=>{filteredMonthlyTotals[a]=monthlyAptTotals[a]||0;});
-  const filteredApartmentForecasts={};
-  filteredApts.forEach(a=>{filteredApartmentForecasts[a]=apartmentForecastsRaw?.[a]||0;});
-  const otvGrandTotal=otvApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
-  const filteredGrandTotal=filteredApts.reduce((s,a)=>s+(monthlyAptTotals[a]||0),0);
+  const aptsSortedByTotal=[...allApts].sort((a,b)=>monthlyAptTotals[b]-monthlyAptTotals[a]);
 
   // channel totals for pie chart
   const channelTotals={};
@@ -4430,7 +4343,8 @@ function buildMonthView(days,opts={}){
     });
   });
   window._channelTotals=channelTotals;
-  const maxAptTotal=Math.max(...filteredApts.map(a=>filteredMonthlyTotals[a]||0),1);
+  const grandTotal=aptsSortedByTotal.reduce((s,a)=>s+monthlyAptTotals[a],0);
+  const maxAptTotal=monthlyAptTotals[aptsSortedByTotal[0]]||1;
 
   // Daily breakdown table: rows=apartments, cols=days
 
@@ -4456,30 +4370,14 @@ function buildMonthView(days,opts={}){
 
   // monthly summary (stays below grid)
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
-    <div class="card-title">Podsumowanie miesięczne przychodów</div>
-    <div class="card-subtitle">${showApartmentForecast?'Zaklepane przychody i przewidywany wynik dla bieżącego miesiąca. Kliknij nagłówek kolumny, aby sortować.':'Zaklepane przychody dla wybranego miesiąca. Kliknij nagłówek kolumny, aby sortować.'}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button onclick="setPrevioSummaryFilter('all')" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='all'?'#475569':'var(--border)'};background:${summaryFilter==='all'?'#475569':'var(--white)'};color:${summaryFilter==='all'?'#fff':'var(--text-mid)'}">Wszystkie obiekty</button>
-        <button onclick="setPrevioSummaryFilter('otv')" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${summaryFilter==='otv'?'#0369a1':'var(--border)'};background:${summaryFilter==='otv'?'#0369a1':'var(--white)'};color:${summaryFilter==='otv'?'#fff':'var(--text-mid)'}">Portfolio OTV + L25</button>
-        <button onclick="togglePrevioGroupedSummary()" style="padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${_state.previoOtvTotalExpanded?'#0f766e':'var(--border)'};background:${_state.previoOtvTotalExpanded?'#ecfeff':'var(--white)'};color:${_state.previoOtvTotalExpanded?'#0f766e':'var(--text-mid)'}">${summaryFilter==='otv'?'Grupy OTV / L25':'Grupy OTV / L25 / Agata'}</button>
-      </div>
-      <div style="font-size:12px;color:var(--text-muted)">Widok: <strong style="color:var(--text)">${summaryFilter==='otv'?'Portfolio OTV + L25':'Wszystkie obiekty'}</strong> · ${filteredApts.length} apt.</div>
-    </div>
-    ${_state.previoOtvTotalExpanded?`<div style="margin-bottom:14px;background:#ecfeff;border:1px solid #67e8f9;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Zgrupowany widok obiektów</div>
-        <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:4px">${summaryFilter==='otv'?'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, a pozostałe lokale wpadają do grupy OTV główne.':'L25 sumuje się do jednej pozycji, Stawowa i Katowicka zostają osobno, lokale OTV wpadają do grupy OTV główne, a zewnętrzne apartamenty do Agaty.'}</div>
-      </div>
-      <div style="font-size:24px;font-weight:800;color:#0f766e">${fmt(summaryFilter==='otv'?otvGrandTotal:filteredGrandTotal)} zł</div>
-    </div>`:''}
+    <div class="card-title">Podsumowanie miesięczne per apartament</div>
+    <div class="card-subtitle">Łączny przychód · kliknij nagłówek kolumny aby sortować</div>
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
         <thead><tr>
           <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')" title="Kliknij aby sortować">Apartament ↕</th>
           <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')" title="Kliknij aby sortować">Przychód ↕</th>
-          ${showApartmentForecast?'<th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable(\'forecast\')" title="Kliknij aby sortować">Przewidywany ↕</th>':''}
-          <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable(\'share\')" title="Kliknij aby sortować">Udział ↕</th>
+          <th style="text-align:right">Udział</th>
           <th></th>
         </tr></thead>
         <tbody id="monthlyAptBody"></tbody>
@@ -4487,55 +4385,10 @@ function buildMonthView(days,opts={}){
     </div>
   </div>`;
 
-  let monthlyViewTotals={...filteredMonthlyTotals};
-  let monthlyViewApts=[...filteredApts];
-  let monthlyViewForecasts={...filteredApartmentForecasts};
-  if(_state.previoOtvTotalExpanded){
-    const groupedTotals={
-      'L25 Premium Apartments':0,
-      'Stawowa':0,
-      'Katowicka':0,
-      'OTV główne':0,
-      'Agata':0
-    };
-    const groupedForecasts={
-      'L25 Premium Apartments':0,
-      'Stawowa':0,
-      'Katowicka':0,
-      'OTV główne':0,
-      'Agata':0
-    };
-    filteredApts.forEach(apt=>{
-      const total=filteredMonthlyTotals[apt]||0;
-      const forecast=filteredApartmentForecasts[apt]||0;
-      const aptLower=String(apt||'').toLowerCase();
-      if(aptLower.includes('l25')){
-        groupedTotals['L25 Premium Apartments']+=total;
-        groupedForecasts['L25 Premium Apartments']+=forecast;
-      }else if(aptLower.includes('stawowa')){
-        groupedTotals['Stawowa']+=total;
-        groupedForecasts['Stawowa']+=forecast;
-      }else if(aptLower.includes('katowicka')){
-        groupedTotals['Katowicka']+=total;
-        groupedForecasts['Katowicka']+=forecast;
-      }else if(summaryFilter==='otv' || isRevenueOtvApartment(apt)){
-        groupedTotals['OTV główne']+=total;
-        groupedForecasts['OTV główne']+=forecast;
-      }else{
-        groupedTotals['Agata']+=total;
-        groupedForecasts['Agata']+=forecast;
-      }
-    });
-    monthlyViewTotals=Object.fromEntries(Object.entries(groupedTotals).filter(([,v])=>v>0));
-    monthlyViewForecasts=Object.fromEntries(Object.entries(groupedForecasts).filter(([,v])=>v>0));
-    monthlyViewApts=['OTV główne','L25 Premium Apartments','Stawowa','Katowicka','Agata'].filter(name=>monthlyViewTotals[name]>0);
-  }
-
   // store monthly data globally for re-sorting
-  window._monthlyAptTotals = monthlyViewTotals;
-  window._monthlyAllApts = monthlyViewApts;
-  window._monthlyAptForecasts = showApartmentForecast?monthlyViewForecasts:null;
-  window._grandTotal = filteredGrandTotal;
+  window._monthlyAptTotals = monthlyAptTotals;
+  window._allApts = allApts;
+  window._grandTotal = grandTotal;
   window._monthlySortOrder = 'default'; // default: custom order
 
   const drawer=`<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
@@ -6152,83 +6005,70 @@ function exportAgataReservationsXls(monthKey, monthLabel){
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&apos;');
-  const buildCell=(value,type='String',style='')=>(
-    `<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="${type}">${xmlEscape(value)}</Data></Cell>`
-  );
-  const titleRow=
-    `<Row ss:AutoFitHeight="0" ss:Height="24">`+
-      `<Cell ss:MergeAcross="${headers.length-1}" ss:StyleID="title"><Data ss:Type="String">${xmlEscape(`Agata Faktura - rezerwacje miesiąca ${monthLabel}`)}</Data></Cell>`+
-    `</Row>`;
-  const blankRow='<Row ss:Height="8"></Row>';
-  const headerRow=`<Row ss:StyleID="header">${headers.map(h=>buildCell(h,'String','header')).join('')}</Row>`;
+  const htmlEscape=xmlEscape;
+  const buildHtmlCell=(value,cls='')=>`<td${cls?` class="${cls}"`:''}>${htmlEscape(value)}</td>`;
   const dataRows=rows.map(row=>(
-    `<Row>`+
+    `<tr>`+
       row.map((cell,idx)=>{
-        if(idx>=7){
-          return buildCell(Number(cell||0).toFixed(2),'Number','money');
-        }
-        if(idx===2){
-          return buildCell(cell===''?'':Number(cell),'Number','center');
-        }
-        return buildCell(cell,'String',idx===4||idx===5?'center':'');
+        if(idx>=7)return buildHtmlCell(Number(cell||0).toFixed(2),'money');
+        if(idx===2)return buildHtmlCell(cell===''?'':Number(cell),'center');
+        return buildHtmlCell(cell,idx===4||idx===5?'center':'');
       }).join('')+
-    `</Row>`
+    `</tr>`
   )).join('');
-  const worksheetXml=`<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Center"/>
-   <Borders/>
-   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#111827"/>
-   <Interior/>
-   <NumberFormat/>
-   <Protection/>
-  </Style>
-  <Style ss:ID="title">
-   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1"/>
-  </Style>
-  <Style ss:ID="header">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="money">
-   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
-   <NumberFormat ss:Format="#,##0.00"/>
-  </Style>
-  <Style ss:ID="center">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-  </Style>
- </Styles>
- <Worksheet ss:Name="Rezerwacje">
-  <Table>
-   <Column ss:AutoFitWidth="0" ss:Width="84"/>
-   <Column ss:AutoFitWidth="0" ss:Width="84"/>
-   <Column ss:AutoFitWidth="0" ss:Width="48"/>
-   <Column ss:AutoFitWidth="0" ss:Width="180"/>
-   <Column ss:AutoFitWidth="0" ss:Width="104"/>
-   <Column ss:AutoFitWidth="0" ss:Width="64"/>
-   <Column ss:AutoFitWidth="0" ss:Width="142"/>
-   <Column ss:AutoFitWidth="0" ss:Width="84"/>
-   <Column ss:AutoFitWidth="0" ss:Width="84"/>
-   <Column ss:AutoFitWidth="0" ss:Width="96"/>
-   <Column ss:AutoFitWidth="0" ss:Width="104"/>
-   <Column ss:AutoFitWidth="0" ss:Width="84"/>
-   <Column ss:AutoFitWidth="0" ss:Width="108"/>
-   ${titleRow}
-   ${blankRow}
-   ${headerRow}
-   ${dataRows}
-  </Table>
- </Worksheet>
-</Workbook>`;
-  const blob=new Blob([worksheetXml],{type:'application/vnd.ms-excel;charset=utf-8;'});
+  const workbookHtml=`<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <!--[if gte mso 9]><xml>
+  <x:ExcelWorkbook>
+    <x:ExcelWorksheets>
+      <x:ExcelWorksheet>
+        <x:Name>Rezerwacje</x:Name>
+        <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+      </x:ExcelWorksheet>
+    </x:ExcelWorksheets>
+  </x:ExcelWorkbook>
+  </xml><![endif]-->
+  <style>
+    body{font-family:Calibri,Arial,sans-serif}
+    table{border-collapse:collapse}
+    td,th{border:1px solid #d1d5db;padding:6px 8px;font-size:11pt;vertical-align:middle}
+    .title{font-size:14pt;font-weight:700;border:none;padding:4px 0 10px 0}
+    .spacer td{border:none;height:8px;padding:0}
+    .header{background:#0F766E;color:#fff;font-weight:700;text-align:center}
+    .center{text-align:center}
+    .money{text-align:right;mso-number-format:"0.00"}
+  </style>
+</head>
+<body>
+  <table>
+    <colgroup>
+      <col style="width:84px">
+      <col style="width:84px">
+      <col style="width:48px">
+      <col style="width:180px">
+      <col style="width:104px">
+      <col style="width:64px">
+      <col style="width:142px">
+      <col style="width:84px">
+      <col style="width:84px">
+      <col style="width:96px">
+      <col style="width:104px">
+      <col style="width:84px">
+      <col style="width:108px">
+    </colgroup>
+    <tr><td class="title" colspan="${headers.length}">${htmlEscape(`Agata Faktura - rezerwacje miesiąca ${monthLabel}`)}</td></tr>
+    <tr class="spacer"><td colspan="${headers.length}"></td></tr>
+    <tr>${headers.map(h=>`<th class="header">${htmlEscape(h)}</th>`).join('')}</tr>
+    ${dataRows}
+  </table>
+</body>
+</html>`;
+  const blob=new Blob(['\ufeff',workbookHtml],{type:'application/vnd.ms-excel;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
@@ -6328,7 +6168,7 @@ const BOOKING_GROUPS=[
   },
   {
     name:'L25 Premium Apartments',
-    commission:0.15,
+    commission:0.18,
     match: apt=>isL25PremiumApartment(apt),
   },
   {
@@ -6384,7 +6224,7 @@ function isL25PremiumApartment(apt){
 
 function getBookingGroup(apt){
   if(isL25PremiumApartment(apt)){
-    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.15};
+    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.18};
   }
   for(const g of BOOKING_GROUPS){
     if(g.match(apt))return g;
@@ -7546,19 +7386,11 @@ function renderDrawerBody(day){
 
 function renderMonthlyTable(){
   const totals=window._monthlyAptTotals||{};
-  const apts=window._monthlyAllApts||[];
-  const forecasts=window._monthlyAptForecasts||null;
-  const showForecastCol=!!forecasts;
+  const apts=window._allApts||[];
   const grand=window._grandTotal||0;
   const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
   if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
-  else if(sort==='forecast'&&showForecastCol)sorted.sort((a,b)=>(forecasts[b]||0)-(forecasts[a]||0));
-  else if(sort==='share')sorted.sort((a,b)=>{
-    const ap=grand>0?((totals[a]||0)/grand):0;
-    const bp=grand>0?((totals[b]||0)/grand):0;
-    return bp-ap;
-  });
   else if(sort==='name')sorted.sort((a,b)=>a.localeCompare(b,'pl'));
   else sorted=sortByDefaultOrder(sorted);
 
@@ -7580,36 +7412,20 @@ function renderMonthlyTable(){
     const rowBg=isTop?'var(--green-light)':isBot?'var(--red-light)':'';
     const valColor=isTop?'var(--green)':isBot?'var(--red)':'var(--blue)';
     const badge=isTop?'<span style="font-size:10px;margin-left:5px">🟢</span>':isBot?'<span style="font-size:10px;margin-left:5px">🔴</span>':'';
-    const forecastVal=showForecastCol?(forecasts[apt]||0):0;
     return`<tr style="background:${rowBg}">
       <td style="font-weight:600">${apt}${badge}</td>
       <td style="text-align:right;font-weight:700;color:${valColor};font-variant-numeric:tabular-nums">${fmt(total)} zł</td>
-      ${showForecastCol?`<td style="text-align:right;font-weight:700;color:#0f766e;font-variant-numeric:tabular-nums">${fmt(forecastVal)} zł</td>`:''}
       <td style="text-align:right;color:var(--text-muted);font-variant-numeric:tabular-nums">${pct}%</td>
       <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px"><div style="height:100%;width:${barW}%;background:${isTop?'var(--green)':isBot?'var(--red)':'var(--blue)'};border-radius:3px"></div></div></td>
     </tr>`;
-  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td>${showForecastCol?`<td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(Object.values(forecasts).reduce((s,v)=>s+(+v||0),0))} zł</td>`:''}<td style="text-align:right">100%</td><td></td></tr>`;
-}
-
-function setPrevioSummaryFilter(mode){
-  _state.previoSummaryFilter=mode==='otv'?'otv':'all';
-  window._monthlySortOrder='default';
-  if(_state.section==='rental')renderApp();
-}
-
-function togglePrevioGroupedSummary(){
-  _state.previoOtvTotalExpanded=!_state.previoOtvTotalExpanded;
-  window._monthlySortOrder='default';
-  if(_state.section==='rental')renderApp();
+  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
 }
 
 function sortMonthlyTable(by){
-  // cycle between selected sort and default
+  // cycle: total → name → default
   const current=window._monthlySortOrder||'default';
   if(by==='name') window._monthlySortOrder= current==='name'?'default':'name';
   else if(by==='total') window._monthlySortOrder= current==='total'?'default':'total';
-  else if(by==='forecast') window._monthlySortOrder= current==='forecast'?'default':'forecast';
-  else if(by==='share') window._monthlySortOrder= current==='share'?'default':'share';
   else window._monthlySortOrder='default';
   renderMonthlyTable();
 }
@@ -9688,8 +9504,6 @@ function buildOblozenieLive(){
   const rezCard=(r,accent)=>{
     const godz_od=r.godzinaOd||fmtHour(r.dataOd||'');
     const godz_do=r.godzinaDo||fmtHour(r.dataDo||'');
-    const reservationNo=String(r.voucher||r.resId||r.nr||'').trim();
-    const pricePlain=Number.isFinite(Number(r.cena))?Number(r.cena).toFixed(2).replace('.',','):String(fmt(r.cena||0)).trim();
     const phoneBadge=showPhones && r.telefon
       ? `<a href="tel:${r.telefon}" style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid var(--border);color:var(--text-mid);font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-decoration:none">📞 ${r.telefon}</a>`
       : '';
@@ -9704,7 +9518,7 @@ function buildOblozenieLive(){
     return`<div style="background:${r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)'};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
-        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}${reservationNo?`<button onclick='copyTextToClipboard(${JSON.stringify(reservationNo)},this)' title="Kopiuj numer rezerwacji" style="border:1px solid var(--border);background:#fff;color:var(--text-mid);border-radius:999px;padding:2px 7px;font-size:9px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">Nr ${escapeHtml(reservationNo)}</button>`:''}<button onclick='copyTextToClipboard(${JSON.stringify(pricePlain)},this)' title="Kopiuj kwotę bez zł" style="border:1px solid ${accent};background:#fff;color:${accent};border-radius:999px;padding:2px 7px;font-size:10px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif">${fmt(r.cena)} zł</button></div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
