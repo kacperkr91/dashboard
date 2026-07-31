@@ -5449,7 +5449,10 @@ function buildAgataFakturaView(){
       ✉️ Wyślij do Agaty
     </button>
     <button onclick="exportAgataReservationsXls('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0f766e;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
-      📊 Pobierz XLS z rezerwacjami
+      📊 Pobierz XLS dla Windows / Excel
+    </button>
+    <button onclick="exportAgataReservationsCsv('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#0ea5e9;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
+      🍏 Pobierz CSV dla Mac / Numbers
     </button>
     <button onclick="exportAgataPdf('${monthKey}','${activeMonth?.label||monthKey}')" style="background:#166534;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px">
       📄 Eksportuj PDF dla Agaty
@@ -6073,6 +6076,63 @@ function exportAgataReservationsXls(monthKey, monthLabel){
   const a=document.createElement('a');
   a.href=url;
   a.download=`agata_rezerwacje_${monthKey}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function exportAgataReservationsCsv(monthKey, monthLabel){
+  const data=_state.data.agata?.[monthKey];
+  if(!data||data.error){
+    alert('Brak danych Agata Faktura do eksportu.');
+    return;
+  }
+
+  const reservations=[...(data.reservations||[])].sort((a,b)=>{
+    const ad=String(a.dataDo||'');
+    const bd=String(b.dataDo||'');
+    if(ad!==bd)return ad.localeCompare(bd);
+    const aa=String(a.apartament||'');
+    const ba=String(b.apartament||'');
+    return aa.localeCompare(ba,'pl');
+  });
+  if(!reservations.length){
+    alert('Brak rezerwacji do pobrania.');
+    return;
+  }
+
+  const headers=['Data od','Data do','Osoby','Goście','Partner','Status','Apartament','Transakcja','Prowizja','Goła cena','Cena z systemu','Dopłata','Cena całkowita'];
+  const csvEscape=value=>{
+    const s=String(value??'');
+    return `"${s.replace(/"/g,'""')}"`;
+  };
+  const fmtCsvNumber=value=>Number(value||0).toFixed(2);
+  const lines=[
+    headers.map(csvEscape).join(';'),
+    ...reservations.map(r=>[
+      r.dataOd||'',
+      r.dataDo||'',
+      r.osoby||'',
+      r.gosc||'',
+      r.partner||'',
+      r.status||'',
+      r.apartament||'',
+      fmtCsvNumber(r.transakcja),
+      fmtCsvNumber(r.prowizja),
+      fmtCsvNumber(r.golaCena),
+      fmtCsvNumber(r.cenaSystem),
+      fmtCsvNumber(r.doplata),
+      fmtCsvNumber(r.cenaCalkowita),
+    ].map(csvEscape).join(';'))
+  ];
+
+  const csvContent='\ufeff'+lines.join('\r\n');
+  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`agata_rezerwacje_${monthKey}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
