@@ -1356,21 +1356,19 @@ function getHousekeepingTotals(hkData){
   const rowsPranie=activeRows.reduce((s,r)=>s+(Number(r.pranie)||0),0);
   const rowsApt=activeRows.reduce((s,r)=>s+(Number(r.aptCena)||0),0);
   const rowsGos=activeRows.reduce((s,r)=>s+(Number(r.gosCena)||0),0);
-  const officialSuma=parseMoneyLoose(faktura.suma);
   const officialNetto=parseMoneyLoose(faktura.kwotaNetto);
   const officialVat=parseMoneyLoose(faktura.vat);
   const officialBrutto=parseMoneyLoose(faktura.kwotaBrutto);
   const officialPrac=parseMoneyLoose(faktura.pracownicy);
   const officialOdjecia=parseMoneyLoose(faktura.odjecia);
-  const displaySuma=officialSuma>0?officialSuma:rowsSuma;
-  const netto=officialNetto>0?officialNetto:(displaySuma-officialPrac-officialOdjecia);
+  const netto=officialNetto>0?officialNetto:(rowsSuma-officialPrac-officialOdjecia);
   const vat=officialVat>0?officialVat:Math.round(netto*0.23*100)/100;
   const brutto=officialBrutto>0?officialBrutto:Math.round((netto+vat)*100)/100;
   return{
     rows,
     activeRows,
     rowsSuma,
-    totalSuma:displaySuma,
+    totalSuma:rowsSuma,
     totalPranie:rowsPranie,
     totalApt:rowsApt,
     totalGos:rowsGos,
