@@ -2674,7 +2674,7 @@ function normalizeKsefPaymentEntry(entry, bruttoValue=0){
   payments=payments.map(p=>({
     date:String(p?.date||'').trim(),
     amount:Math.max(parseMoneyValue(p?.amount),0),
-  })).filter(p=>p.date&&p.amount>0)
+  })).filter(p=>p.date&&p.amount>=0)
     .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const paidAmount=payments.reduce((sum,p)=>sum+p.amount,0);
   const remainingAmount=Math.max((Number(bruttoValue)||0)-paidAmount,0);
@@ -2707,6 +2707,12 @@ function applyKsefPaymentState(target, entry){
     target.remainingAmount=0;
     target.paidAmount=target.bruttoValue||0;
     if(!target.latestPaidDate)target.latestPaidDate=target.issueDate||'';
+    return;
+  }
+  if(normalized.payments.length>0 && (Number(target.bruttoValue)||0)<=0.009){
+    target.paymentState='paid';
+    target.status='paid';
+    target.remainingAmount=0;
     return;
   }
   if(normalized.paidAmount>0 && normalized.remainingAmount<=0.009){
@@ -7920,8 +7926,14 @@ function closeKsefPaidModal(){
 
 function saveKsefInvoicePayment(ksefNumber,paidDate,paidAmount){
   if(!ksefNumber||!paidDate)return;
+  const item=Array.isArray(_state?.data?.ksef)?_state.data.ksef.find(row=>String(row.ksefNumber||'')===String(ksefNumber||'')):null;
+  const bruttoValue=Number(item?.bruttoValue)||0;
   const amount=Math.max(parseMoneyValue(paidAmount),0);
-  if(!(amount>0)){
+  if(amount<0){
+    alert('Kwota płatności nie może być ujemna.');
+    return;
+  }
+  if(!(amount>0) && bruttoValue>0.009){
     alert('Podaj kwotę płatności większą od zera.');
     return;
   }
@@ -7963,7 +7975,7 @@ function markKsefInvoicePaid(ksefNumber,currentDate=''){
       <button onclick="closeKsefPaidModal()" style="background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
     <input id="ksefPaidDateInput" type="date" value="${suggestion}" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
-    <input id="ksefPaidAmountInput" type="number" min="0" step="0.01" value="${suggestedAmount?Number(suggestedAmount.toFixed(2)):''}" placeholder="Kwota płatności" style="width:100%;margin-top:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
+    <input id="ksefPaidAmountInput" type="number" min="0" step="0.01" value="${suggestedAmount?Number(suggestedAmount.toFixed(2)):'0'}" placeholder="Kwota płatności" style="width:100%;margin-top:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:Inter,sans-serif;font-size:14px;padding:12px 14px;border-radius:10px;outline:none"/>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
       <button onclick="closeKsefPaidModal()" style="background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:10px 14px;border-radius:9px;cursor:pointer">Anuluj</button>
       <button onclick="saveKsefInvoicePayment('${safeNumber}',document.getElementById('ksefPaidDateInput').value,document.getElementById('ksefPaidAmountInput').value)" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;font-family:Inter,sans-serif;font-size:13px;font-weight:700;padding:10px 14px;border-radius:9px;cursor:pointer">Zapisz</button>
@@ -7995,7 +8007,6 @@ function markKsefInvoicePaidToday(ksefNumber){
   const today=new Date().toISOString().slice(0,10);
   const item=Array.isArray(_state?.data?.ksef)?_state.data.ksef.find(row=>String(row.ksefNumber||'')===String(ksefNumber||'')):null;
   const amount=item ? Math.max(item.remainingAmount||item.bruttoValue||0,0) : 0;
-  if(!(amount>0))return;
   const existing=getKsefPaidMap();
   const current=normalizeKsefPaymentEntry(existing[ksefNumber],0);
   current.payments.push({date:today,amount});
