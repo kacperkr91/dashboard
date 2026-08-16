@@ -2427,7 +2427,7 @@ function calcPrevioForecast(monthKey){
 
 /* DEFAULT APARTMENT ORDER */
 const APT_ORDER=[
-  'Apt 1','Apt 7','Apt 8','Apt 9','Apt 10','Apt 11',
+  'Apt 1','Apt 7','Apt 7c','Apt 8','Apt 9','Apt 10','Apt 11',
   'Apt 30c','Apt 32c','Apt 31c',
   'Apt 12r','Apt 14r','Apt 15r','Apt 30r','Apt 31r','Apt 32r','Apt 33r','Apt 36r','Apt 37r',
   'Apt A','Apt B','Orzeszkowej','Stawowa','Katowicka',
@@ -2451,8 +2451,8 @@ function sortByDefaultOrder(apts){
 }
 
 function isForcedOtvApartment(apt){
-  const value=String(apt||'').toLowerCase();
-  return value.includes('l25');
+  const value=String(apt||'').toLowerCase().trim();
+  return value.includes('l25')||value==='apt 7c';
 }
 
 
@@ -6324,6 +6324,9 @@ function getBookingGroup(apt){
   if(isL25PremiumApartment(apt)){
     return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.18};
   }
+  if(String(apt||'').toLowerCase().trim()==='apt 7c'){
+    return BOOKING_GROUPS.find(g=>g.name==='Old Town Vistula Premium Apartments')||{name:'Old Town Vistula Premium Apartments',commission:0.18};
+  }
   for(const g of BOOKING_GROUPS){
     if(g.match(apt))return g;
   }
@@ -6472,6 +6475,7 @@ function buildBookingPayoutView(){
   function getPropertyGroup(apt){
     if(isL25PremiumApartment(apt))return'L25 Premium Apartments';
     const a=apt.toLowerCase();
+    if(a==='apt 7c')return'Old Town Vistula Premium Apartments';
     if(a.includes('plac szczep'))return'Plac Szczepański';
     if(a.includes('wawel ii')||a.includes('wawel 2'))return'Wawel II';
     if(a.includes('wawel'))return'Wawel';
