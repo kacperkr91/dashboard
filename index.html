@@ -1252,6 +1252,7 @@ async function loadKsefData(){
     if(dueObj && normalizedDays >= 0 && normalizedDays <= 7)status='due-soon';
     const baseItem={
       ksefNumber,
+      invoiceNumber:String(row[9]||'').trim(),
       issueDate,
       seller:String(row[2]||'').trim()||'Nieznany dostawca',
       nip:String(row[3]||'').trim(),
@@ -4821,7 +4822,7 @@ function buildKsefView(rows){
   const filtered=rows.filter(item=>{
     if(filter!=='all' && item.status!==filter)return false;
     if(!search)return true;
-    return [item.seller,item.ksefNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
+    return [item.seller,item.ksefNumber,item.invoiceNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
   });
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
@@ -4960,10 +4961,10 @@ function buildKsefView(rows){
       <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap">
         <div>
           <div class="card-title">Pełna lista faktur KSeF</div>
-          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF albo statusie płatności.</div>
+          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF, numerze faktury albo statusie płatności.</div>
         </div>
         <div class="ksef-filters">
-          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
+          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF, numer faktury…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
           <select id="ksefStatusFilter" class="ksef-select" onchange="setKsefFilterState('status',this.value)">
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
@@ -4981,6 +4982,7 @@ function buildKsefView(rows){
             <col style="width:150px"/>
             <col style="width:150px"/>
             <col style="width:150px"/>
+            <col style="width:150px"/>
             <col style="width:118px"/>
             <col style="width:118px"/>
             <col style="width:72px"/>
@@ -4993,6 +4995,7 @@ function buildKsefView(rows){
             <tr>
               <th class="col-seller">Dostawca</th>
               <th class="col-ksef">Numer KSeF</th>
+              <th class="col-ksef">Nr faktury</th>
               <th class="col-status">Status</th>
               <th class="col-date">Wystawienie</th>
               <th class="col-date">Termin</th>
@@ -5010,6 +5013,7 @@ function buildKsefView(rows){
                   <div class="ksef-seller-name">${item.seller}</div>
                 </td>
                 <td class="col-ksef">${item.ksefNumber||'—'}</td>
+                <td class="col-ksef">${item.invoiceNumber||'—'}</td>
                 <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
                 <td class="col-date">${item.issueDate||'—'}</td>
                 <td class="col-date">${item.dueDate||'—'}</td>
