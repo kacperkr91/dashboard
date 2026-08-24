@@ -641,7 +641,7 @@ const CONFIG={
   ksefApiKey:         localStorage.getItem('gs_ksef_api_key')||'',
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
-  ksefRange:          'A1:P10000',
+  ksefRange:          'A2:O10000',
   agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
   agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
   laundryApiKey:      localStorage.getItem('gs_laundry_api_key')||'',
@@ -1218,63 +1218,23 @@ async function loadKsefData(){
     const parsed=parseDateDMY(String(value).slice(0,10))||parseDatePL(String(value).slice(0,10))||parseHKDate(String(value).slice(0,10));
     return parsed&& !isNaN(parsed)?parsed:null;
   };
-  const normalizeHeader=value=>String(value||'').trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^a-z0-9]+/g,'');
-  const headerRow=Array.isArray(rows[0])?rows[0]:[];
-  const headerMap={};
-  headerRow.forEach((cell,idx)=>{
-    const key=normalizeHeader(cell);
-    if(key && headerMap[key]===undefined)headerMap[key]=idx;
-  });
-  const hasHeader=headerMap.nrksef!==undefined;
-  const dataRows=hasHeader?rows.slice(1):rows;
-  const findIndex=(...names)=>{
-    for(const name of names){
-      const key=normalizeHeader(name);
-      if(headerMap[key]!==undefined)return headerMap[key];
-    }
-    return -1;
-  };
-  const columns=hasHeader
-    ? {
-      ksefNumber:findIndex('Nr KSeF'),
-      invoiceNumber:findIndex('Nr faktury','Numer faktury'),
-      issueDate:findIndex('Data wystawienia'),
-      seller:findIndex('Sprzedawca'),
-      nip:findIndex('NIP sprzedawcy'),
-      netto:findIndex('Netto'),
-      vat:findIndex('VAT'),
-      brutto:findIndex('Brutto'),
-      dueDate:findIndex('Termin płatności','Termin platnosci'),
-      days:findIndex('Dni do płatności','Dni do platnosci'),
-      alert:findIndex('Alert'),
-      updatedAt:findIndex('Aktualizacja'),
-      paidFlag:findIndex('Oplacona'),
-      paidDate:findIndex('Data oplaćenia','Data oplacenia'),
-      paidAmount:findIndex('Kwota oplacona'),
-      remainingAmount:findIndex('Kwota pozostala'),
-    }
-    : null;
-  const cell=(row,index)=>index>=0?String(row[index]||'').trim():'';
   const paidMap=getKsefPaidMap();
 
-  return dataRows.map(row=>{
-    const bruttoRaw=hasHeader?cell(row,columns.brutto):String(row[7]||'');
-    const brutto=parseFloat(String(bruttoRaw||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const issueDate=hasHeader?cell(row,columns.issueDate):String(row[2]||'').trim();
-    const dueDate=hasHeader?cell(row,columns.dueDate):String(row[8]||'').trim();
-    const daysRaw=hasHeader?(columns.days>=0?row[columns.days]:''):row[9];
+  return rows.map(row=>{
+    const brutto=parseFloat(String(row[6]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const issueDate=String(row[1]||'').trim();
+    const dueDate=String(row[7]||'').trim();
+    const daysRaw=row[8];
     const daysValue=daysRaw===''||daysRaw===undefined||daysRaw===null?'':parseInt(String(daysRaw),10);
     const now=new Date(); now.setHours(0,0,0,0);
     const dueObj=toDate(dueDate);
     const issueObj=toDate(issueDate);
-    const ksefNumber=hasHeader?cell(row,columns.ksefNumber):String(row[0]||'').trim();
+    const ksefNumber=String(row[0]||'').trim();
     const manualPaid=paidMap[ksefNumber]||null;
-    const sheetPaidFlag=(hasHeader?cell(row,columns.paidFlag):String(row[12]||'')).trim().toUpperCase();
-    const sheetPaidDate=hasHeader?cell(row,columns.paidDate):String(row[13]||'').trim();
-    const sheetPaidAmount=parseMoneyValue(hasHeader?cell(row,columns.paidAmount):row[14]||'0');
-    const sheetRemainingAmount=parseMoneyValue(hasHeader?cell(row,columns.remainingAmount):row[15]||'0');
+    const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
+    const sheetPaidDate=String(row[12]||'').trim();
+    const sheetPaidAmount=parseMoneyValue(row[13]||'0');
+    const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
     const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||sheetPaidFlag==='OPLACONA';
     const sheetPartial=sheetPaidFlag==='CZESCIOWO'||sheetPaidFlag==='CZĘŚCIOWO';
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
@@ -1292,18 +1252,17 @@ async function loadKsefData(){
     if(dueObj && normalizedDays >= 0 && normalizedDays <= 7)status='due-soon';
     const baseItem={
       ksefNumber,
-      invoiceNumber:hasHeader?cell(row,columns.invoiceNumber):String(row[1]||'').trim(),
       issueDate,
-      seller:(hasHeader?cell(row,columns.seller):String(row[3]||'').trim())||'Nieznany dostawca',
-      nip:hasHeader?cell(row,columns.nip):String(row[4]||'').trim(),
-      netto:hasHeader?cell(row,columns.netto):String(row[5]||'').trim(),
-      vat:hasHeader?cell(row,columns.vat):String(row[6]||'').trim(),
-      brutto:bruttoRaw,
+      seller:String(row[2]||'').trim()||'Nieznany dostawca',
+      nip:String(row[3]||'').trim(),
+      netto:String(row[4]||'').trim(),
+      vat:String(row[5]||'').trim(),
+      brutto:String(row[6]||'').trim(),
       bruttoValue:brutto,
       dueDate,
       dueDateObj:dueObj,
       daysToDue:normalizedDays,
-      updatedAt:hasHeader?cell(row,columns.updatedAt):String(row[11]||'').trim(),
+      updatedAt:String(row[10]||'').trim(),
       status,
       urgencyStatus:status,
       manualPaidDate:'',
@@ -5001,10 +4960,10 @@ function buildKsefView(rows){
       <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap">
         <div>
           <div class="card-title">Pełna lista faktur KSeF</div>
-          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF, numerze faktury albo statusie płatności.</div>
+          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF albo statusie płatności.</div>
         </div>
         <div class="ksef-filters">
-          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF, nr faktury…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
+          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
           <select id="ksefStatusFilter" class="ksef-select" onchange="setKsefFilterState('status',this.value)">
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
@@ -5022,7 +4981,6 @@ function buildKsefView(rows){
             <col style="width:150px"/>
             <col style="width:150px"/>
             <col style="width:150px"/>
-            <col style="width:150px"/>
             <col style="width:118px"/>
             <col style="width:118px"/>
             <col style="width:72px"/>
@@ -5035,7 +4993,6 @@ function buildKsefView(rows){
             <tr>
               <th class="col-seller">Dostawca</th>
               <th class="col-ksef">Numer KSeF</th>
-              <th class="col-ksef">Nr faktury</th>
               <th class="col-status">Status</th>
               <th class="col-date">Wystawienie</th>
               <th class="col-date">Termin</th>
@@ -5053,7 +5010,6 @@ function buildKsefView(rows){
                   <div class="ksef-seller-name">${item.seller}</div>
                 </td>
                 <td class="col-ksef">${item.ksefNumber||'—'}</td>
-                <td class="col-ksef">${item.invoiceNumber||'—'}</td>
                 <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
                 <td class="col-date">${item.issueDate||'—'}</td>
                 <td class="col-date">${item.dueDate||'—'}</td>
