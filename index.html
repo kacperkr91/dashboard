@@ -1221,20 +1221,23 @@ async function loadKsefData(){
   const paidMap=getKsefPaidMap();
 
   return rows.map(row=>{
-    const brutto=parseFloat(String(row[6]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const issueDate=String(row[1]||'').trim();
-    const dueDate=String(row[7]||'').trim();
-    const daysRaw=row[8];
+    const oldIssueDate=String(row[1]||'').trim();
+    const newIssueDate=String(row[2]||'').trim();
+    const isNewLayout=!!(toDate(newIssueDate) && !toDate(oldIssueDate));
+    const brutto=parseFloat(String((isNewLayout?row[7]:row[6])||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const issueDate=isNewLayout?newIssueDate:oldIssueDate;
+    const dueDate=String((isNewLayout?row[8]:row[7])||'').trim();
+    const daysRaw=isNewLayout?row[9]:row[8];
     const daysValue=daysRaw===''||daysRaw===undefined||daysRaw===null?'':parseInt(String(daysRaw),10);
     const now=new Date(); now.setHours(0,0,0,0);
     const dueObj=toDate(dueDate);
     const issueObj=toDate(issueDate);
     const ksefNumber=String(row[0]||'').trim();
     const manualPaid=paidMap[ksefNumber]||null;
-    const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
-    const sheetPaidDate=String(row[12]||'').trim();
-    const sheetPaidAmount=parseMoneyValue(row[13]||'0');
-    const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
+    const sheetPaidFlag=String((isNewLayout?row[12]:row[11])||'').trim().toUpperCase();
+    const sheetPaidDate=String((isNewLayout?row[13]:row[12])||'').trim();
+    const sheetPaidAmount=parseMoneyValue((isNewLayout?row[14]:row[13])||'0');
+    const sheetRemainingAmount=parseMoneyValue((isNewLayout?row[15]:row[14])||'0');
     const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||sheetPaidFlag==='OPLACONA';
     const sheetPartial=sheetPaidFlag==='CZESCIOWO'||sheetPaidFlag==='CZĘŚCIOWO';
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
@@ -1253,16 +1256,16 @@ async function loadKsefData(){
     const baseItem={
       ksefNumber,
       issueDate,
-      seller:String(row[2]||'').trim()||'Nieznany dostawca',
-      nip:String(row[3]||'').trim(),
-      netto:String(row[4]||'').trim(),
-      vat:String(row[5]||'').trim(),
-      brutto:String(row[6]||'').trim(),
+      seller:String((isNewLayout?row[3]:row[2])||'').trim()||'Nieznany dostawca',
+      nip:String((isNewLayout?row[4]:row[3])||'').trim(),
+      netto:String((isNewLayout?row[5]:row[4])||'').trim(),
+      vat:String((isNewLayout?row[6]:row[5])||'').trim(),
+      brutto:String((isNewLayout?row[7]:row[6])||'').trim(),
       bruttoValue:brutto,
       dueDate,
       dueDateObj:dueObj,
       daysToDue:normalizedDays,
-      updatedAt:String(row[10]||'').trim(),
+      updatedAt:String((isNewLayout?row[11]:row[10])||'').trim(),
       status,
       urgencyStatus:status,
       manualPaidDate:'',
