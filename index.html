@@ -1091,7 +1091,12 @@ async function loadRentalMonthDataByKey(key){
     case 'mar2026':
       return loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03');
     case 'apr2026':
-      return loadAprilData();
+      try{
+        return await loadRentalNamedMonthData(key);
+      }catch(err){
+        if(err?.message!=='NO_MONTH_SHEET')throw err;
+        return loadAprilData();
+      }
     default:
       if(selectedMonthKey===currentMonthKey){
         return loadDayTabMonthData(parsed.month);
