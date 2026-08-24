@@ -10975,7 +10975,7 @@ async function init(){
   const initHkKey=initialSection==='summary'?_state.summaryMonth:_state.hkMonth;
   const initOtvKey=_state.otvMonth;
   const initAgataKey=_state.agataMonth;
-  const initCzynszeKey=_state.czynszeMonth;
+  const initCzynszeKey=initialSection==='summary'?_state.summaryMonth:_state.czynszeMonth;
   const initPrevioKey=initialSection==='otv-new'?_state.otvNewMonth:(initialSection==='summary'?_state.summaryMonth:_state.previoMonth);
   const initRentalKey=_state.rentalMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
@@ -11859,19 +11859,25 @@ function setSummaryMonth(key){
   _state.summaryMonth=key;
   const hasPrevio=_state.data.previo?.[key]!==undefined;
   const hasHk=!!_state.data.housekeeping?.[key];
-  if(hasPrevio&&hasHk){
+  const hasCzynsze=!hasCzynszeDashboardConfig()||_state.data.czynsze?.[key]!==undefined;
+  if(hasPrevio&&hasHk&&hasCzynsze){
     renderApp();
     return;
   }
   if(!hasPrevio)_state.data.previo[key]=null;
   if(!hasHk)_state.data.housekeeping[key]=null;
+  if(hasCzynszeDashboardConfig()&&_state.data.czynsze?.[key]===undefined)_state.data.czynsze[key]=null;
   renderApp();
   Promise.allSettled([
     hasPrevio?Promise.resolve(_state.data.previo[key]):loadPrevioMonth(key),
     hasHk?Promise.resolve(_state.data.housekeeping[key]):loadHousekeepingMonth(key),
-  ]).then(([previoR,hkR])=>{
+    hasCzynsze
+      ? Promise.resolve(_state.data.czynsze?.[key])
+      : detectCzynszeMonths().then(()=>loadCzynszeMonth(key)),
+  ]).then(([previoR,hkR,czynszeR])=>{
     if(!hasPrevio)_state.data.previo[key]=previoR.status==='fulfilled'?previoR.value:{error:previoR.reason?.message||'Błąd'};
     if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
+    if(!hasCzynsze)_state.data.czynsze[key]=czynszeR.status==='fulfilled'?czynszeR.value:{error:czynszeR.reason?.message||'Błąd'};
     if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
   });
 }
