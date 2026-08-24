@@ -5500,6 +5500,7 @@ function buildSummaryView(){
   const rows=apartmentKeys.map(apt=>{
     const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
     const hk=housekeepingMap[apt]||{housekeeping:0,pranie:0,aptCena:0,gosCena:0};
+    const internetCost=getStaticInternetCostForApartment(apt);
     return{
       apt,
       gross:income.gross||0,
@@ -5515,8 +5516,8 @@ function buildSummaryView(){
       gas:null,
       rent:null,
       advance:null,
-      internet:null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0),
+      internet:internetCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost,
     };
   });
 
@@ -5536,23 +5537,24 @@ function buildSummaryView(){
     acc.channelCost+=r.channelCost;
     acc.incomeNet+=r.incomeNet;
     acc.housekeeping+=r.housekeeping;
+    acc.internet+=r.internet||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,internet:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
-    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po odjęciu housekeeping</div></div>
+    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po odjęciu housekeeping i internetu</div></div>
   </div>`;
 
   const filters=`<div class="grid-card" style="animation:fadeUp 0.4s 0.05s ease both;margin-bottom:18px;padding:16px 18px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="font-size:15px">Filtry podsumowania</div>
-        <div class="card-subtitle">Na razie koszty: kanał i housekeeping. Pozostałe kolumny są przygotowane jako b.d.</div>
+        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping i internet. Pozostałe kolumny są przygotowane pod dalsze uzupełnienie.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="summarySearchInput" type="search" value="${escapeHtml(_state.summarySearch)}" oninput="setSummarySearch(this.value)" placeholder="Szukaj apartamentu…" style="min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
@@ -5573,7 +5575,7 @@ function buildSummaryView(){
     <td class="num">${bd}</td>
     <td class="num">${bd}</td>
     <td class="num">${bd}</td>
-    <td class="num">${bd}</td>
+    <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
@@ -5594,13 +5596,22 @@ function buildSummaryView(){
             <td class="num">${bd}</td>
             <td class="num">${bd}</td>
             <td class="num">${bd}</td>
-            <td class="num">${bd}</td>
+            <td class="num">${fmt(totals.internet)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
         </tbody>
       </table></div>
     </div>`;
+}
+
+function getStaticInternetCostForApartment(apt){
+  const raw=String(apt||'').trim().toLowerCase();
+  if(!raw)return 0;
+  if(isL25PremiumApartment(raw))return 0;
+  if(raw.includes('stawowa'))return 0;
+  if(raw.includes('katowicka'))return 0;
+  return 97.84;
 }
 
 function openOtvDrawer(date){
