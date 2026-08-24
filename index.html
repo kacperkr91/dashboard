@@ -5383,33 +5383,36 @@ function buildOtvNewView(){
     acc.gross+=r.gross||0;
     acc.cost+=r.cost||0;
     acc.net+=r.net||0;
-    acc.noce+=r.noce||0;
+    acc.commission+=r.commission||0;
+    acc.transactionFee+=r.transactionFee||0;
     return acc;
-  },{gross:0,cost:0,net:0,noce:0});
+  },{gross:0,cost:0,net:0,commission:0,transactionFee:0});
 
   const channelMap={};
   const apartmentMap={};
   enriched.forEach(r=>{
-    if(!channelMap[r.channel])channelMap[r.channel]={count:0,gross:0,cost:0,net:0};
-    channelMap[r.channel].count++;
+    if(!channelMap[r.channel])channelMap[r.channel]={gross:0,cost:0,net:0,commission:0,transactionFee:0};
     channelMap[r.channel].gross+=r.gross||0;
     channelMap[r.channel].cost+=r.cost||0;
     channelMap[r.channel].net+=r.net||0;
+    channelMap[r.channel].commission+=r.commission||0;
+    channelMap[r.channel].transactionFee+=r.transactionFee||0;
 
     const aptKey=r.apt||'—';
-    if(!apartmentMap[aptKey])apartmentMap[aptKey]={apt:aptKey,count:0,noce:0,gross:0,cost:0,net:0};
-    apartmentMap[aptKey].count++;
-    apartmentMap[aptKey].noce+=r.noce||0;
+    if(!apartmentMap[aptKey])apartmentMap[aptKey]={apt:aptKey,gross:0,cost:0,net:0,commission:0,transactionFee:0};
     apartmentMap[aptKey].gross+=r.gross||0;
     apartmentMap[aptKey].cost+=r.cost||0;
     apartmentMap[aptKey].net+=r.net||0;
+    apartmentMap[aptKey].commission+=r.commission||0;
+    apartmentMap[aptKey].transactionFee+=r.transactionFee||0;
   });
 
   const kpis=`<div class="kpi-row">
-    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód brutto</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${enriched.length} rezerwacji</div></div>
-    <div class="kpi-card c-purple" style="animation-delay:0.07s"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.cost)}</div><div class="sub">prowizje i opłaty</div></div>
-    <div class="kpi-card c-green" style="animation-delay:0.14s"><div class="label">Dochód netto</div><div class="value"><span class="sym">zł</span>${fmt(totals.net)}</div><div class="sub">${totals.gross>0?`${(totals.net/totals.gross*100).toFixed(1)}% brutto`:''}</div></div>
-    <div class="kpi-card c-orange" style="animation-delay:0.21s"><div class="label">Noce</div><div class="value">${fmt(totals.noce)}</div><div class="sub">${totals.noce?`${fmt(totals.net/totals.noce)} zł / noc`:''}</div></div>
+    <div class="kpi-card c-blue" style="animation-delay:0s"><div class="label">Przychód brutto</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">OTV bez zewnętrznych obiektów</div></div>
+    <div class="kpi-card c-purple" style="animation-delay:0.07s"><div class="label">Prowizje</div><div class="value"><span class="sym">zł</span>${fmt(totals.commission)}</div><div class="sub">kanały sprzedaży</div></div>
+    <div class="kpi-card c-orange" style="animation-delay:0.14s"><div class="label">Opłaty trans.</div><div class="value"><span class="sym">zł</span>${fmt(totals.transactionFee)}</div><div class="sub">Booking 1.4%, Airbnb 0%</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.21s"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.cost)}</div><div class="sub">prowizje + opłaty</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.28s"><div class="label">Dochód netto</div><div class="value"><span class="sym">zł</span>${fmt(totals.net)}</div><div class="sub">${totals.gross>0?`${(totals.net/totals.gross*100).toFixed(1)}% brutto`:''}</div></div>
   </div>`;
 
   const channelCards=Object.entries(channelMap)
@@ -5418,7 +5421,7 @@ function buildOtvNewView(){
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
         <div>
           <div class="card-title" style="font-size:15px">${name}</div>
-          <div class="card-subtitle">${val.count} rezerwacji</div>
+          <div class="card-subtitle">kanał sprzedaży</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;color:var(--text-muted)">Netto</div>
@@ -5427,35 +5430,22 @@ function buildOtvNewView(){
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px">
         <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Brutto</div><div style="font-size:14px;font-weight:700">${fmt(val.gross)} zł</div></div>
-        <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Koszt</div><div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(val.cost)} zł</div></div>
+        <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Prowizja</div><div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(val.commission)} zł</div></div>
+        <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Transakcje</div><div style="font-size:14px;font-weight:700;color:var(--orange)">${fmt(val.transactionFee)} zł</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px">
+        <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Koszt razem</div><div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(val.cost)} zł</div></div>
         <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Udział</div><div style="font-size:14px;font-weight:700">${totals.net>0?(val.net/totals.net*100).toFixed(1):'0.0'}%</div></div>
       </div>
     </div>`).join('');
 
   const apartmentRows=Object.values(apartmentMap)
-    .sort((a,b)=>b.net-a.net||a.apt.localeCompare(b.apt,'pl'))
+    .sort((a,b)=>b.net-a.net||b.gross-a.gross||a.apt.localeCompare(b.apt,'pl'))
     .map(r=>`<tr>
       <td style="font-weight:700">${r.apt}</td>
-      <td class="num">${r.count}</td>
-      <td class="num">${fmt(r.noce)}</td>
       <td class="num">${fmt(r.gross)} zł</td>
-      <td class="num" style="color:var(--red)">${fmt(r.cost)} zł</td>
-      <td class="num" style="font-weight:800;color:#059669">${fmt(r.net)} zł</td>
-    </tr>`).join('');
-
-  const reservationRows=enriched
-    .sort((a,b)=>{
-      const ad=parseDateDMY(a.dataDo)||new Date(0);
-      const bd=parseDateDMY(b.dataDo)||new Date(0);
-      return ad-bd||String(a.apt||'').localeCompare(String(b.apt||''),'pl');
-    })
-    .map(r=>`<tr>
-      <td>${r.dataOd||'—'} → ${r.dataDo||'—'}</td>
-      <td style="font-weight:700">${r.apt||'—'}</td>
-      <td>${r.channel}</td>
-      <td>${r.voucher||'—'}</td>
-      <td>${r.gosc||'—'}</td>
-      <td class="num">${fmt(r.gross)} zł</td>
+      <td class="num" style="color:var(--red)">${fmt(r.commission)} zł</td>
+      <td class="num" style="color:var(--orange)">${fmt(r.transactionFee)} zł</td>
       <td class="num" style="color:var(--red)">${fmt(r.cost)} zł</td>
       <td class="num" style="font-weight:800;color:#059669">${fmt(r.net)} zł</td>
     </tr>`).join('');
@@ -5464,18 +5454,10 @@ function buildOtvNewView(){
     <div class="grid-2" style="margin-bottom:18px">${channelCards}</div>
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both;margin-bottom:18px">
       <div class="card-title">Dochód OTV per apartament</div>
-      <div class="card-subtitle">Liczone automatycznie z rezerwacji Previo po odjęciu kosztów kanałów.</div>
+      <div class="card-subtitle">Posortowane od najwyższego netto. Liczone automatycznie po odjęciu prowizji i opłat.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Rez.</th><th class="num">Noce</th><th class="num">Brutto</th><th class="num">Koszt</th><th class="num">Netto</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Transakcje</th><th class="num">Koszt</th><th class="num">Netto</th></tr></thead>
         <tbody>${apartmentRows}</tbody>
-      </table></div>
-    </div>
-    <div class="grid-card" style="animation:fadeUp 0.4s 0.15s ease both">
-      <div class="card-title">Rezerwacje OTV New</div>
-      <div class="card-subtitle">OTV = wszystkie apartamenty poza Bronowicka, Wawel, Wawel II, Plac Szczepańskie i Zamkowa.</div>
-      <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Pobyt</th><th>Apartament</th><th>Kanał</th><th>Nr rez.</th><th>Gość</th><th class="num">Brutto</th><th class="num">Koszt</th><th class="num">Netto</th></tr></thead>
-        <tbody>${reservationRows}</tbody>
       </table></div>
     </div>`;
 }
@@ -6474,7 +6456,7 @@ const BOOKING_GROUPS=[
   },
   {
     name:'L25 Premium Apartments',
-    commission:0.18,
+    commission:0.15,
     match: apt=>isL25PremiumApartment(apt),
   },
   {
@@ -6530,7 +6512,7 @@ function isL25PremiumApartment(apt){
 
 function getBookingGroup(apt){
   if(isL25PremiumApartment(apt)){
-    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.18};
+    return BOOKING_GROUPS.find(g=>g.name==='L25 Premium Apartments')||{name:'L25 Premium Apartments',commission:0.15};
   }
   if(String(apt||'').toLowerCase().trim()==='apt 7c'){
     return BOOKING_GROUPS.find(g=>g.name==='Old Town Vistula Premium Apartments')||{name:'Old Town Vistula Premium Apartments',commission:0.18};
