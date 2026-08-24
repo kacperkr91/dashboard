@@ -5608,9 +5608,9 @@ function buildSummaryView(){
 function getStaticInternetCostForApartment(apt){
   const raw=String(apt||'').trim().toLowerCase();
   if(!raw)return 0;
-  if(isL25PremiumApartment(raw))return 0;
-  if(raw.includes('stawowa'))return 0;
-  if(raw.includes('katowicka'))return 0;
+  if(isL25PremiumApartment(raw))return 74.19;
+  if(raw.includes('stawowa'))return 72.94;
+  if(raw.includes('katowicka'))return 93.01;
   return 97.84;
 }
 
