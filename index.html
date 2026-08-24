@@ -1225,10 +1225,11 @@ async function loadKsefData(){
     const newIssueDate=String(row[2]||'').trim();
     const oldSeller=String(row[2]||'').trim();
     const newSeller=String(row[3]||'').trim();
-    const oldIssueLooksLikeDate=!!toDate(oldIssueDate);
-    const newIssueLooksLikeDate=!!toDate(newIssueDate);
-    const oldSellerLooksLikeDate=!!toDate(oldSeller);
-    const newSellerLooksLikeDate=!!toDate(newSeller);
+    const looksLikeIsoDate=value=>/^\d{4}-\d{2}-\d{2}/.test(String(value||'').trim());
+    const oldIssueLooksLikeDate=looksLikeIsoDate(oldIssueDate);
+    const newIssueLooksLikeDate=looksLikeIsoDate(newIssueDate);
+    const oldSellerLooksLikeDate=looksLikeIsoDate(oldSeller);
+    const newSellerLooksLikeDate=looksLikeIsoDate(newSeller);
     const isNewLayout=
       (newIssueLooksLikeDate && oldSellerLooksLikeDate && !newSellerLooksLikeDate) ||
       (newIssueLooksLikeDate && !oldIssueLooksLikeDate);
@@ -4832,7 +4833,7 @@ function buildKsefView(rows){
   const filtered=rows.filter(item=>{
     if(filter!=='all' && item.status!==filter)return false;
     if(!search)return true;
-    return [item.seller,item.ksefNumber,item.invoiceNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
+    return [item.seller,item.ksefNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
   });
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
