@@ -641,7 +641,7 @@ const CONFIG={
   ksefApiKey:         localStorage.getItem('gs_ksef_api_key')||'',
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
-  ksefRange:          'A2:O10000',
+  ksefRange:          'A2:P10000',
   agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
   agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
   laundryApiKey:      localStorage.getItem('gs_laundry_api_key')||'',
@@ -1221,20 +1221,20 @@ async function loadKsefData(){
   const paidMap=getKsefPaidMap();
 
   return rows.map(row=>{
-    const brutto=parseFloat(String(row[6]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const issueDate=String(row[1]||'').trim();
-    const dueDate=String(row[7]||'').trim();
-    const daysRaw=row[8];
+    const brutto=parseFloat(String(row[7]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const issueDate=String(row[2]||'').trim();
+    const dueDate=String(row[8]||'').trim();
+    const daysRaw=row[9];
     const daysValue=daysRaw===''||daysRaw===undefined||daysRaw===null?'':parseInt(String(daysRaw),10);
     const now=new Date(); now.setHours(0,0,0,0);
     const dueObj=toDate(dueDate);
     const issueObj=toDate(issueDate);
     const ksefNumber=String(row[0]||'').trim();
     const manualPaid=paidMap[ksefNumber]||null;
-    const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
-    const sheetPaidDate=String(row[12]||'').trim();
-    const sheetPaidAmount=parseMoneyValue(row[13]||'0');
-    const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
+    const sheetPaidFlag=String(row[12]||'').trim().toUpperCase();
+    const sheetPaidDate=String(row[13]||'').trim();
+    const sheetPaidAmount=parseMoneyValue(row[14]||'0');
+    const sheetRemainingAmount=parseMoneyValue(row[15]||'0');
     const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||sheetPaidFlag==='OPLACONA';
     const sheetPartial=sheetPaidFlag==='CZESCIOWO'||sheetPaidFlag==='CZĘŚCIOWO';
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
@@ -1252,18 +1252,18 @@ async function loadKsefData(){
     if(dueObj && normalizedDays >= 0 && normalizedDays <= 7)status='due-soon';
     const baseItem={
       ksefNumber,
-      invoiceNumber:String(row[9]||'').trim(),
+      invoiceNumber:String(row[1]||'').trim(),
       issueDate,
-      seller:String(row[2]||'').trim()||'Nieznany dostawca',
-      nip:String(row[3]||'').trim(),
-      netto:String(row[4]||'').trim(),
-      vat:String(row[5]||'').trim(),
-      brutto:String(row[6]||'').trim(),
+      seller:String(row[3]||'').trim()||'Nieznany dostawca',
+      nip:String(row[4]||'').trim(),
+      netto:String(row[5]||'').trim(),
+      vat:String(row[6]||'').trim(),
+      brutto:String(row[7]||'').trim(),
       bruttoValue:brutto,
       dueDate,
       dueDateObj:dueObj,
       daysToDue:normalizedDays,
-      updatedAt:String(row[10]||'').trim(),
+      updatedAt:String(row[11]||'').trim(),
       status,
       urgencyStatus:status,
       manualPaidDate:'',
@@ -4964,7 +4964,7 @@ function buildKsefView(rows){
           <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF, numerze faktury albo statusie płatności.</div>
         </div>
         <div class="ksef-filters">
-          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF, numer faktury…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
+          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF, nr faktury…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
           <select id="ksefStatusFilter" class="ksef-select" onchange="setKsefFilterState('status',this.value)">
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
