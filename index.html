@@ -3893,6 +3893,7 @@ let _state={
   parkingCardsSortDir:'asc',
   otvNewSortKey:'net',
   otvNewSortDir:'desc',
+  summaryMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -3933,7 +3934,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -3944,6 +3945,7 @@ const DASHBOARD_MODULE_LABELS={
   housekeeping:'Housekeeping',
   otv:'Rezerwacje OTV',
   'otv-new':'Rezerwacje OTV New',
+  summary:'Podsumowanie',
   previo:'Previo',
   'laundry-textiles':'Pranie / Tekstylia',
   czynsze:'Czynsze',
@@ -5473,6 +5475,102 @@ function buildOtvNewView(){
     </div>`;
 }
 
+function buildSummaryView(){
+  const monthKey=_state.summaryMonth;
+  const previoRows=_state.data.previo?.[monthKey];
+  const hkData=_state.data.housekeeping?.[monthKey];
+  const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{key:monthKey,label:monthKey,short:monthKey};
+  const monthNav=`<div class="hk-month-nav">
+    ${PREVIO_MONTHS.slice().reverse().map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setSummaryMonth('${m.key}')">${m.short}</button>`).join('')}
+  </div>`;
+
+  if(!previoRows||!hkData)return monthNav+renderLoading('Ładowanie podsumowania OTV…');
+  if(previoRows.error)return monthNav+renderError(previoRows.error);
+  if(hkData.error)return monthNav+renderError(hkData.error);
+
+  const incomeMap=buildOtvApartmentFinanceMap(previoRows);
+  const housekeepingMap=buildHousekeepingApartmentMap(hkData);
+  const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap)])].filter(Boolean));
+  if(!apartmentKeys.length){
+    return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
+  }
+
+  const rows=apartmentKeys.map(apt=>{
+    const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
+    const hk=housekeepingMap[apt]||{housekeeping:0,pranie:0,aptCena:0,gosCena:0};
+    return{
+      apt,
+      gross:income.gross||0,
+      commission:income.commission||0,
+      transactionFee:income.transactionFee||0,
+      channelCost:income.cost||0,
+      incomeNet:income.net||0,
+      housekeeping:hk.housekeeping||0,
+      pranie:hk.pranie||0,
+      aptCena:hk.aptCena||0,
+      gosCena:hk.gosCena||0,
+      remaining:(income.net||0)-(hk.housekeeping||0),
+    };
+  }).sort((a,b)=>b.remaining-a.remaining||b.incomeNet-a.incomeNet||a.apt.localeCompare(b.apt,'pl'));
+
+  const totals=rows.reduce((acc,r)=>{
+    acc.gross+=r.gross;
+    acc.commission+=r.commission;
+    acc.transactionFee+=r.transactionFee;
+    acc.channelCost+=r.channelCost;
+    acc.incomeNet+=r.incomeNet;
+    acc.housekeeping+=r.housekeeping;
+    acc.remaining+=r.remaining;
+    return acc;
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,remaining:0});
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
+    <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
+    <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
+    <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
+    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po odjęciu housekeeping</div></div>
+  </div>`;
+
+  const tableRows=rows.map(r=>`<tr>
+    <td style="font-weight:700">${r.apt}</td>
+    <td class="num">${fmt(r.gross)} zł</td>
+    <td class="num" style="color:var(--red)">${fmt(r.commission)} zł</td>
+    <td class="num" style="color:var(--orange)">${fmt(r.transactionFee)} zł</td>
+    <td class="num" style="color:var(--red)">${fmt(r.channelCost)} zł</td>
+    <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
+    <td class="num">${fmt(r.pranie)} zł</td>
+    <td class="num">${fmt(r.aptCena)} zł</td>
+    <td class="num">${fmt(r.gosCena)} zł</td>
+    <td class="num" style="color:var(--orange);font-weight:700">${fmt(r.housekeeping)} zł</td>
+    <td class="num" style="font-weight:800;color:${r.remaining>=0?'#059669':'#dc2626'}">${fmt(r.remaining)} zł</td>
+  </tr>`).join('');
+
+  return monthNav+kpis+`
+    <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
+      <div class="card-title">Podsumowanie OTV per apartament</div>
+      <div class="card-subtitle">Dochód z rezerwacji minus pełne koszty kanałów i housekeeping dla tego samego miesiąca.</div>
+      <div class="hk-table-wrap"><table class="hk-table">
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Transakcje</th><th class="num">Koszt kanału</th><th class="num">Dochód</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Sprzątanie</th><th class="num">HK razem</th><th class="num">Zostaje</th></tr></thead>
+        <tbody>${tableRows}
+          <tr class="hk-total">
+            <td>ŁĄCZNIE</td>
+            <td class="num">${fmt(totals.gross)} zł</td>
+            <td class="num">${fmt(totals.commission)} zł</td>
+            <td class="num">${fmt(totals.transactionFee)} zł</td>
+            <td class="num">${fmt(totals.channelCost)} zł</td>
+            <td class="num">${fmt(totals.incomeNet)} zł</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="num">${fmt(totals.housekeeping)} zł</td>
+            <td class="num">${fmt(totals.remaining)} zł</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
 function openOtvDrawer(date){
   const byDate=window._otvByDate||{};
   const allHol=window._otvAllHol||{};
@@ -6569,6 +6667,36 @@ function getOtvNewReservationFinancials(row){
     return{channel,gross,cost,net,commission:cost,transactionFee:0};
   }
   return{channel,gross,cost:0,net:gross,commission:0,transactionFee:0};
+}
+
+function buildOtvApartmentFinanceMap(rows=[]){
+  const map={};
+  rows.filter(r=>!r.cancelled&&isOtvNewApartment(r.apt)).forEach(r=>{
+    const finance=getOtvNewReservationFinancials(r);
+    const aptKey=r.apt||'—';
+    if(!map[aptKey])map[aptKey]={apt:aptKey,gross:0,commission:0,transactionFee:0,cost:0,net:0};
+    map[aptKey].gross+=finance.gross||0;
+    map[aptKey].commission+=finance.commission||0;
+    map[aptKey].transactionFee+=finance.transactionFee||0;
+    map[aptKey].cost+=finance.cost||0;
+    map[aptKey].net+=finance.net||0;
+  });
+  return map;
+}
+
+function buildHousekeepingApartmentMap(hkData){
+  const totals=getHousekeepingTotals(hkData);
+  const map={};
+  totals.activeRows.forEach(r=>{
+    if(!isOtvNewApartment(r.apt))return;
+    const aptKey=r.apt||'—';
+    if(!map[aptKey])map[aptKey]={apt:aptKey,housekeeping:0,pranie:0,aptCena:0,gosCena:0};
+    map[aptKey].housekeeping+=Number(r.suma)||0;
+    map[aptKey].pranie+=Number(r.pranie)||0;
+    map[aptKey].aptCena+=Number(r.aptCena)||0;
+    map[aptKey].gosCena+=Number(r.gosCena)||0;
+  });
+  return map;
 }
 
 // Get Thursday-Wednesday period containing a date
@@ -10701,7 +10829,7 @@ async function init(){
   const initialSection=_state.section||'oblozenie';
   const laundryOnlyUser=isLaundryOnlyUser();
   const needsPrimaryConfig=hasAnyModuleAccess([
-    'oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','previo',
+    'oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','summary','previo',
     'artur-payments','agata-faktura','czynsze','tasks','booking-payout','dyzury','noty','goscie','parking'
   ]);
   const needsLaundryConfig=hasModuleAccess('laundry-textiles');
@@ -10712,12 +10840,12 @@ async function init(){
   const needRental=hasModuleAccess('rental')&&initialSection==='rental';
   const needMedia=hasModuleAccess('media')&&initialSection==='media';
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
-  const needHousekeeping=hasModuleAccess('housekeeping')&&initialSection==='housekeeping';
+  const needHousekeeping=((hasModuleAccess('housekeeping')&&initialSection==='housekeeping')||(hasModuleAccess('summary')&&initialSection==='summary'));
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
   const needLaundry=hasModuleAccess('laundry-textiles')&&initialSection==='laundry-textiles';
   const needCzynsze=hasModuleAccess('czynsze')&&initialSection==='czynsze';
   const needParkingCards=hasModuleAccess('parking-cards')&&initialSection==='parking-cards';
-  const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout','otv-new'])&&['previo','oblozenie','booking-payout','rental','otv-new'].includes(initialSection);
+  const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout','otv-new','summary'])&&['previo','oblozenie','booking-payout','rental','otv-new','summary'].includes(initialSection);
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
   const needParking=hasModuleAccess('parking')&&(initialSection==='parking'||shouldShowTodayBanner());
   const needKsef=hasAnyModuleAccess(['ksef','artur-payments'])&&['ksef','artur-payments'].includes(initialSection);
@@ -10762,11 +10890,11 @@ async function init(){
     needCzynsze?detectCzynszeMonths():Promise.resolve(),
   ]);
 
-  const initHkKey=_state.hkMonth;
+  const initHkKey=initialSection==='summary'?_state.summaryMonth:_state.hkMonth;
   const initOtvKey=_state.otvMonth;
   const initAgataKey=_state.agataMonth;
   const initCzynszeKey=_state.czynszeMonth;
-  const initPrevioKey=initialSection==='otv-new'?_state.otvNewMonth:_state.previoMonth;
+  const initPrevioKey=initialSection==='otv-new'?_state.otvNewMonth:(initialSection==='summary'?_state.summaryMonth:_state.previoMonth);
   const initRentalKey=_state.rentalMonth;
   const [pYr,pMo]=initPrevioKey.split('-');
   const lastYearPrevioKey=`${parseInt(pYr)-1}-${pMo}`;
@@ -10908,6 +11036,17 @@ async function prefetchSecondaryModules(){
       }
     });
   }
+  if(hasModuleAccess('summary')&&section!=='summary'){
+    jobs.push(async ()=>{
+      const key=_state.summaryMonth;
+      if(key&&_state.data.previo?.[key]===undefined){
+        await loadPrevioMonthIntoState(key);
+      }
+      if(key&&!_state.data.housekeeping?.[key]){
+        _state.data.housekeeping[key]=await loadHousekeepingMonth(key);
+      }
+    });
+  }
   if(canViewAgataFaktura()&&section!=='agata-faktura'){
     jobs.push(async ()=>{
       await detectAgataMonths();
@@ -11020,6 +11159,27 @@ function ensureSectionDataLoaded(section){
     }).catch(e=>{
       _state.data.previo[key]={error:e.message||'Błąd'};
       if(_state.section==='otv-new'&&_state.otvNewMonth===key)renderApp();
+    });
+    return true;
+  }
+  if(section==='summary'){
+    const key=_state.summaryMonth;
+    const hasPrevio=_state.data.previo?.[key]!==undefined;
+    const hasHk=!!_state.data.housekeeping?.[key];
+    if(hasPrevio&&hasHk){
+      renderApp();
+      return true;
+    }
+    if(!hasPrevio)_state.data.previo[key]=null;
+    if(!hasHk)_state.data.housekeeping[key]=null;
+    renderApp();
+    Promise.allSettled([
+      hasPrevio?Promise.resolve(_state.data.previo[key]):loadPrevioMonth(key),
+      hasHk?Promise.resolve(_state.data.housekeeping[key]):loadHousekeepingMonth(key),
+    ]).then(([previoR,hkR])=>{
+      if(!hasPrevio)_state.data.previo[key]=previoR.status==='fulfilled'?previoR.value:{error:previoR.reason?.message||'Błąd'};
+      if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
+      if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
     });
     return true;
   }
@@ -11244,6 +11404,7 @@ function renderApp(){
     ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('otv-new','Rezerwacje OTV New','🧾','background:#6d28d9;border-color:#6d28d9;color:#fff')}
+    ${navButton('summary','Podsumowanie','📊','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
     ${navButton('previo','Previo','🏨','background:#059669;border-color:#059669;color:#fff')}
     ${navButton('agata-faktura','Agata Faktura','🧮','background:#166534;border-color:#166534;color:#fff')}
     ${navButton('czynsze','Czynsze','🏢','background:#0f766e;border-color:#0f766e;color:#fff')}
@@ -11321,6 +11482,8 @@ function renderApp(){
     content=buildOtvView();
   } else if(section==='otv-new'){
     content=buildOtvNewView();
+  } else if(section==='summary'){
+    content=buildSummaryView();
   } else if(section==='previo'){
     content=buildPrevioView();
   } else if(section==='agata-faktura'){
@@ -11596,6 +11759,27 @@ function setOtvNewSort(key){
     _state.otvNewSortDir=key==='apt'?'asc':'desc';
   }
   renderApp();
+}
+
+function setSummaryMonth(key){
+  _state.summaryMonth=key;
+  const hasPrevio=_state.data.previo?.[key]!==undefined;
+  const hasHk=!!_state.data.housekeeping?.[key];
+  if(hasPrevio&&hasHk){
+    renderApp();
+    return;
+  }
+  if(!hasPrevio)_state.data.previo[key]=null;
+  if(!hasHk)_state.data.housekeeping[key]=null;
+  renderApp();
+  Promise.allSettled([
+    hasPrevio?Promise.resolve(_state.data.previo[key]):loadPrevioMonth(key),
+    hasHk?Promise.resolve(_state.data.housekeeping[key]):loadHousekeepingMonth(key),
+  ]).then(([previoR,hkR])=>{
+    if(!hasPrevio)_state.data.previo[key]=previoR.status==='fulfilled'?previoR.value:{error:previoR.reason?.message||'Błąd'};
+    if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
+    if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
+  });
 }
 
 function setHkMonth(key){
