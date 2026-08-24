@@ -2304,6 +2304,12 @@ function calcPrevioForecast(monthKey){
   });
   const confirmed=confirmedRows.reduce((s,r)=>s+r.cena,0);
   const currentBookedTotal=active.reduce((s,r)=>s+r.cena,0);
+  const bookedByApt={};
+  active.forEach(r=>{
+    const apt=String(r.apt||'').trim();
+    if(!apt)return;
+    bookedByApt[apt]=(bookedByApt[apt]||0)+(+r.cena||0);
+  });
 
   // Last year same month
   const lastYearKey=`${yr-1}-${String(mo).padStart(2,'0')}`;
@@ -2406,6 +2412,50 @@ function calcPrevioForecast(monthKey){
   }
 
   const forecastTotal=currentBookedTotal+estNewBookings;
+  const apartmentForecasts={...bookedByApt};
+
+  if(monthKey===currentMonthKey&&daysLeft>0&&estNewBookings>0){
+    const apts=[...new Set(active.map(r=>String(r.apt||'').trim()).filter(Boolean))];
+    const occupiedFutureCountByApt={};
+    active.forEach(r=>{
+      const from=parsePrevioRowDate(r,'dataOd');
+      const to=parsePrevioRowDate(r,'dataDo');
+      const apt=String(r.apt||'').trim();
+      if(!from||!to||!apt)return;
+      let cur=new Date(from);
+      while(cur<to){
+        if(cur>=futureStart&&cur<=monthEnd){
+          occupiedFutureCountByApt[apt]=(occupiedFutureCountByApt[apt]||0)+1;
+        }
+        cur=addDays(cur,1);
+      }
+    });
+
+    const weightByApt={};
+    apts.forEach(apt=>{
+      const aptRows=active.filter(r=>String(r.apt||'').trim()===apt);
+      const aptFutureRows=confirmedRows.filter(r=>String(r.apt||'').trim()===apt);
+      const occupiedFutureNights=occupiedFutureCountByApt[apt]||0;
+      const freeFutureNights=Math.max(daysLeft-occupiedFutureNights,0);
+      const aptAdr=averageNightValue(aptRows)||averageNightValue(aptFutureRows)||currentAdrPerNight||0;
+      weightByApt[apt]=freeFutureNights*Math.max(aptAdr,0);
+    });
+
+    let weightTotal=Object.values(weightByApt).reduce((s,v)=>s+v,0);
+    if(weightTotal<=0){
+      apts.forEach(apt=>{
+        weightByApt[apt]=Math.max(bookedByApt[apt]||0,1);
+      });
+      weightTotal=Object.values(weightByApt).reduce((s,v)=>s+v,0);
+    }
+
+    if(weightTotal>0){
+      apts.forEach(apt=>{
+        const extra=estNewBookings*(weightByApt[apt]||0)/weightTotal;
+        apartmentForecasts[apt]=(apartmentForecasts[apt]||0)+extra;
+      });
+    }
+  }
 
   // Occupied apts
   const confirmedApts=new Set(confirmedRows.map(r=>r.apt));
@@ -2413,6 +2463,7 @@ function calcPrevioForecast(monthKey){
 
   return{
     earned, confirmed, estNewBookings, forecastTotal,
+    apartmentForecasts,
     lastYearTotal, lastYearKey,
     lastYearRowCount:lastYearActiveRows.length,
     avgLast7Pct:Math.round(avgLast7Pct*100),
@@ -4368,7 +4419,11 @@ function buildMonthView(days,opts={}){
 
   // ── Per-apt daily breakdown table ──
   // Collect all unique apt names across all days
-  const allApts=sortByDefaultOrder([...new Set(enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})))]);
+  const forecastApts=pf&&pf.apartmentForecasts?Object.keys(pf.apartmentForecasts):[];
+  const allApts=sortByDefaultOrder([...new Set([
+    ...enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})),
+    ...forecastApts
+  ])]);
 
   // Monthly totals per apt
   const monthlyAptTotals={};
@@ -4411,14 +4466,16 @@ function buildMonthView(days,opts={}){
   </div>`;
 
   // monthly summary (stays below grid)
+  const showMonthlyForecast=!!(pf&&monthKey===(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)&&pf.apartmentForecasts);
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
     <div class="card-title">Podsumowanie miesięczne per apartament</div>
-    <div class="card-subtitle">Łączny przychód · kliknij nagłówek kolumny aby sortować</div>
+    <div class="card-subtitle">${showMonthlyForecast?'Łączny przychód oraz prognoza dla bieżącego miesiąca · kliknij nagłówek kolumny aby sortować':'Łączny przychód · kliknij nagłówek kolumny aby sortować'}</div>
     <div class="apt-breakdown-wrap">
       <table class="monthly-apt-table">
         <thead><tr>
           <th style="text-align:left;cursor:pointer" onclick="sortMonthlyTable('name')" title="Kliknij aby sortować">Apartament ↕</th>
           <th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('total')" title="Kliknij aby sortować">Przychód ↕</th>
+          ${showMonthlyForecast?`<th style="text-align:right;cursor:pointer" onclick="sortMonthlyTable('forecast')" title="Kliknij aby sortować">Prognoza ↕</th>`:''}
           <th style="text-align:right">Udział</th>
           <th></th>
         </tr></thead>
@@ -4431,6 +4488,9 @@ function buildMonthView(days,opts={}){
   window._monthlyAptTotals = monthlyAptTotals;
   window._allApts = allApts;
   window._grandTotal = grandTotal;
+  window._monthlyAptForecasts = showMonthlyForecast?(pf.apartmentForecasts||{}):{};
+  window._monthlyForecastGrand = showMonthlyForecast?Object.values(pf.apartmentForecasts||{}).reduce((s,v)=>s+(+v||0),0):0;
+  window._showMonthlyForecast = showMonthlyForecast;
   window._monthlySortOrder = 'default'; // default: custom order
 
   const drawer=`<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
@@ -7488,11 +7548,15 @@ function renderDrawerBody(day){
 
 function renderMonthlyTable(){
   const totals=window._monthlyAptTotals||{};
+  const forecasts=window._monthlyAptForecasts||{};
   const apts=window._allApts||[];
   const grand=window._grandTotal||0;
+  const forecastGrand=window._monthlyForecastGrand||0;
+  const showForecast=!!window._showMonthlyForecast;
   const sort=window._monthlySortOrder||'default';
   let sorted=[...apts];
   if(sort==='total')sorted.sort((a,b)=>(totals[b]||0)-(totals[a]||0));
+  else if(sort==='forecast')sorted.sort((a,b)=>(forecasts[b]||0)-(forecasts[a]||0));
   else if(sort==='name')sorted.sort((a,b)=>a.localeCompare(b,'pl'));
   else sorted=sortByDefaultOrder(sorted);
 
@@ -7507,7 +7571,9 @@ function renderMonthlyTable(){
   if(!body)return;
   body.innerHTML=sorted.map(apt=>{
     const total=totals[apt]||0;
+    const forecast=forecasts[apt]||0;
     const pct=grand>0?(total/grand*100).toFixed(1):'0.0';
+    const forecastPct=forecastGrand>0?(forecast/forecastGrand*100).toFixed(1):'0.0';
     const barW=Math.round(total/maxV*100);
     const isTop=top3.has(apt)&&total>0;
     const isBot=bot3.has(apt)&&total>0&&!isTop;
@@ -7517,10 +7583,11 @@ function renderMonthlyTable(){
     return`<tr style="background:${rowBg}">
       <td style="font-weight:600">${apt}${badge}</td>
       <td style="text-align:right;font-weight:700;color:${valColor};font-variant-numeric:tabular-nums">${fmt(total)} zł</td>
+      ${showForecast?`<td style="text-align:right;font-weight:700;color:#0f766e;font-variant-numeric:tabular-nums">${forecast>0?`${fmt(forecast)} zł<div style="font-size:10px;color:var(--text-muted);font-weight:600;margin-top:2px">${forecastPct}% prog.</div>`:'—'}</td>`:''}
       <td style="text-align:right;color:var(--text-muted);font-variant-numeric:tabular-nums">${pct}%</td>
       <td style="width:120px"><div style="background:var(--border);border-radius:3px;overflow:hidden;height:8px"><div style="height:100%;width:${barW}%;background:${isTop?'var(--green)':isBot?'var(--red)':'var(--blue)'};border-radius:3px"></div></div></td>
     </tr>`;
-  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td><td style="text-align:right">100%</td><td></td></tr>`;
+  }).join('')+`<tr class="grand-total"><td>ŁĄCZNIE</td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(grand)} zł</td>${showForecast?`<td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(forecastGrand)} zł</td>`:''}<td style="text-align:right">100%</td><td></td></tr>`;
 }
 
 function sortMonthlyTable(by){
@@ -7528,6 +7595,7 @@ function sortMonthlyTable(by){
   const current=window._monthlySortOrder||'default';
   if(by==='name') window._monthlySortOrder= current==='name'?'default':'name';
   else if(by==='total') window._monthlySortOrder= current==='total'?'default':'total';
+  else if(by==='forecast') window._monthlySortOrder= current==='forecast'?'default':'forecast';
   else window._monthlySortOrder='default';
   renderMonthlyTable();
 }
