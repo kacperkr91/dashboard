@@ -3894,6 +3894,8 @@ let _state={
   otvNewSortKey:'net',
   otvNewSortDir:'desc',
   summaryMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
+  summarySearch:'',
+  summaryFilter:'all',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -5509,18 +5511,32 @@ function buildSummaryView(){
       pranie:hk.pranie||0,
       aptCena:hk.aptCena||0,
       gosCena:hk.gosCena||0,
-      remaining:(income.net||0)-(hk.housekeeping||0),
+      energy:null,
+      gas:null,
+      rent:null,
+      advance:null,
+      internet:null,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0),
     };
-  }).sort((a,b)=>b.remaining-a.remaining||b.incomeNet-a.incomeNet||a.apt.localeCompare(b.apt,'pl'));
+  });
 
-  const totals=rows.reduce((acc,r)=>{
+  const search=_state.summarySearch.trim().toLowerCase();
+  const filter=_state.summaryFilter||'all';
+  const filteredRows=rows.filter(r=>{
+    if(search&&!r.apt.toLowerCase().includes(search))return false;
+    if(filter==='positive'&&r.remainingAfterKnown<=0)return false;
+    if(filter==='negative'&&r.remainingAfterKnown>=0)return false;
+    return true;
+  }).sort((a,b)=>b.remainingAfterKnown-a.remainingAfterKnown||b.incomeNet-a.incomeNet||a.apt.localeCompare(b.apt,'pl'));
+
+  const totals=filteredRows.reduce((acc,r)=>{
     acc.gross+=r.gross;
     acc.commission+=r.commission;
     acc.transactionFee+=r.transactionFee;
     acc.channelCost+=r.channelCost;
     acc.incomeNet+=r.incomeNet;
     acc.housekeeping+=r.housekeeping;
-    acc.remaining+=r.remaining;
+    acc.remaining+=r.remainingAfterKnown;
     return acc;
   },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,remaining:0});
 
@@ -5532,38 +5548,54 @@ function buildSummaryView(){
     <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po odjęciu housekeeping</div></div>
   </div>`;
 
-  const tableRows=rows.map(r=>`<tr>
+  const filters=`<div class="grid-card" style="animation:fadeUp 0.4s 0.05s ease both;margin-bottom:18px;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div class="card-title" style="font-size:15px">Filtry podsumowania</div>
+        <div class="card-subtitle">Na razie koszty: kanał i housekeeping. Pozostałe kolumny są przygotowane jako b.d.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="summarySearchInput" type="search" value="${escapeHtml(_state.summarySearch)}" oninput="setSummarySearch(this.value)" placeholder="Szukaj apartamentu…" style="min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
+        <button class="sort-btn ${filter==='all'?'active':''}" onclick="setSummaryFilter('all')">Wszystkie</button>
+        <button class="sort-btn ${filter==='positive'?'active':''}" onclick="setSummaryFilter('positive')">Na plusie</button>
+        <button class="sort-btn ${filter==='negative'?'active':''}" onclick="setSummaryFilter('negative')">Na minusie</button>
+      </div>
+    </div>
+  </div>`;
+
+  const bd=`<span style="color:var(--text-muted)">b.d.</span>`;
+  const tableRows=filteredRows.map(r=>`<tr>
     <td style="font-weight:700">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
-    <td class="num" style="color:var(--red)">${fmt(r.commission)} zł</td>
-    <td class="num" style="color:var(--orange)">${fmt(r.transactionFee)} zł</td>
     <td class="num" style="color:var(--red)">${fmt(r.channelCost)} zł</td>
-    <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
-    <td class="num">${fmt(r.pranie)} zł</td>
-    <td class="num">${fmt(r.aptCena)} zł</td>
-    <td class="num">${fmt(r.gosCena)} zł</td>
     <td class="num" style="color:var(--orange);font-weight:700">${fmt(r.housekeeping)} zł</td>
-    <td class="num" style="font-weight:800;color:${r.remaining>=0?'#059669':'#dc2626'}">${fmt(r.remaining)} zł</td>
+    <td class="num">${bd}</td>
+    <td class="num">${bd}</td>
+    <td class="num">${bd}</td>
+    <td class="num">${bd}</td>
+    <td class="num">${bd}</td>
+    <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
+    <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
 
-  return monthNav+kpis+`
+  return monthNav+kpis+filters+`
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Dochód z rezerwacji minus pełne koszty kanałów i housekeeping dla tego samego miesiąca.</div>
+      <div class="card-subtitle">Widok skrócony pod dalsze koszty stałe: prąd, gaz, czynsz, zaliczka eksploatacyjna i internet.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Transakcje</th><th class="num">Koszt kanału</th><th class="num">Dochód</th><th class="num">Pranie</th><th class="num">Apt</th><th class="num">Sprzątanie</th><th class="num">HK razem</th><th class="num">Zostaje</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
             <td class="num">${fmt(totals.gross)} zł</td>
-            <td class="num">${fmt(totals.commission)} zł</td>
-            <td class="num">${fmt(totals.transactionFee)} zł</td>
             <td class="num">${fmt(totals.channelCost)} zł</td>
-            <td class="num">${fmt(totals.incomeNet)} zł</td>
-            <td class="num">—</td>
-            <td class="num">—</td>
-            <td class="num">—</td>
             <td class="num">${fmt(totals.housekeeping)} zł</td>
+            <td class="num">${bd}</td>
+            <td class="num">${bd}</td>
+            <td class="num">${bd}</td>
+            <td class="num">${bd}</td>
+            <td class="num">${bd}</td>
+            <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
         </tbody>
@@ -11780,6 +11812,24 @@ function setSummaryMonth(key){
     if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
     if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
   });
+}
+
+function setSummarySearch(val){
+  _state.summarySearch=String(val||'');
+  renderApp();
+  requestAnimationFrame(()=>{
+    const input=document.getElementById('summarySearchInput');
+    if(input){
+      input.focus();
+      const pos=_state.summarySearch.length;
+      try{input.setSelectionRange(pos,pos);}catch(e){}
+    }
+  });
+}
+
+function setSummaryFilter(val){
+  _state.summaryFilter=val||'all';
+  renderApp();
 }
 
 function setHkMonth(key){
