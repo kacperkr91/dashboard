@@ -4466,7 +4466,8 @@ function buildMonthView(days,opts={}){
   </div>`;
 
   // monthly summary (stays below grid)
-  const showMonthlyForecast=!!(pf&&monthKey===(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)&&pf.apartmentForecasts);
+  const selectedMonthKey=_state.previoMonth||'';
+  const showMonthlyForecast=!!(pf&&selectedMonthKey===(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)&&pf.apartmentForecasts);
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
     <div class="card-title">Podsumowanie miesięczne per apartament</div>
     <div class="card-subtitle">${showMonthlyForecast?'Łączny przychód oraz prognoza dla bieżącego miesiąca · kliknij nagłówek kolumny aby sortować':'Łączny przychód · kliknij nagłówek kolumny aby sortować'}</div>
