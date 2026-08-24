@@ -1064,9 +1064,23 @@ async function loadDayTabMonthData(monthNumber){
   return results;
 }
 
+async function loadRentalNamedMonthData(rentalKey){
+  const parsed=parseRentalMonthKey(rentalKey);
+  if(!parsed)throw new Error('UNKNOWN_RENTAL_MONTH');
+  const{apiKey,spreadsheetId}=CONFIG;
+  const monthKey=`${parsed.year}-${String(parsed.month).padStart(2,'0')}`;
+  const allSheetNames=await fetchSheetNames(spreadsheetId,apiKey);
+  const sheetName=resolvePrevioMonthSheetName(monthKey,allSheetNames);
+  if(!sheetName)throw new Error('NO_MONTH_SHEET');
+  const totalDays=new Date(parsed.year,parsed.month,0).getDate();
+  return loadRawMonth(sheetName,'C','M',3,1000,totalDays,String(parsed.month).padStart(2,'0'));
+}
+
 async function loadRentalMonthDataByKey(key){
   const parsed=parseRentalMonthKey(key);
   if(!parsed)throw new Error('UNKNOWN_RENTAL_MONTH');
+  const currentMonthKey=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  const selectedMonthKey=`${parsed.year}-${String(parsed.month).padStart(2,'0')}`;
   switch(key){
     case 'dec2025':
       return loadRawMonth(CONFIG.decSheet,CONFIG.decDateCol,CONFIG.decAmountCol,CONFIG.decStartRow,CONFIG.decEndRow,31,'12');
@@ -1079,7 +1093,15 @@ async function loadRentalMonthDataByKey(key){
     case 'apr2026':
       return loadAprilData();
     default:
-      return loadDayTabMonthData(parsed.month);
+      if(selectedMonthKey===currentMonthKey){
+        return loadDayTabMonthData(parsed.month);
+      }
+      try{
+        return await loadRentalNamedMonthData(key);
+      }catch(err){
+        if(err?.message!=='NO_MONTH_SHEET')throw err;
+        return loadDayTabMonthData(parsed.month);
+      }
   }
 }
 
