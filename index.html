@@ -5492,7 +5492,7 @@ function buildSummaryView(){
 
   const incomeMap=buildOtvApartmentFinanceMap(previoRows);
   const housekeepingMap=buildHousekeepingApartmentMap(hkData);
-  const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap)])].filter(Boolean));
+  const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
   }
