@@ -3891,6 +3891,8 @@ let _state={
   parkingCardsSearch:'',
   parkingCardsSortKey:'sheet',
   parkingCardsSortDir:'asc',
+  otvNewSortKey:'net',
+  otvNewSortDir:'desc',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -5439,8 +5441,17 @@ function buildOtvNewView(){
       </div>
     </div>`).join('');
 
+  const sortKey=_state.otvNewSortKey||'net';
+  const sortDir=_state.otvNewSortDir==='asc'?1:-1;
+  const sortArrow=key=>sortKey===key?(sortDir===1?' ↑':' ↓'):'';
   const apartmentRows=Object.values(apartmentMap)
-    .sort((a,b)=>b.net-a.net||b.gross-a.gross||a.apt.localeCompare(b.apt,'pl'))
+    .sort((a,b)=>{
+      if(sortKey==='apt')return a.apt.localeCompare(b.apt,'pl')*sortDir;
+      const aVal=Number(a[sortKey]||0);
+      const bVal=Number(b[sortKey]||0);
+      if(aVal!==bVal)return (aVal-bVal)*sortDir;
+      return a.apt.localeCompare(b.apt,'pl');
+    })
     .map(r=>`<tr>
       <td style="font-weight:700">${r.apt}</td>
       <td class="num">${fmt(r.gross)} zł</td>
@@ -5456,7 +5467,7 @@ function buildOtvNewView(){
       <div class="card-title">Dochód OTV per apartament</div>
       <div class="card-subtitle">Posortowane od najwyższego netto. Liczone automatycznie po odjęciu prowizji i opłat.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Prowizja</th><th class="num">Transakcje</th><th class="num">Koszt</th><th class="num">Netto</th></tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="setOtvNewSort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setOtvNewSort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setOtvNewSort('commission')">Prowizja${sortArrow('commission')}</th><th class="num" style="cursor:pointer" onclick="setOtvNewSort('transactionFee')">Transakcje${sortArrow('transactionFee')}</th><th class="num" style="cursor:pointer" onclick="setOtvNewSort('cost')">Koszt${sortArrow('cost')}</th><th class="num" style="cursor:pointer" onclick="setOtvNewSort('net')">Netto${sortArrow('net')}</th></tr></thead>
         <tbody>${apartmentRows}</tbody>
       </table></div>
     </div>`;
@@ -11575,6 +11586,16 @@ function setOtvNewMonth(key){
       if(_state.section==='otv-new'&&_state.otvNewMonth===key)renderApp();
     });
   } else renderApp();
+}
+
+function setOtvNewSort(key){
+  if(_state.otvNewSortKey===key){
+    _state.otvNewSortDir=_state.otvNewSortDir==='asc'?'desc':'asc';
+  }else{
+    _state.otvNewSortKey=key;
+    _state.otvNewSortDir=key==='apt'?'asc':'desc';
+  }
+  renderApp();
 }
 
 function setHkMonth(key){
