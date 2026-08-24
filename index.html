@@ -641,7 +641,7 @@ const CONFIG={
   ksefApiKey:         localStorage.getItem('gs_ksef_api_key')||'',
   ksefSpreadsheetId:  localStorage.getItem('gs_ksef_spreadsheet_id')||'',
   ksefSheet:          'KSeF',
-  ksefRange:          'A2:O2000',
+  ksefRange:          'A2:O10000',
   agataApiKey:        localStorage.getItem('gs_agata_api_key')||'',
   agataSpreadsheetId: '1LqvIrYlcm2SIV9ydw-YCtDRyZpfnYPWOuyRihxFiey8',
   laundryApiKey:      localStorage.getItem('gs_laundry_api_key')||'',
@@ -6815,9 +6815,14 @@ function buildKsefBiuroMonthMap(rows=[]){
   const result={};
   Object.entries(monthMap).forEach(([monthKey,list])=>{
     const sorted=list.slice().sort((a,b)=>b.netto-a.netto);
+    const advanceCandidates=sorted.filter(item=>item.netto>=500&&item.netto<=900);
+    const advanceCandidate=advanceCandidates.sort((a,b)=>Math.abs(a.netto-700)-Math.abs(b.netto-700))[0]||null;
+    const remainingForRent=advanceCandidate
+      ? sorted.filter(item=>item.ksefNumber!==advanceCandidate.ksefNumber)
+      : sorted;
     result[monthKey]={
-      rent:sorted[0]?.netto??null,
-      advance:sorted[1]?.netto??null,
+      rent:remainingForRent[0]?.netto??sorted[0]?.netto??null,
+      advance:advanceCandidate?.netto??sorted[1]?.netto??null,
       invoices:sorted,
     };
   });
