@@ -5481,17 +5481,19 @@ function buildSummaryView(){
   const monthKey=_state.summaryMonth;
   const previoRows=_state.data.previo?.[monthKey];
   const hkData=_state.data.housekeeping?.[monthKey];
+  const czynszeData=_state.data.czynsze?.[monthKey];
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{key:monthKey,label:monthKey,short:monthKey};
   const monthNav=`<div class="hk-month-nav">
     ${PREVIO_MONTHS.slice().reverse().map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setSummaryMonth('${m.key}')">${m.short}</button>`).join('')}
   </div>`;
 
-  if(!previoRows||!hkData)return monthNav+renderLoading('Ładowanie podsumowania OTV…');
+  if(!previoRows||!hkData||_state.data.czynsze?.[monthKey]===null)return monthNav+renderLoading('Ładowanie podsumowania OTV…');
   if(previoRows.error)return monthNav+renderError(previoRows.error);
   if(hkData.error)return monthNav+renderError(hkData.error);
 
   const incomeMap=buildOtvApartmentFinanceMap(previoRows);
   const housekeepingMap=buildHousekeepingApartmentMap(hkData);
+  const czynszeMap=buildCzynszeApartmentMap(czynszeData);
   const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
@@ -5500,6 +5502,7 @@ function buildSummaryView(){
   const rows=apartmentKeys.map(apt=>{
     const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
     const hk=housekeepingMap[apt]||{housekeeping:0,pranie:0,aptCena:0,gosCena:0};
+    const czynsz=czynszeMap[apt]||{rent:null,advance:null};
     const internetCost=getStaticInternetCostForApartment(apt);
     return{
       apt,
@@ -5514,10 +5517,10 @@ function buildSummaryView(){
       gosCena:hk.gosCena||0,
       energy:null,
       gas:null,
-      rent:null,
-      advance:null,
+      rent:czynsz.rent,
+      advance:czynsz.advance,
       internet:internetCost,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0),
     };
   });
 
@@ -5537,24 +5540,26 @@ function buildSummaryView(){
     acc.channelCost+=r.channelCost;
     acc.incomeNet+=r.incomeNet;
     acc.housekeeping+=r.housekeeping;
+    acc.rent+=Number(r.rent)||0;
+    acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,internet:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
-    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po odjęciu housekeeping i internetu</div></div>
+    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, internecie, czynszu i zaliczce</div></div>
   </div>`;
 
   const filters=`<div class="grid-card" style="animation:fadeUp 0.4s 0.05s ease both;margin-bottom:18px;padding:16px 18px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="font-size:15px">Filtry podsumowania</div>
-        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping i internet. Pozostałe kolumny są przygotowane pod dalsze uzupełnienie.</div>
+        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping, internet, czynsz i zaliczka eksploatacyjna. Pozostałe kolumny są przygotowane pod dalsze uzupełnienie.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="summarySearchInput" type="search" value="${escapeHtml(_state.summarySearch)}" oninput="setSummarySearch(this.value)" placeholder="Szukaj apartamentu…" style="min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
@@ -5573,8 +5578,8 @@ function buildSummaryView(){
     <td class="num" style="color:var(--orange);font-weight:700">${fmt(r.housekeeping)} zł</td>
     <td class="num">${bd}</td>
     <td class="num">${bd}</td>
-    <td class="num">${bd}</td>
-    <td class="num">${bd}</td>
+    <td class="num">${r.rent!==null?`${fmt(r.rent)} zł`:bd}</td>
+    <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
@@ -5583,7 +5588,7 @@ function buildSummaryView(){
   return monthNav+kpis+filters+`
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Widok skrócony pod dalsze koszty stałe: prąd, gaz, czynsz, zaliczka eksploatacyjna i internet.</div>
+      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem i zaliczką eksploatacyjną.</div>
       <div class="hk-table-wrap"><table class="hk-table">
         <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
@@ -5594,8 +5599,8 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.housekeeping)} zł</td>
             <td class="num">${bd}</td>
             <td class="num">${bd}</td>
-            <td class="num">${bd}</td>
-            <td class="num">${bd}</td>
+            <td class="num">${fmt(totals.rent)} zł</td>
+            <td class="num">${fmt(totals.advance)} zł</td>
             <td class="num">${fmt(totals.internet)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
@@ -5608,6 +5613,7 @@ function buildSummaryView(){
 function getStaticInternetCostForApartment(apt){
   const raw=String(apt||'').trim().toLowerCase();
   if(!raw)return 0;
+  if(raw.includes('magazynek'))return 0;
   if(isL25PremiumApartment(raw))return 74.19;
   if(raw.includes('stawowa'))return 72.94;
   if(raw.includes('katowicka'))return 93.01;
@@ -6738,6 +6744,39 @@ function buildHousekeepingApartmentMap(hkData){
     map[aptKey].pranie+=Number(r.pranie)||0;
     map[aptKey].aptCena+=Number(r.aptCena)||0;
     map[aptKey].gosCena+=Number(r.gosCena)||0;
+  });
+  return map;
+}
+
+function normalizeSummaryApartmentKey(apt){
+  const raw=String(apt||'').trim();
+  if(!raw)return '';
+  if(/^biuro$/i.test(raw))return 'Biuro';
+  if(/^magazynek$/i.test(raw))return 'Magazynek';
+  if(/^katowicka$/i.test(raw))return 'Katowicka';
+  if(/^stawowa$/i.test(raw))return 'Stawowa';
+  if(/^starego$/i.test(raw))return 'Starego';
+  if(/^drzeszkowej$/i.test(raw))return 'Drzeszkowej';
+  if(/^zamoyskiego\s*a$/i.test(raw))return 'Apt A';
+  if(/^zamoyskiego\s*b$/i.test(raw))return 'Apt B';
+  const rynekMatch=raw.match(/^rynek\s*(\d+[a-z]?)$/i);
+  if(rynekMatch)return `Apt ${rynekMatch[1]}`;
+  const aptMatch=raw.match(/^apt\s*(.+)$/i);
+  if(aptMatch)return `Apt ${aptMatch[1]}`;
+  return raw;
+}
+
+function buildCzynszeApartmentMap(payload){
+  const items=payload?.items||[];
+  const map={};
+  items.forEach(item=>{
+    const aptKey=normalizeSummaryApartmentKey(item?.apartament);
+    if(!aptKey)return;
+    map[aptKey]={
+      apt:aptKey,
+      rent:Number(item?.oplata23Netto)||0,
+      advance:Number(item?.sumaCzynszNetto)||0,
+    };
   });
   return map;
 }
@@ -10886,7 +10925,7 @@ async function init(){
   const needHousekeeping=((hasModuleAccess('housekeeping')&&initialSection==='housekeeping')||(hasModuleAccess('summary')&&initialSection==='summary'));
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
   const needLaundry=hasModuleAccess('laundry-textiles')&&initialSection==='laundry-textiles';
-  const needCzynsze=hasModuleAccess('czynsze')&&initialSection==='czynsze';
+  const needCzynsze=(hasModuleAccess('czynsze')&&initialSection==='czynsze')||(initialSection==='summary'&&hasCzynszeDashboardConfig());
   const needParkingCards=hasModuleAccess('parking-cards')&&initialSection==='parking-cards';
   const needPrevio=hasAnyModuleAccess(['previo','oblozenie','booking-payout','otv-new','summary'])&&['previo','oblozenie','booking-payout','rental','otv-new','summary'].includes(initialSection);
   const needAgata=canViewAgataFaktura()&&initialSection==='agata-faktura';
@@ -11088,6 +11127,12 @@ async function prefetchSecondaryModules(){
       if(key&&!_state.data.housekeeping?.[key]){
         _state.data.housekeeping[key]=await loadHousekeepingMonth(key);
       }
+      if(hasCzynszeDashboardConfig()){
+        await detectCzynszeMonths();
+        if(key&&!_state.data.czynsze?.[key]){
+          _state.data.czynsze[key]=await loadCzynszeMonth(key);
+        }
+      }
     });
   }
   if(canViewAgataFaktura()&&section!=='agata-faktura'){
@@ -11209,19 +11254,25 @@ function ensureSectionDataLoaded(section){
     const key=_state.summaryMonth;
     const hasPrevio=_state.data.previo?.[key]!==undefined;
     const hasHk=!!_state.data.housekeeping?.[key];
-    if(hasPrevio&&hasHk){
+    const hasCzynsze=!hasCzynszeDashboardConfig()||_state.data.czynsze?.[key]!==undefined;
+    if(hasPrevio&&hasHk&&hasCzynsze){
       renderApp();
       return true;
     }
     if(!hasPrevio)_state.data.previo[key]=null;
     if(!hasHk)_state.data.housekeeping[key]=null;
+    if(hasCzynszeDashboardConfig()&&_state.data.czynsze?.[key]===undefined)_state.data.czynsze[key]=null;
     renderApp();
     Promise.allSettled([
       hasPrevio?Promise.resolve(_state.data.previo[key]):loadPrevioMonth(key),
       hasHk?Promise.resolve(_state.data.housekeeping[key]):loadHousekeepingMonth(key),
-    ]).then(([previoR,hkR])=>{
+      hasCzynsze
+        ? Promise.resolve(_state.data.czynsze?.[key])
+        : detectCzynszeMonths().then(()=>loadCzynszeMonth(key)),
+    ]).then(([previoR,hkR,czynszeR])=>{
       if(!hasPrevio)_state.data.previo[key]=previoR.status==='fulfilled'?previoR.value:{error:previoR.reason?.message||'Błąd'};
       if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
+      if(!hasCzynsze)_state.data.czynsze[key]=czynszeR.status==='fulfilled'?czynszeR.value:{error:czynszeR.reason?.message||'Błąd'};
       if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
     });
     return true;
