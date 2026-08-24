@@ -1223,7 +1223,15 @@ async function loadKsefData(){
   return rows.map(row=>{
     const oldIssueDate=String(row[1]||'').trim();
     const newIssueDate=String(row[2]||'').trim();
-    const isNewLayout=!!(toDate(newIssueDate) && !toDate(oldIssueDate));
+    const oldSeller=String(row[2]||'').trim();
+    const newSeller=String(row[3]||'').trim();
+    const oldIssueLooksLikeDate=!!toDate(oldIssueDate);
+    const newIssueLooksLikeDate=!!toDate(newIssueDate);
+    const oldSellerLooksLikeDate=!!toDate(oldSeller);
+    const newSellerLooksLikeDate=!!toDate(newSeller);
+    const isNewLayout=
+      (newIssueLooksLikeDate && oldSellerLooksLikeDate && !newSellerLooksLikeDate) ||
+      (newIssueLooksLikeDate && !oldIssueLooksLikeDate);
     const brutto=parseFloat(String((isNewLayout?row[7]:row[6])||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
     const issueDate=isNewLayout?newIssueDate:oldIssueDate;
     const dueDate=String((isNewLayout?row[8]:row[7])||'').trim();
