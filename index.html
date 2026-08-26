@@ -10104,17 +10104,12 @@ function buildOblozenieLive(){
     {name:'L25',total:totals.l25||0,color:'#0f766e'},
     {name:'Agata',total:totals.agata||0,color:'#c2410c'},
   ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
-  const compactMoney=value=>{
-    const n=Number(value||0);
-    if(Math.abs(n)>=10000)return `${(n/1000).toFixed(1).replace('.',',')}k`;
-    return fmt(n);
-  };
   const renderBreakdownList=(items,limit=4)=>items.slice(0,limit).map(item=>`
-    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;gap:8px;align-items:center">
+    <div style="display:grid;grid-template-columns:10px minmax(0,1.2fr) auto auto;gap:6px;align-items:center">
       <span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>
-      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</span>
-      <span style="font-size:11px;font-weight:700;color:var(--text)">${compactMoney(item.total)} zł</span>
-      <span style="font-size:11px;font-weight:700;color:var(--text-muted)">${Math.round(item.pct)}%</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap">${item.name}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
+      <span style="font-size:10px;font-weight:700;color:var(--text-muted);white-space:nowrap">${Math.round(item.pct)}%</span>
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
     const monthTitle=String(opts.monthLabel||'').toUpperCase();
@@ -10126,7 +10121,7 @@ function buildOblozenieLive(){
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${opts.value}</div>
       <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${opts.subtitle}</div>
       <div style="height:1px;background:#e6ebf2;margin:16px 0 14px"></div>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.95fr);gap:14px">
         <div style="min-width:0">
           <div style="font-size:11px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">${opts.leftTitle}</div>
           <div style="display:grid;gap:10px">${renderBreakdownList(opts.leftItems,4)}</div>
@@ -10424,8 +10419,8 @@ function buildOblozenieLive(){
           </div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:220px minmax(0,1fr) 220px;gap:10px;margin-top:18px;align-items:stretch">
-        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+      <div style="display:grid;grid-template-columns:180px minmax(0,1fr) 220px;gap:10px;margin-top:18px;align-items:stretch">
+        <div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:18px 18px 16px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
           <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
           <div style="font-size:11px;color:var(--text-muted);opacity:.85;margin-top:6px">Dzień ${targetDate.getDate()} z ${daysInMonth} miesiąca</div>
@@ -10467,15 +10462,16 @@ function buildOblozenieLive(){
           rightTitle:'Obiekty',
           rightItems:forecastSegmentItems
         })}
-        <div style="background:#eef2ff;border:1px solid #a5b4fc;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:center;text-align:center">
-          <div style="width:min(220px,100%);margin:0 auto">
-          <div style="font-size:11px;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.06em">Rok temu</div>
-          <div style="font-size:18px;font-weight:800;color:#4338ca;margin-top:6px">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
-          <div style="font-size:11px;color:#3730a3;opacity:.8;margin-top:6px">Ten sam miesiąc w poprzednim roku</div>
-          ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
+        <div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:18px 18px 16px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between;text-align:left">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#0f172a">Rok temu</div>
+            <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${currentMonthLabelUpper}</div>
           </div>
+          <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
+          <div style="font-size:12px;color:var(--text-mid);margin-top:10px">Ten sam miesiąc w poprzednim roku</div>
+          ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e6ebf2;font-size:11px;color:var(--text-mid)">Rezerwacje: <strong style="color:var(--text)">${currentMonthPrevioForecast.lastYearRowCount}</strong></div>`:''}
         </div>
-      </div>
+        </div>
         ${renderStartCountryCard()}
       </div>
     </div>
