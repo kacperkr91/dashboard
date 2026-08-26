@@ -9994,31 +9994,31 @@ function getStartCountryCardData(){
 
 function renderStartCountryCard(){
   const {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries}=getStartCountryCardData();
-  return `<div data-start-country-card style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#fff7ed 44%,#ffedd5 100%);border:1px solid #fed7aa;border-radius:20px;padding:16px 16px 14px;box-shadow:0 16px 36px rgba(249,115,22,.12)">
-    <div style="position:absolute;inset:auto -38px -38px auto;width:160px;height:160px;border-radius:999px;background:rgba(251,146,60,.14);filter:blur(8px);pointer-events:none"></div>
-    <div style="position:absolute;top:-36px;right:58px;width:118px;height:118px;border-radius:999px;background:rgba(253,186,116,.22);filter:blur(10px);pointer-events:none"></div>
+  return `<div data-start-country-card style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#eefcff 44%,#dff7ff 100%);border:1px solid #b6ebff;border-radius:20px;padding:16px 16px 14px;box-shadow:0 16px 36px rgba(14,165,233,.12)">
+    <div style="position:absolute;inset:auto -38px -38px auto;width:160px;height:160px;border-radius:999px;background:rgba(34,211,238,.14);filter:blur(8px);pointer-events:none"></div>
+    <div style="position:absolute;top:-36px;right:58px;width:118px;height:118px;border-radius:999px;background:rgba(125,211,252,.24);filter:blur(10px);pointer-events:none"></div>
     <div style="position:relative;z-index:1">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
         <div>
-          <div style="font-size:11px;font-weight:900;color:#c2410c;text-transform:uppercase;letter-spacing:.06em">Top 10 narodowości</div>
-          <div style="font-size:10px;color:#9a3412;opacity:.84;margin-top:5px">${currentMonthCountryScopeLabel}</div>
+          <div style="font-size:11px;font-weight:900;color:#0f4c81;text-transform:uppercase;letter-spacing:.06em">Top 10 narodowości</div>
+          <div style="font-size:10px;color:#0f766e;opacity:.84;margin-top:5px">${currentMonthCountryScopeLabel}</div>
         </div>
         <div style="display:grid;grid-template-columns:1.45fr .9fr .9fr 1fr;gap:4px;width:100%">
-          <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'rgba(255,255,255,.82)'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+          <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#0f766e':'#99f6e4'};background:${startCountryScope==='wszystkie'?'#0f766e':'rgba(255,255,255,.82)'};color:${startCountryScope==='wszystkie'?'#fff':'#0f766e'}">Wszystkie</button>
           <button type="button" onclick="setStartCountryScope('otv')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'rgba(255,255,255,.82)'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
           <button type="button" onclick="setStartCountryScope('l25')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'rgba(255,255,255,.82)'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
-          <button type="button" onclick="setStartCountryScope('agata')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'rgba(255,255,255,.82)'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+          <button type="button" onclick="setStartCountryScope('agata')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#0f4c81':'#7dd3fc'};background:${startCountryScope==='agata'?'#0f4c81':'rgba(255,255,255,.82)'};color:${startCountryScope==='agata'?'#fff':'#0f4c81'}">Agata</button>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:12px">
       ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
-        <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.82);border:1px solid rgba(254,215,170,.9)">
-          <div style="font-size:9px;font-weight:800;color:#b45309">${index+1}.</div>
+        <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.82);border:1px solid rgba(182,235,255,.92)">
+          <div style="font-size:9px;font-weight:800;color:#0f766e">${index+1}.</div>
           <div style="font-size:13px;line-height:1">${item.flag}</div>
           <div style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-          <div style="font-size:10px;font-weight:800;color:#c2410c">${item.count}</div>
+          <div style="font-size:10px;font-weight:800;color:#0f4c81">${item.count}</div>
         </div>
-      `).join(''):`<div style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.78);border:1px solid rgba(254,215,170,.9);border-radius:12px;padding:10px 12px">Brak narodowości w tym miesiącu.</div>`}
+      `).join(''):`<div style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.78);border:1px solid rgba(182,235,255,.92);border-radius:12px;padding:10px 12px">Brak narodowości w tym miesiącu.</div>`}
       </div>
     </div>
   </div>`;
@@ -10107,9 +10107,22 @@ function buildOblozenieLive(){
     {name:'L25',total:totals.l25||0,color:'#0f766e'},
     {name:'Agata',total:totals.agata||0,color:'#c2410c'},
   ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
+  const renderBreakdownMarker=item=>{
+    const badgeMap={
+      'Booking.com':{label:'B',bg:'#e7efff',fg:'#003580',border:'#bfd3ff'},
+      'Airbnb':{label:'A',bg:'#ffe7ea',fg:'#FF5A5F',border:'#ffc4cb'},
+      'Profitroom':{label:'P',bg:'#e8fbef',fg:'#16a34a',border:'#b8ecc8'},
+      'Własna':{label:'W',bg:'#f2eaff',fg:'#7c3aed',border:'#ddccff'},
+    };
+    const badge=badgeMap[item.name];
+    if(badge){
+      return `<span style="width:22px;height:22px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;background:${badge.bg};color:${badge.fg};border:1px solid ${badge.border};font-size:10px;font-weight:900;letter-spacing:.01em">${badge.label}</span>`;
+    }
+    return `<span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>`;
+  };
   const renderBreakdownList=(items,limit=4)=>items.slice(0,limit).map(item=>`
-    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) 92px;column-gap:8px;align-items:center;min-width:0">
-      <span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>
+    <div style="display:grid;grid-template-columns:22px minmax(0,1fr) 92px;column-gap:8px;align-items:center;min-width:0">
+      ${renderBreakdownMarker(item)}
       <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;min-width:0">${item.name}</span>
       <span style="display:flex;flex-direction:column;align-items:flex-end;justify-self:end;line-height:1.05;width:92px;min-width:92px;text-align:right">
         <span style="font-size:9px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
