@@ -2773,6 +2773,25 @@ function normalizeKsefPaymentEntry(entry, bruttoValue=0){
   const latestPaidDate=payments.length?payments[payments.length-1].date:'';
   return{payments,paidAmount,remainingAmount,latestPaidDate,updatedAt};
 }
+function mergeKsefPaidMaps(localMap,remoteMap){
+  const merged={};
+  const keys=new Set([
+    ...Object.keys(localMap||{}),
+    ...Object.keys(remoteMap||{}),
+  ]);
+  keys.forEach(key=>{
+    const localEntry=localMap?.[key];
+    const remoteEntry=remoteMap?.[key];
+    if(localEntry && remoteEntry){
+      const localUpdated=String(localEntry.updatedAt||'');
+      const remoteUpdated=String(remoteEntry.updatedAt||'');
+      merged[key]=localUpdated>=remoteUpdated?localEntry:remoteEntry;
+      return;
+    }
+    merged[key]=localEntry||remoteEntry;
+  });
+  return merged;
+}
 function getKsefBaseStatus(dueObj, daysValue=''){
   if(!dueObj)return'missing';
   const now=new Date();
@@ -8241,9 +8260,18 @@ async function syncPull(){
       _doneCache=doneData.done;
       localStorage.setItem('kal_done',JSON.stringify(_doneCache));
     }
-    if(ksefPaidData?.paidMap){
-      _ksefPaidCache=ksefPaidData.paidMap;
+    if(ksefPaidData&&typeof ksefPaidData.paidMap==='object'&&ksefPaidData.paidMap!==null){
+      let localKsefPaid={};
+      try{
+        localKsefPaid=JSON.parse(localStorage.getItem('ksef_paid_map')||'{}')||{};
+      }catch(e){localKsefPaid={};}
+      const remoteKsefPaid=ksefPaidData.paidMap;
+      const mergedKsefPaid=mergeKsefPaidMaps(localKsefPaid,remoteKsefPaid);
+      _ksefPaidCache=mergedKsefPaid;
       localStorage.setItem('ksef_paid_map',JSON.stringify(_ksefPaidCache));
+      if(Object.keys(mergedKsefPaid).length!==Object.keys(remoteKsefPaid).length || JSON.stringify(mergedKsefPaid)!==JSON.stringify(remoteKsefPaid)){
+        syncPushKsefPaid(mergedKsefPaid);
+      }
     }
     if(arturPaymentsData&&typeof arturPaymentsData.payments==='object'&&arturPaymentsData.payments!==null){
       let localArtur={};
