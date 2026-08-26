@@ -10310,10 +10310,8 @@ function buildOblozenieLive(){
           <div style="font-size:18px;font-weight:800;color:#7c3aed;margin-top:6px">${revpar>0?fmt(revpar)+' zł':'—'}</div>
           <div style="font-size:11px;color:#7c3aed;opacity:.78;margin-top:6px">Przychód na każdy dostępny apartament</div>
         </div>
-        ${weatherCard('Teraz w Krakowie',weatherCache?.current||null,'current')}
-        ${weatherCard('Jutro',weatherTomorrow,'daily')}
       </div>
-      <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px;align-items:stretch">
         <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:14px;padding:14px 16px">
           <div style="width:min(220px,100%)">
           <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Zrealizowane</div>
@@ -10361,8 +10359,8 @@ function buildOblozenieLive(){
           ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
           </div>
         </div>
-        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px">
-          <div style="width:min(280px,100%)">
+        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px;grid-row:span 2">
+          <div style="width:100%">
           <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
           <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthTopCountries.length||0}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
