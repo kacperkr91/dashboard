@@ -10000,6 +10000,22 @@ function buildOblozenieLive(){
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
   const showPhones=!!_state.oblozenieTelefony;
+  const currentMonthCountryRows=(filtry==='otv'?currentMonthOtvRows:currentMonthRows).filter(row=>!row.cancelled&&row.kraj);
+  const currentMonthCountryCounts=currentMonthCountryRows.reduce((acc,row)=>{
+    const code=String(row.kraj||'').toUpperCase().trim();
+    if(!code)return acc;
+    acc[code]=(acc[code]||0)+1;
+    return acc;
+  },{});
+  const currentMonthTopCountries=Object.entries(currentMonthCountryCounts)
+    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+    .slice(0,10)
+    .map(([code,count])=>({
+      code,
+      count,
+      flag:getFlagEmoji(code),
+      name:COUNTRY_NAMES[code]||code,
+    }));
   const targetDate=dzien==='dzis'?today:tmr;
   const daysInMonth=new Date(targetDate.getFullYear(),targetDate.getMonth()+1,0).getDate();
   const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
@@ -10327,6 +10343,23 @@ function buildOblozenieLive(){
           <div style="font-size:18px;font-weight:800;color:#4338ca;margin-top:6px">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#3730a3;opacity:.8;margin-top:6px">Ten sam miesiąc w poprzednim roku</div>
           ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
+          </div>
+        </div>
+        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px">
+          <div style="width:min(280px,100%)">
+          <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
+          <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthTopCountries.length||0}</div>
+          <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:6px">${filtry==='otv'?'Bieżący miesiąc · tylko OTV':'Bieżący miesiąc · wszystkie obiekty'}</div>
+          <div style="display:grid;gap:5px;margin-top:10px">
+            ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
+              <div style="display:grid;grid-template-columns:18px 22px minmax(0,1fr) auto;gap:6px;align-items:center">
+                <div style="font-size:10px;font-weight:800;color:#b45309">${index+1}.</div>
+                <div style="font-size:15px;line-height:1">${item.flag}</div>
+                <div style="font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+                <div style="font-size:11px;font-weight:800;color:#c2410c">${item.count}</div>
+              </div>
+            `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
+          </div>
           </div>
         </div>
       </div>
