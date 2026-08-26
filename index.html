@@ -10000,7 +10000,23 @@ function buildOblozenieLive(){
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
   const showPhones=!!_state.oblozenieTelefony;
-  const currentMonthCountryRows=(filtry==='otv'?currentMonthOtvRows:currentMonthRows).filter(row=>!row.cancelled&&row.kraj);
+  const startCountryScope=_state.startCountryScope||'wszystkie';
+  const currentMonthL25Rows=currentMonthRows.filter(row=>String(row.apt||'').includes('L25/'));
+  const currentMonthCountryScopeRows=startCountryScope==='otv'
+    ? currentMonthOtvRows
+    : startCountryScope==='l25'
+    ? currentMonthL25Rows
+    : startCountryScope==='agata'
+    ? currentMonthAgataRows
+    : currentMonthRows;
+  const currentMonthCountryScopeLabel=startCountryScope==='otv'
+    ? 'Bieżący miesiąc · OTV'
+    : startCountryScope==='l25'
+    ? 'Bieżący miesiąc · L25'
+    : startCountryScope==='agata'
+    ? 'Bieżący miesiąc · Agata'
+    : 'Bieżący miesiąc · wszystkie';
+  const currentMonthCountryRows=currentMonthCountryScopeRows.filter(row=>!row.cancelled&&row.kraj);
   const currentMonthCountryCounts=currentMonthCountryRows.reduce((acc,row)=>{
     const code=String(row.kraj||'').toUpperCase().trim();
     if(!code)return acc;
@@ -10349,7 +10365,13 @@ function buildOblozenieLive(){
           <div style="width:min(280px,100%)">
           <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
           <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthTopCountries.length||0}</div>
-          <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:6px">${filtry==='otv'?'Bieżący miesiąc · tylko OTV':'Bieżący miesiąc · wszystkie obiekty'}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+            <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
+            <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
+            <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+          </div>
+          <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:8px">${currentMonthCountryScopeLabel}</div>
           <div style="display:grid;gap:5px;margin-top:10px">
             ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
               <div style="display:grid;grid-template-columns:18px 22px minmax(0,1fr) auto;gap:6px;align-items:center">
