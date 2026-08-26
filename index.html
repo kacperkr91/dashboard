@@ -5011,23 +5011,21 @@ function buildKsefView(rows){
       <div class="ksef-table-wrap" style="margin-top:18px">
         <table class="ksef-table">
           <colgroup>
-            <col style="width:150px"/>
-            <col style="width:150px"/>
-            <col style="width:160px"/>
-            <col style="width:150px"/>
-            <col style="width:118px"/>
-            <col style="width:118px"/>
-            <col style="width:72px"/>
-            <col style="width:110px"/>
-            <col style="width:126px"/>
-            <col style="width:172px"/>
-            <col style="width:96px"/>
+            <col style="width:168px"/>
+            <col style="width:210px"/>
+            <col style="width:138px"/>
+            <col style="width:104px"/>
+            <col style="width:104px"/>
+            <col style="width:58px"/>
+            <col style="width:94px"/>
+            <col style="width:112px"/>
+            <col style="width:152px"/>
+            <col style="width:88px"/>
           </colgroup>
           <thead>
             <tr>
               <th class="col-seller">Dostawca</th>
-              <th class="col-ksef">Numer KSeF</th>
-              <th class="col-ksef">Nr faktury</th>
+              <th class="col-ksef">Numery</th>
               <th class="col-status">Status</th>
               <th class="col-date">Wystawienie</th>
               <th class="col-date">Termin</th>
@@ -5044,8 +5042,10 @@ function buildKsefView(rows){
                 <td class="col-seller">
                   <div class="ksef-seller-name">${item.seller}</div>
                 </td>
-                <td class="col-ksef">${item.ksefNumber||'—'}</td>
-                <td class="col-ksef">${item.invoiceNumber||'—'}</td>
+                <td class="col-ksef">
+                  <div style="font-weight:700">${item.ksefNumber||'—'}</div>
+                  <div class="ksef-muted" style="font-size:11px;margin-top:3px">Fv: ${item.invoiceNumber||'—'}</div>
+                </td>
                 <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
                 <td class="col-date">${item.issueDate||'—'}</td>
                 <td class="col-date">${item.dueDate||'—'}</td>
