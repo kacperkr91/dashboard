@@ -1221,20 +1221,32 @@ async function loadKsefData(){
   const paidMap=getKsefPaidMap();
 
   return rows.map(row=>{
-    const brutto=parseFloat(String(row[6]||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
-    const issueDate=String(row[1]||'').trim();
-    const dueDate=String(row[7]||'').trim();
-    const daysRaw=row[8];
+    const oldIssueDate=String(row[1]||'').trim();
+    const newIssueDate=String(row[2]||'').trim();
+    const oldSeller=String(row[2]||'').trim();
+    const newSeller=String(row[3]||'').trim();
+    const looksLikeIsoDate=value=>/^\d{4}-\d{2}-\d{2}/.test(String(value||'').trim());
+    const oldIssueLooksLikeDate=looksLikeIsoDate(oldIssueDate);
+    const newIssueLooksLikeDate=looksLikeIsoDate(newIssueDate);
+    const oldSellerLooksLikeDate=looksLikeIsoDate(oldSeller);
+    const newSellerLooksLikeDate=looksLikeIsoDate(newSeller);
+    const isNewLayout=
+      (newIssueLooksLikeDate && oldSellerLooksLikeDate && !newSellerLooksLikeDate) ||
+      (newIssueLooksLikeDate && !oldIssueLooksLikeDate);
+    const brutto=parseFloat(String((isNewLayout?row[7]:row[6])||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
+    const issueDate=isNewLayout?newIssueDate:oldIssueDate;
+    const dueDate=String((isNewLayout?row[8]:row[7])||'').trim();
+    const daysRaw=isNewLayout?row[9]:row[8];
     const daysValue=daysRaw===''||daysRaw===undefined||daysRaw===null?'':parseInt(String(daysRaw),10);
     const now=new Date(); now.setHours(0,0,0,0);
     const dueObj=toDate(dueDate);
     const issueObj=toDate(issueDate);
     const ksefNumber=String(row[0]||'').trim();
     const manualPaid=paidMap[ksefNumber]||null;
-    const sheetPaidFlag=String(row[11]||'').trim().toUpperCase();
-    const sheetPaidDate=String(row[12]||'').trim();
-    const sheetPaidAmount=parseMoneyValue(row[13]||'0');
-    const sheetRemainingAmount=parseMoneyValue(row[14]||'0');
+    const sheetPaidFlag=String((isNewLayout?row[12]:row[11])||'').trim().toUpperCase();
+    const sheetPaidDate=String((isNewLayout?row[13]:row[12])||'').trim();
+    const sheetPaidAmount=parseMoneyValue((isNewLayout?row[14]:row[13])||'0');
+    const sheetRemainingAmount=parseMoneyValue((isNewLayout?row[15]:row[14])||'0');
     const sheetPaid=sheetPaidFlag==='TAK'||sheetPaidFlag==='TRUE'||sheetPaidFlag==='1'||sheetPaidFlag==='OPLACONA';
     const sheetPartial=sheetPaidFlag==='CZESCIOWO'||sheetPaidFlag==='CZĘŚCIOWO';
     const autoPaidAtPurchase=!!(dueObj && issueObj && dueObj.getTime()===issueObj.getTime());
@@ -1250,19 +1262,21 @@ async function loadKsefData(){
     const normalizedDays=Number.isFinite(daysValue)?daysValue:(Number.isFinite(daysToDue)?daysToDue:'');
     if(dueObj && normalizedDays < 0)status='overdue';
     if(dueObj && normalizedDays >= 0 && normalizedDays <= 7)status='due-soon';
+    const invoiceNumber=String((isNewLayout?row[1]:'')||'').trim();
     const baseItem={
       ksefNumber,
+      invoiceNumber,
       issueDate,
-      seller:String(row[2]||'').trim()||'Nieznany dostawca',
-      nip:String(row[3]||'').trim(),
-      netto:String(row[4]||'').trim(),
-      vat:String(row[5]||'').trim(),
-      brutto:String(row[6]||'').trim(),
+      seller:String((isNewLayout?row[3]:row[2])||'').trim()||'Nieznany dostawca',
+      nip:String((isNewLayout?row[4]:row[3])||'').trim(),
+      netto:String((isNewLayout?row[5]:row[4])||'').trim(),
+      vat:String((isNewLayout?row[6]:row[5])||'').trim(),
+      brutto:String((isNewLayout?row[7]:row[6])||'').trim(),
       bruttoValue:brutto,
       dueDate,
       dueDateObj:dueObj,
       daysToDue:normalizedDays,
-      updatedAt:String(row[10]||'').trim(),
+      updatedAt:String((isNewLayout?row[11]:row[10])||'').trim(),
       status,
       urgencyStatus:status,
       manualPaidDate:'',
@@ -4821,7 +4835,7 @@ function buildKsefView(rows){
   const filtered=rows.filter(item=>{
     if(filter!=='all' && item.status!==filter)return false;
     if(!search)return true;
-    return [item.seller,item.ksefNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
+    return [item.seller,item.ksefNumber,item.invoiceNumber,item.nip,item.dueDate,item.issueDate].join(' ').toLowerCase().includes(search);
   });
 
   const overdue=rows.filter(r=>r.status==='overdue').sort((a,b)=>(a.daysToDue||0)-(b.daysToDue||0));
@@ -4960,10 +4974,10 @@ function buildKsefView(rows){
       <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap">
         <div>
           <div class="card-title">Pełna lista faktur KSeF</div>
-          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF albo statusie płatności.</div>
+          <div class="card-subtitle">Filtruj po dostawcy, numerze KSeF, numerze faktury albo statusie płatności.</div>
         </div>
         <div class="ksef-filters">
-          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
+          <input id="ksefSearchInput" class="ksef-search" type="text" placeholder="Szukaj: dostawca, NIP, numer KSeF, nr faktury…" value="${_state.ksefSearch||''}" oninput="setKsefFilterState('search',this.value)"/>
           <select id="ksefStatusFilter" class="ksef-select" onchange="setKsefFilterState('status',this.value)">
             <option value="all" ${filter==='all'?'selected':''}>Wszystkie</option>
             <option value="overdue" ${filter==='overdue'?'selected':''}>Po terminie</option>
@@ -4980,6 +4994,7 @@ function buildKsefView(rows){
           <colgroup>
             <col style="width:150px"/>
             <col style="width:150px"/>
+            <col style="width:160px"/>
             <col style="width:150px"/>
             <col style="width:118px"/>
             <col style="width:118px"/>
@@ -4993,6 +5008,7 @@ function buildKsefView(rows){
             <tr>
               <th class="col-seller">Dostawca</th>
               <th class="col-ksef">Numer KSeF</th>
+              <th class="col-ksef">Nr faktury</th>
               <th class="col-status">Status</th>
               <th class="col-date">Wystawienie</th>
               <th class="col-date">Termin</th>
@@ -5010,6 +5026,7 @@ function buildKsefView(rows){
                   <div class="ksef-seller-name">${item.seller}</div>
                 </td>
                 <td class="col-ksef">${item.ksefNumber||'—'}</td>
+                <td class="col-ksef">${item.invoiceNumber||'—'}</td>
                 <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
                 <td class="col-date">${item.issueDate||'—'}</td>
                 <td class="col-date">${item.dueDate||'—'}</td>
