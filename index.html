@@ -10311,7 +10311,7 @@ function buildOblozenieLive(){
           <div style="font-size:11px;color:#7c3aed;opacity:.78;margin-top:6px">Przychód na każdy dostępny apartament</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px;align-items:stretch">
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;align-items:stretch">
         <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:14px;padding:14px 16px">
           <div style="width:min(220px,100%)">
           <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Zrealizowane</div>
@@ -10359,24 +10359,30 @@ function buildOblozenieLive(){
           ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
           </div>
         </div>
-        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px;grid-row:span 2">
+        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px;grid-column:1 / -1">
           <div style="width:100%">
           <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
-          <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthTopCountries.length||0}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-            <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
-            <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
-            <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
-            <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+          <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-top:6px">
+            <div>
+              <div style="font-size:22px;font-weight:800;color:#c2410c">${currentMonthTopCountries.length||0}</div>
+              <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:4px">${currentMonthCountryScopeLabel}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+              <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+              <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
+              <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
+              <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+            </div>
           </div>
-          <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:8px">${currentMonthCountryScopeLabel}</div>
-          <div style="display:grid;gap:5px;margin-top:10px">
+          <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px">
             ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
-              <div style="display:grid;grid-template-columns:18px 22px minmax(0,1fr) auto;gap:6px;align-items:center">
-                <div style="font-size:10px;font-weight:800;color:#b45309">${index+1}.</div>
-                <div style="font-size:15px;line-height:1">${item.flag}</div>
-                <div style="font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-                <div style="font-size:11px;font-weight:800;color:#c2410c">${item.count}</div>
+              <div style="background:#fff;border:1px solid #fed7aa;border-radius:12px;padding:8px 10px;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="font-size:10px;font-weight:800;color:#b45309">${index+1}.</div>
+                  <div style="font-size:15px;line-height:1">${item.flag}</div>
+                  <div style="font-size:11px;font-weight:800;color:#c2410c;margin-left:auto">${item.count}</div>
+                </div>
+                <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
               </div>
             `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
           </div>
