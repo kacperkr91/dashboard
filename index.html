@@ -10287,8 +10287,8 @@ function buildOblozenieLive(){
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:stretch">
-        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px;flex:0 0 220px">
+      <div style="display:grid;grid-template-columns:220px 220px minmax(0,1fr);gap:10px;margin-top:18px;align-items:stretch">
+        <div style="background:#ffffffd8;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
           <div style="font-size:18px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
           <div style="font-size:11px;color:var(--text-muted);opacity:.85;margin-top:6px">Dzień ${targetDate.getDate()} z ${daysInMonth} miesiąca</div>
@@ -10296,33 +10296,32 @@ function buildOblozenieLive(){
             <div style="height:100%;width:${monthDayProgress.toFixed(1)}%;background:linear-gradient(90deg,#0f766e,#14b8a6)"></div>
           </div>
         </div>
-        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:14px 16px;flex:0 0 220px">
+        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:12px 14px">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
             <div>
               <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
-              <div style="font-size:20px;font-weight:800;color:#c2410c;margin-top:6px">${currentMonthTopCountries.length||0}</div>
-              <div style="font-size:11px;color:#9a3412;opacity:.8;margin-top:4px">${currentMonthCountryScopeLabel}</div>
+              <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:5px">${currentMonthTopCountries.length||0}</div>
+              <div style="font-size:10px;color:#9a3412;opacity:.8;margin-top:3px">${currentMonthCountryScopeLabel}</div>
             </div>
             <div style="display:flex;gap:5px;flex-wrap:wrap">
-              <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
-              <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
-              <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
-              <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:4px 10px;border-radius:999px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+              <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+              <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
+              <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
+              <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:7px;margin-top:12px">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin-top:10px;max-height:250px;overflow:auto;padding-right:2px">
             ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
-              <div style="display:grid;grid-template-columns:18px 22px minmax(0,1fr) auto;gap:6px;align-items:center;background:#fff;border:1px solid #fed7aa;border-radius:12px;padding:8px 10px">
-                <div style="font-size:10px;font-weight:800;color:#b45309">${index+1}.</div>
-                <div style="font-size:15px;line-height:1">${item.flag}</div>
-                <div style="font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-                <div style="font-size:11px;font-weight:800;color:#c2410c">${item.count}</div>
+              <div style="display:grid;grid-template-columns:16px 20px minmax(0,1fr) auto;gap:5px;align-items:center;background:#fff;border:1px solid #fed7aa;border-radius:10px;padding:6px 8px">
+                <div style="font-size:9px;font-weight:800;color:#b45309">${index+1}.</div>
+                <div style="font-size:14px;line-height:1">${item.flag}</div>
+                <div style="font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+                <div style="font-size:10px;font-weight:800;color:#c2410c">${item.count}</div>
               </div>
             `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
           </div>
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;align-items:stretch">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch">
         <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:14px;padding:14px 16px">
           <div style="width:min(220px,100%)">
           <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Zrealizowane</div>
@@ -10370,6 +10369,7 @@ function buildOblozenieLive(){
           ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="font-size:10px;color:#4338ca;opacity:.75;margin-top:6px">Rezerwacje: ${currentMonthPrevioForecast.lastYearRowCount}</div>`:''}
           </div>
         </div>
+      </div>
       </div>
     </div>
 
