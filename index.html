@@ -350,31 +350,28 @@
     .ksef-action-btn{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;min-height:32px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;}
     .ksef-action-btn:hover{background:var(--bg);}
     .ksef-action-btn.paid{background:#f0fdf4;border-color:#86efac;color:#15803d;}
-    .ksef-table-wrap{overflow:auto;}
-    .ksef-table{width:100%;min-width:1320px;border-collapse:separate;border-spacing:0;table-layout:fixed;}
-    .ksef-table thead th,.ksef-table tbody td{padding:12px 14px;vertical-align:middle;}
+    .ksef-table-wrap{overflow-x:hidden;overflow-y:visible;}
+    .ksef-table{width:100%;min-width:0;border-collapse:separate;border-spacing:0;table-layout:fixed;}
+    .ksef-table thead th,.ksef-table tbody td{padding:10px 9px;vertical-align:middle;}
     .ksef-table thead th:first-child,.ksef-table tbody td:first-child,.ksef-table thead th:nth-child(2),.ksef-table tbody td:nth-child(2){text-align:left;}
     .ksef-table thead th.col-status,.ksef-table tbody td.col-status,
     .ksef-table thead th.col-days,.ksef-table tbody td.col-days,
-    .ksef-table thead th.col-paid,.ksef-table tbody td.col-paid,
-    .ksef-table thead th.col-updated,.ksef-table tbody td.col-updated{text-align:center;}
+    .ksef-table thead th.col-paid,.ksef-table tbody td.col-paid{text-align:center;}
     .ksef-table thead th.col-amount,.ksef-table tbody td.col-amount{text-align:right;font-variant-numeric:tabular-nums;}
     .ksef-table thead th.col-date,.ksef-table tbody td.col-date{text-align:center;white-space:nowrap;}
     .ksef-table thead th.col-nip,.ksef-table tbody td.col-nip{text-align:left;white-space:nowrap;}
     .ksef-table .col-ksef{font-family:monospace;font-size:11px;word-break:break-word;overflow-wrap:anywhere;line-height:1.25;}
     .ksef-table .col-seller{min-width:0;word-break:normal;overflow-wrap:anywhere;line-height:1.25;}
-    .ksef-table .col-status{width:150px;}
-    .ksef-table .col-date{width:118px;}
-    .ksef-table .col-days{width:72px;}
-    .ksef-table .col-amount{width:110px;}
-    .ksef-table .col-nip{width:126px;}
-    .ksef-table .col-paid{width:172px;}
-    .ksef-table .col-updated{width:96px;}
+    .ksef-table .col-status{width:132px;}
+    .ksef-table .col-date{width:96px;}
+    .ksef-table .col-days{width:52px;}
+    .ksef-table .col-amount{width:90px;}
+    .ksef-table .col-nip{width:106px;}
+    .ksef-table .col-paid{width:136px;}
     .ksef-seller-name{font-weight:700;line-height:1.22;}
-    .ksef-table tbody td.col-paid{padding-top:10px;padding-bottom:10px;}
-    .ksef-table .ksef-badge{justify-content:center;min-width:108px;}
-    .ksef-paid-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
-    .ksef-table td.col-updated{font-size:11px;line-height:1.25;word-break:break-word;}
+    .ksef-table tbody td.col-paid{padding-top:8px;padding-bottom:8px;}
+    .ksef-table .ksef-badge{justify-content:center;min-width:0;}
+    .ksef-paid-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;}
     .ksef-table tbody tr.overdue{background:#fff7f7;}
     .ksef-table tbody tr.due-soon{background:#fffaf5;}
     .ksef-table tbody tr.partial{background:#fffdf4;}
@@ -5011,16 +5008,15 @@ function buildKsefView(rows){
       <div class="ksef-table-wrap" style="margin-top:18px">
         <table class="ksef-table">
           <colgroup>
-            <col style="width:168px"/>
-            <col style="width:210px"/>
-            <col style="width:138px"/>
-            <col style="width:104px"/>
-            <col style="width:104px"/>
-            <col style="width:58px"/>
-            <col style="width:94px"/>
-            <col style="width:112px"/>
-            <col style="width:152px"/>
-            <col style="width:88px"/>
+            <col style="width:180px"/>
+            <col style="width:180px"/>
+            <col style="width:132px"/>
+            <col style="width:96px"/>
+            <col style="width:96px"/>
+            <col style="width:52px"/>
+            <col style="width:90px"/>
+            <col style="width:106px"/>
+            <col style="width:136px"/>
           </colgroup>
           <thead>
             <tr>
@@ -5033,7 +5029,6 @@ function buildKsefView(rows){
               <th class="col-amount">Brutto</th>
               <th class="col-nip">NIP</th>
               <th class="col-paid">Opłacenie</th>
-              <th class="col-updated">Aktualizacja</th>
             </tr>
           </thead>
           <tbody>
@@ -5043,8 +5038,8 @@ function buildKsefView(rows){
                   <div class="ksef-seller-name">${item.seller}</div>
                 </td>
                 <td class="col-ksef">
-                  <div style="font-weight:700">${item.ksefNumber||'—'}</div>
-                  <div class="ksef-muted" style="font-size:11px;margin-top:3px">Fv: ${item.invoiceNumber||'—'}</div>
+                  <div style="font-weight:700;font-family:'Inter',sans-serif">${item.invoiceNumber||'—'}</div>
+                  <div class="ksef-muted" style="font-size:10px;margin-top:3px">KSeF: ${item.ksefNumber||'—'}</div>
                 </td>
                 <td class="col-status"><span class="ksef-badge ${badgeClassFor(item.status)}">${labelFor(item)}</span></td>
                 <td class="col-date">${item.issueDate||'—'}</td>
@@ -5071,7 +5066,6 @@ function buildKsefView(rows){
                           </div>`
                   }
                 </td>
-                <td class="ksef-muted col-updated">${item.updatedAt||'—'}</td>
               </tr>
             `).join('')}
           </tbody>
