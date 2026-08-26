@@ -10057,7 +10057,6 @@ function buildOblozenieLive(){
   const lastYearMonthKey=`${parseInt(currentYear,10)-1}-${currentMonth}`;
   const previousMonthDate=new Date(today.getFullYear(),today.getMonth()-1,1);
   const previousMonthKey=`${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth()+1).padStart(2,'0')}`;
-  const previousMonthLabelUpper=`${MONTHS_PL_UPPER[previousMonthDate.getMonth()]} ${previousMonthDate.getFullYear()}`;
   ensurePrevioMonthFresh(currentMonthKey,'oblozenie');
   ensurePrevioMonthFresh(lastYearMonthKey,'oblozenie');
   ensurePrevioMonthFresh(previousMonthKey,'oblozenie');
@@ -10192,6 +10191,7 @@ function buildOblozenieLive(){
   const MONTHS_PL_UPPER=['STYCZEŃ','LUTY','MARZEC','KWIECIEŃ','MAJ','CZERWIEC','LIPIEC','SIERPIEŃ','WRZESIEŃ','PAŹDZIERNIK','LISTOPAD','GRUDZIEŃ'];
   const dateLabel=d=>`${d.getDate()} ${MONTHS_PL[d.getMonth()]} (${DOW[d.getDay()]})`;
   const currentMonthLabelUpper=`${MONTHS_PL_UPPER[today.getMonth()]} ${today.getFullYear()}`;
+  const previousMonthLabelUpper=`${MONTHS_PL_UPPER[previousMonthDate.getMonth()]} ${previousMonthDate.getFullYear()}`;
   const weatherByDate=Object.fromEntries((weatherCache?.days||[]).map(day=>[day.date,day]));
   const weatherToday=weatherByDate[todayStr]||weatherCache?.days?.[0]||null;
   const weatherTomorrow=weatherByDate[tmrStr]||weatherCache?.days?.[1]||null;
