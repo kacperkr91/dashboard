@@ -10107,22 +10107,9 @@ function buildOblozenieLive(){
     {name:'L25',total:totals.l25||0,color:'#0f766e'},
     {name:'Agata',total:totals.agata||0,color:'#c2410c'},
   ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
-  const renderBreakdownMarker=item=>{
-    const badgeMap={
-      'Booking.com':{label:'B',bg:'#e7efff',fg:'#003580',border:'#bfd3ff'},
-      'Airbnb':{label:'A',bg:'#ffe7ea',fg:'#FF5A5F',border:'#ffc4cb'},
-      'Profitroom':{label:'P',bg:'#e8fbef',fg:'#16a34a',border:'#b8ecc8'},
-      'Własna':{label:'W',bg:'#f2eaff',fg:'#7c3aed',border:'#ddccff'},
-    };
-    const badge=badgeMap[item.name];
-    if(badge){
-      return `<span style="width:22px;height:22px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;background:${badge.bg};color:${badge.fg};border:1px solid ${badge.border};font-size:10px;font-weight:900;letter-spacing:.01em">${badge.label}</span>`;
-    }
-    return `<span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>`;
-  };
   const renderBreakdownList=(items,limit=4)=>items.slice(0,limit).map(item=>`
-    <div style="display:grid;grid-template-columns:22px minmax(0,1fr) 92px;column-gap:8px;align-items:center;min-width:0">
-      ${renderBreakdownMarker(item)}
+    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) 92px;column-gap:8px;align-items:center;min-width:0">
+      <span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>
       <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;min-width:0">${item.name}</span>
       <span style="display:flex;flex-direction:column;align-items:flex-end;justify-self:end;line-height:1.05;width:92px;min-width:92px;text-align:right">
         <span style="font-size:9px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
