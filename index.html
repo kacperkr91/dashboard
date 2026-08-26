@@ -9936,6 +9936,101 @@ function loadAllPrevioMonths(){
 const WYLACZONE_APT=['Orzeszkowej']; // apartamenty których już nie wynajmujemy
 const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bronowicka','Plac Szczepański B41','Plac Szczepański C41']; // nie-OTV
 
+function getStartCountryCardData(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const currentMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const normalizePrevioDate=value=>{
+    if(value&&typeof value==='object'&&value.dataDoKey)return value.dataDoKey;
+    const parsed=parseDateDMY(String(value||'').trim());
+    return parsed?dateKey(parsed):String(value||'').slice(0,10);
+  };
+  const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
+    ? _state.data.previo[currentMonthKey].filter(r=>{
+        if(r.cancelled)return false;
+        const checkout=normalizePrevioDate(r.dataDo||'');
+        return checkout.slice(0,7)===currentMonthKey;
+      })
+    : [];
+  const isAgataApartment=apt=>{
+    if(isForcedOtvApartment(apt))return false;
+    return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
+  };
+  const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
+  const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
+  const currentMonthL25Rows=currentMonthRows.filter(row=>String(row.apt||'').includes('L25/'));
+  const startCountryScope=_state.startCountryScope||'wszystkie';
+  const currentMonthCountryScopeRows=startCountryScope==='otv'
+    ? currentMonthOtvRows
+    : startCountryScope==='l25'
+    ? currentMonthL25Rows
+    : startCountryScope==='agata'
+    ? currentMonthAgataRows
+    : currentMonthRows;
+  const currentMonthCountryScopeLabel=startCountryScope==='otv'
+    ? 'Bieżący miesiąc · OTV'
+    : startCountryScope==='l25'
+    ? 'Bieżący miesiąc · L25'
+    : startCountryScope==='agata'
+    ? 'Bieżący miesiąc · Agata'
+    : 'Bieżący miesiąc · wszystkie';
+  const currentMonthCountryCounts=currentMonthCountryScopeRows.reduce((acc,row)=>{
+    if(row.cancelled||!row.kraj)return acc;
+    const code=String(row.kraj||'').toUpperCase().trim();
+    if(!code)return acc;
+    acc[code]=(acc[code]||0)+1;
+    return acc;
+  },{});
+  const currentMonthTopCountries=Object.entries(currentMonthCountryCounts)
+    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+    .slice(0,10)
+    .map(([code,count])=>({
+      code,
+      count,
+      flag:getFlagEmoji(code),
+      name:COUNTRY_NAMES[code]||code,
+    }));
+  return {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries};
+}
+
+function renderStartCountryCard(){
+  const {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries}=getStartCountryCardData();
+  return `<div data-start-country-card style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
+        <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:5px">${currentMonthTopCountries.length||0}</div>
+        <div style="font-size:10px;color:#9a3412;opacity:.8;margin-top:3px">${currentMonthCountryScopeLabel}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.45fr .9fr .9fr 1fr;gap:4px;width:100%">
+        <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+        <button type="button" onclick="setStartCountryScope('otv')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
+        <button type="button" onclick="setStartCountryScope('l25')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
+        <button type="button" onclick="setStartCountryScope('agata')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:3px;margin-top:8px">
+      ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
+        <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:5px;align-items:center;padding:3px 0">
+          <div style="font-size:9px;font-weight:800;color:#b45309">${index+1}.</div>
+          <div style="font-size:13px;line-height:1">${item.flag}</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+          <div style="font-size:10px;font-weight:800;color:#c2410c">${item.count}</div>
+        </div>
+      `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
+    </div>
+  </div>`;
+}
+
+function setStartCountryScope(scope){
+  _state.startCountryScope=scope;
+  const card=document.querySelector('[data-start-country-card]');
+  if(card&&_state.section==='oblozenie'){
+    card.outerHTML=renderStartCountryCard();
+    return;
+  }
+  renderApp();
+}
+
 function buildOblozenieLive(){
   ensurePrevioWindowLoaded(new Date());
   const today=new Date();today.setHours(0,0,0,0);
@@ -10000,38 +10095,6 @@ function buildOblozenieLive(){
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
   const showPhones=!!_state.oblozenieTelefony;
-  const startCountryScope=_state.startCountryScope||'wszystkie';
-  const currentMonthL25Rows=currentMonthRows.filter(row=>String(row.apt||'').includes('L25/'));
-  const currentMonthCountryScopeRows=startCountryScope==='otv'
-    ? currentMonthOtvRows
-    : startCountryScope==='l25'
-    ? currentMonthL25Rows
-    : startCountryScope==='agata'
-    ? currentMonthAgataRows
-    : currentMonthRows;
-  const currentMonthCountryScopeLabel=startCountryScope==='otv'
-    ? 'Bieżący miesiąc · OTV'
-    : startCountryScope==='l25'
-    ? 'Bieżący miesiąc · L25'
-    : startCountryScope==='agata'
-    ? 'Bieżący miesiąc · Agata'
-    : 'Bieżący miesiąc · wszystkie';
-  const currentMonthCountryRows=currentMonthCountryScopeRows.filter(row=>!row.cancelled&&row.kraj);
-  const currentMonthCountryCounts=currentMonthCountryRows.reduce((acc,row)=>{
-    const code=String(row.kraj||'').toUpperCase().trim();
-    if(!code)return acc;
-    acc[code]=(acc[code]||0)+1;
-    return acc;
-  },{});
-  const currentMonthTopCountries=Object.entries(currentMonthCountryCounts)
-    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
-    .slice(0,10)
-    .map(([code,count])=>({
-      code,
-      count,
-      flag:getFlagEmoji(code),
-      name:COUNTRY_NAMES[code]||code,
-    }));
   const targetDate=dzien==='dzis'?today:tmr;
   const daysInMonth=new Date(targetDate.getFullYear(),targetDate.getMonth()+1,0).getDate();
   const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
@@ -10345,31 +10408,7 @@ function buildOblozenieLive(){
           </div>
         </div>
       </div>
-        <div style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:12px 14px">
-          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
-            <div>
-              <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
-              <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:5px">${currentMonthTopCountries.length||0}</div>
-              <div style="font-size:10px;color:#9a3412;opacity:.8;margin-top:3px">${currentMonthCountryScopeLabel}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:100%">
-              <button onclick="_state.startCountryScope='wszystkie';renderApp()" style="padding:3px 0;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
-              <button onclick="_state.startCountryScope='otv';renderApp()" style="padding:3px 0;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
-              <button onclick="_state.startCountryScope='l25';renderApp()" style="padding:3px 0;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
-              <button onclick="_state.startCountryScope='agata';renderApp()" style="padding:3px 0;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:3px;margin-top:8px">
-            ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
-              <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:5px;align-items:center;padding:3px 0">
-                <div style="font-size:9px;font-weight:800;color:#b45309">${index+1}.</div>
-                <div style="font-size:13px;line-height:1">${item.flag}</div>
-                <div style="font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-                <div style="font-size:10px;font-weight:800;color:#c2410c">${item.count}</div>
-              </div>
-            `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
-          </div>
-        </div>
+        ${renderStartCountryCard()}
       </div>
     </div>
 
