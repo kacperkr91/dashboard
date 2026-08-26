@@ -10105,12 +10105,12 @@ function buildOblozenieLive(){
     {name:'Agata',total:totals.agata||0,color:'#c2410c'},
   ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
   const renderBreakdownList=(items,limit=4)=>items.slice(0,limit).map(item=>`
-    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) 112px;column-gap:12px;align-items:center">
+    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) 98px;column-gap:10px;align-items:center;min-width:0">
       <span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>
-      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;min-width:0">${item.name}</span>
-      <span style="display:flex;flex-direction:column;align-items:flex-end;justify-self:end;line-height:1.05;width:112px;text-align:right">
-        <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
-        <span style="font-size:10px;font-weight:700;color:var(--text-muted);white-space:nowrap;margin-top:3px">${Math.round(item.pct)}%</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${item.name}</span>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;justify-self:end;line-height:1.05;width:98px;min-width:98px;text-align:right">
+        <span style="font-size:9px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);white-space:nowrap;margin-top:3px">${Math.round(item.pct)}%</span>
       </span>
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
@@ -10123,12 +10123,12 @@ function buildOblozenieLive(){
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${opts.value}</div>
       <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${opts.subtitle}</div>
       <div style="height:1px;background:#e6ebf2;margin:16px 0 14px"></div>
-      <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.95fr);gap:14px">
+      <div style="display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:12px;min-width:0">
         <div style="min-width:0">
           <div style="font-size:11px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">${opts.leftTitle}</div>
           <div style="display:grid;gap:10px">${renderBreakdownList(opts.leftItems,4)}</div>
         </div>
-        <div style="min-width:0;border-left:1px solid #eef2f7;padding-left:16px">
+        <div style="min-width:0;border-left:1px solid #eef2f7;padding-left:14px">
           <div style="font-size:11px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">${opts.rightTitle}</div>
           <div style="display:grid;gap:10px">${renderBreakdownList(opts.rightItems,3)}</div>
         </div>
