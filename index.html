@@ -10105,11 +10105,13 @@ function buildOblozenieLive(){
     {name:'Agata',total:totals.agata||0,color:'#c2410c'},
   ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
   const renderBreakdownList=(items,limit=4)=>items.slice(0,limit).map(item=>`
-    <div style="display:grid;grid-template-columns:10px minmax(0,1.2fr) auto auto;gap:6px;align-items:center">
+    <div style="display:grid;grid-template-columns:10px minmax(0,1fr) 112px;column-gap:12px;align-items:center">
       <span style="width:4px;height:22px;border-radius:999px;background:${item.color};display:inline-block"></span>
-      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap">${item.name}</span>
-      <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
-      <span style="font-size:10px;font-weight:700;color:var(--text-muted);white-space:nowrap">${Math.round(item.pct)}%</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;min-width:0">${item.name}</span>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;justify-self:end;line-height:1.05;width:112px;text-align:right">
+        <span style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap">${fmt(item.total)} zł</span>
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);white-space:nowrap;margin-top:3px">${Math.round(item.pct)}%</span>
+      </span>
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
     const monthTitle=String(opts.monthLabel||'').toUpperCase();
