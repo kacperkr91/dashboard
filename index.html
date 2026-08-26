@@ -9994,29 +9994,32 @@ function getStartCountryCardData(){
 
 function renderStartCountryCard(){
   const {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries}=getStartCountryCardData();
-  return `<div data-start-country-card style="background:#fffaf0;border:1px solid #fcd34d;border-radius:14px;padding:12px 14px">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.06em">Top 10 krajów</div>
-        <div style="font-size:18px;font-weight:800;color:#c2410c;margin-top:5px">${currentMonthTopCountries.length||0}</div>
-        <div style="font-size:10px;color:#9a3412;opacity:.8;margin-top:3px">${currentMonthCountryScopeLabel}</div>
+  return `<div data-start-country-card style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#fff7ed 44%,#ffedd5 100%);border:1px solid #fed7aa;border-radius:20px;padding:16px 16px 14px;box-shadow:0 16px 36px rgba(249,115,22,.12)">
+    <div style="position:absolute;inset:auto -38px -38px auto;width:160px;height:160px;border-radius:999px;background:rgba(251,146,60,.14);filter:blur(8px);pointer-events:none"></div>
+    <div style="position:absolute;top:-36px;right:58px;width:118px;height:118px;border-radius:999px;background:rgba(253,186,116,.22);filter:blur(10px);pointer-events:none"></div>
+    <div style="position:relative;z-index:1">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11px;font-weight:900;color:#c2410c;text-transform:uppercase;letter-spacing:.06em">Top 10 narodowości</div>
+          <div style="font-size:10px;color:#9a3412;opacity:.84;margin-top:5px">${currentMonthCountryScopeLabel}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.45fr .9fr .9fr 1fr;gap:4px;width:100%">
+          <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'rgba(255,255,255,.82)'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
+          <button type="button" onclick="setStartCountryScope('otv')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'rgba(255,255,255,.82)'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
+          <button type="button" onclick="setStartCountryScope('l25')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'rgba(255,255,255,.82)'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
+          <button type="button" onclick="setStartCountryScope('agata')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'rgba(255,255,255,.82)'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1.45fr .9fr .9fr 1fr;gap:4px;width:100%">
-        <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#c2410c':'#fdba74'};background:${startCountryScope==='wszystkie'?'#c2410c':'#fff7ed'};color:${startCountryScope==='wszystkie'?'#fff':'#9a3412'}">Wszystkie</button>
-        <button type="button" onclick="setStartCountryScope('otv')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'#eff6ff'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
-        <button type="button" onclick="setStartCountryScope('l25')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='l25'?'#0f766e':'#99f6e4'};background:${startCountryScope==='l25'?'#0f766e':'#ecfeff'};color:${startCountryScope==='l25'?'#fff':'#0f766e'}">L25</button>
-        <button type="button" onclick="setStartCountryScope('agata')" style="padding:3px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='agata'?'#7c2d12':'#fdba74'};background:${startCountryScope==='agata'?'#7c2d12':'#fff7ed'};color:${startCountryScope==='agata'?'#fff':'#9a3412'}">Agata</button>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:3px;margin-top:8px">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:12px">
       ${currentMonthTopCountries.length?currentMonthTopCountries.map((item,index)=>`
-        <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:5px;align-items:center;padding:3px 0">
+        <div style="display:grid;grid-template-columns:14px 18px minmax(0,1fr) auto;gap:6px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.82);border:1px solid rgba(254,215,170,.9)">
           <div style="font-size:9px;font-weight:800;color:#b45309">${index+1}.</div>
           <div style="font-size:13px;line-height:1">${item.flag}</div>
-          <div style="font-size:10px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
           <div style="font-size:10px;font-weight:800;color:#c2410c">${item.count}</div>
         </div>
-      `).join(''):`<div style="font-size:11px;color:var(--text-muted)">Brak krajów w tym miesiącu.</div>`}
+      `).join(''):`<div style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.78);border:1px solid rgba(254,215,170,.9);border-radius:12px;padding:10px 12px">Brak narodowości w tym miesiącu.</div>`}
+      </div>
     </div>
   </div>`;
 }
