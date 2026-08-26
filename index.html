@@ -10075,22 +10075,70 @@ function buildOblozenieLive(){
     if(isForcedOtvApartment(apt))return false;
     return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
   };
+  const isL25Apartment=apt=>String(apt||'').includes('L25/');
   const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
+  const currentMonthL25Rows=currentMonthRows.filter(row=>isL25Apartment(row.apt));
   const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
+  const currentMonthOtvCoreRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt));
   const currentMonthAgataTotal=currentMonthAgataRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthL25Total=currentMonthL25Rows.reduce((sum,row)=>sum+(row.cena||0),0);
   const currentMonthOtvTotal=currentMonthOtvRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthOtvCoreTotal=currentMonthOtvCoreRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const startChannelColors={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#16a34a','Własna':'#7c3aed'};
-  const realizedChannelTotals=realizedMonthRows.reduce((acc,row)=>{
-    const key=(row.kanal||'Własna').toLowerCase().includes('booking')?'Booking.com'
-      :(row.kanal||'').toLowerCase().includes('airbnb')?'Airbnb'
-      :(row.kanal||'').toLowerCase().includes('profitroom')?'Profitroom'
-      :'Własna';
-    acc[key]=(acc[key]||0)+(row.cena||0);
-    return acc;
-  },{});
-  const realizedChannelItems=Object.entries(realizedChannelTotals)
-    .map(([name,total])=>({name,total,pct:currentMonthEarned>0?(total/currentMonthEarned)*100:0,color:startChannelColors[name]||'#64748b'}))
-    .sort((a,b)=>b.total-a.total);
+  const getChannelKey=row=>(row.kanal||'Własna').toLowerCase().includes('booking')?'Booking.com'
+    :(row.kanal||'').toLowerCase().includes('airbnb')?'Airbnb'
+    :(row.kanal||'').toLowerCase().includes('profitroom')?'Profitroom'
+    :'Własna';
+  const buildChannelItems=(rows,totalBase)=>{
+    const totals=rows.reduce((acc,row)=>{
+      const key=getChannelKey(row);
+      acc[key]=(acc[key]||0)+(row.cena||0);
+      return acc;
+    },{});
+    return Object.entries(totals)
+      .map(([name,total])=>({name,total,pct:totalBase>0?(total/totalBase)*100:0,color:startChannelColors[name]||'#64748b'}))
+      .sort((a,b)=>b.total-a.total);
+  };
+  const buildSegmentItems=(totals,totalBase)=>[
+    {name:'OTV',total:totals.otv||0,color:'#2563eb'},
+    {name:'L25',total:totals.l25||0,color:'#0f766e'},
+    {name:'Agata',total:totals.agata||0,color:'#c2410c'},
+  ].map(item=>({...item,pct:totalBase>0?(item.total/totalBase)*100:0}));
+  const renderBreakdownRows=(items,accent)=>items.length?`<div style="display:grid;gap:3px;margin-top:8px">
+    ${items.map(item=>`<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center">
+      <div style="min-width:0;display:flex;align-items:center;gap:6px;color:${item.color||accent}">
+        <span style="width:7px;height:7px;border-radius:999px;background:${item.color||accent};display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</span>
+      </div>
+      <span style="font-size:10px;color:var(--text-muted);font-weight:700">${Math.round(item.pct)}%</span>
+      <span style="font-size:10px;color:var(--text);font-weight:800">${fmt(item.total)} zł</span>
+    </div>`).join('')}
+  </div>`:'';
+  const realizedChannelItems=buildChannelItems(realizedMonthRows,currentMonthEarned);
+  const realizedSegmentItems=buildSegmentItems({
+    otv:realizedMonthRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+    l25:realizedMonthRows.filter(row=>isL25Apartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+    agata:realizedMonthRows.filter(row=>isAgataApartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+  },currentMonthEarned);
+  const totalChannelItems=buildChannelItems(currentMonthRows,currentMonthTotal);
+  const totalSegmentItems=buildSegmentItems({
+    otv:currentMonthOtvCoreTotal,
+    l25:currentMonthL25Total,
+    agata:currentMonthAgataTotal,
+  },currentMonthTotal);
+  const forecastRatio=currentMonthTotal>0&&currentMonthPrevioForecast?.forecastTotal
+    ? currentMonthPrevioForecast.forecastTotal/currentMonthTotal
+    : 1;
+  const forecastChannelItems=totalChannelItems.map(item=>({
+    ...item,
+    total:item.total*forecastRatio,
+    pct:currentMonthPrevioForecast?.forecastTotal>0?((item.total*forecastRatio)/currentMonthPrevioForecast.forecastTotal)*100:0,
+  }));
+  const forecastSegmentItems=buildSegmentItems({
+    otv:currentMonthOtvCoreTotal*forecastRatio,
+    l25:currentMonthL25Total*forecastRatio,
+    agata:currentMonthAgataTotal*forecastRatio,
+  },currentMonthPrevioForecast?.forecastTotal||0);
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -10365,8 +10413,10 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.06em">Zrealizowane</div>
           <div style="font-size:18px;font-weight:800;color:#059669;margin-top:6px">${currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—'}</div>
           <div style="font-size:11px;color:#065f46;opacity:.8;margin-top:6px">Przychód już zrealizowany w tym miesiącu</div>
-          ${realizedChannelItems.length?`<div style="margin-top:8px;height:7px;background:#dcfce7;border-radius:999px;overflow:hidden;display:flex">${realizedChannelItems.map(item=>`<div style="height:100%;width:${item.pct.toFixed(1)}%;background:${item.color}"></div>`).join('')}</div>`:''}
-          ${realizedChannelItems.length?`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px">${realizedChannelItems.map(item=>`<div style="min-width:0;text-align:center;color:${item.color}"><div style="font-size:9px;font-weight:700;line-height:1.15;white-space:normal;word-break:break-word">${item.name.replace('Booking.com','Booking')}</div><div style="font-size:10px;font-weight:800;line-height:1.1;margin-top:2px">${Math.round(item.pct)}%</div></div>`).join('')}</div>`:''}
+          <div style="font-size:10px;font-weight:800;color:#047857;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Kanały</div>
+          ${renderBreakdownRows(realizedChannelItems,'#059669')}
+          <div style="font-size:10px;font-weight:800;color:#047857;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Obiekty</div>
+          ${renderBreakdownRows(realizedSegmentItems,'#059669')}
           </div>
         </div>
         <div style="background:#ecfeff;border:1px solid #67e8f9;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:center;text-align:center">
@@ -10374,22 +10424,10 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.06em">Cały miesiąc</div>
           <div style="font-size:18px;font-weight:800;color:#0f766e;margin-top:6px">${currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#0f766e;opacity:.8;margin-top:6px">Łączna wartość wszystkich rezerwacji miesiąca</div>
-          <div style="margin-top:8px;height:7px;background:#dbeafe;border-radius:999px;overflow:hidden;display:flex">
-            <div style="height:100%;width:${currentMonthTotal>0?((currentMonthOtvTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#2563eb"></div>
-            <div style="height:100%;width:${currentMonthTotal>0?((currentMonthAgataTotal/currentMonthTotal)*100).toFixed(1):0}%;background:#f59e0b"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px">
-            <div style="min-width:0;text-align:center;color:#1d4ed8">
-              <div style="font-size:9px;font-weight:700;line-height:1.15">OTV</div>
-              <div style="font-size:10px;font-weight:800;line-height:1.1;margin-top:2px">${currentMonthOtvRows.length?fmt(currentMonthOtvTotal)+' zł':'—'}</div>
-              <div style="font-size:9px;opacity:.8;line-height:1.1;margin-top:2px">${currentMonthTotal>0?Math.round((currentMonthOtvTotal/currentMonthTotal)*100):0}% całości</div>
-            </div>
-            <div style="min-width:0;text-align:center;color:#c2410c">
-              <div style="font-size:9px;font-weight:700;line-height:1.15">Agata</div>
-              <div style="font-size:10px;font-weight:800;line-height:1.1;margin-top:2px">${currentMonthAgataRows.length?fmt(currentMonthAgataTotal)+' zł':'—'}</div>
-              <div style="font-size:9px;opacity:.8;line-height:1.1;margin-top:2px">${currentMonthTotal>0?Math.round((currentMonthAgataTotal/currentMonthTotal)*100):0}% całości</div>
-            </div>
-          </div>
+          <div style="font-size:10px;font-weight:800;color:#0f766e;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Kanały</div>
+          ${renderBreakdownRows(totalChannelItems,'#0f766e')}
+          <div style="font-size:10px;font-weight:800;color:#0f766e;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Obiekty</div>
+          ${renderBreakdownRows(totalSegmentItems,'#0f766e')}
           </div>
         </div>
         <div style="background:#dcfce7;border:1px solid #4ade80;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:center;text-align:center">
@@ -10397,6 +10435,10 @@ function buildOblozenieLive(){
           <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.06em">Prognoza miesiąca</div>
           <div style="font-size:18px;font-weight:800;color:#16a34a;margin-top:6px">${currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—'}</div>
           <div style="font-size:11px;color:#166534;opacity:.85;margin-top:6px">Szacowany wynik na koniec miesiąca</div>
+          <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Kanały</div>
+          ${renderBreakdownRows(forecastChannelItems,'#16a34a')}
+          <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-top:9px">Obiekty</div>
+          ${renderBreakdownRows(forecastSegmentItems,'#16a34a')}
           </div>
         </div>
         <div style="background:#eef2ff;border:1px solid #a5b4fc;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:center;text-align:center">
