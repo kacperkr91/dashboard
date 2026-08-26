@@ -10115,23 +10115,27 @@ function buildOblozenieLive(){
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
     const monthTitle=String(opts.monthLabel||'').toUpperCase();
-    return `<div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:18px 18px 16px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between;min-height:280px;text-align:left">
+    return `<div style="position:relative;overflow:hidden;background:${opts.cardBackground||'linear-gradient(180deg,#ffffff 0%,#fcfdff 100%)'};border:1px solid ${opts.cardBorder||'#e6ebf2'};border-radius:20px;padding:18px 18px 16px;box-shadow:${opts.cardShadow||'0 12px 32px rgba(15,23,42,.06)'};display:flex;flex-direction:column;justify-content:space-between;min-height:280px;text-align:left">
+      <div style="position:absolute;inset:auto -48px -44px auto;width:180px;height:180px;border-radius:999px;background:${opts.orbPrimary||'rgba(124,58,237,.10)'};filter:blur(8px);pointer-events:none"></div>
+      <div style="position:absolute;top:-44px;right:72px;width:130px;height:130px;border-radius:999px;background:${opts.orbSecondary||'rgba(167,139,250,.14)'};filter:blur(10px);pointer-events:none"></div>
+      <div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;min-height:246px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:${opts.headingColor}">${opts.title}</div>
         <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>
       </div>
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${opts.value}</div>
       <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${opts.subtitle}</div>
-      <div style="height:1px;background:#e6ebf2;margin:16px 0 14px"></div>
+      <div style="height:1px;background:${opts.dividerColor||'#e6ebf2'};margin:16px 0 14px"></div>
       <div style="display:grid;grid-template-columns:minmax(0,1.14fr) minmax(0,.86fr);gap:10px;min-width:0">
-        <div style="min-width:0">
+        <div style="min-width:0;background:${opts.panelBackground||'rgba(255,255,255,.72)'};border:1px solid ${opts.panelBorder||'rgba(255,255,255,.82)'};border-radius:16px;padding:12px 12px 10px;backdrop-filter:blur(6px)">
           <div style="font-size:11px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">${opts.leftTitle}</div>
           <div style="display:grid;gap:10px">${renderBreakdownList(opts.leftItems,4)}</div>
         </div>
-        <div style="min-width:0;border-left:1px solid #eef2f7;padding-left:12px">
+        <div style="min-width:0;background:${opts.panelBackground||'rgba(255,255,255,.72)'};border:1px solid ${opts.panelBorder||'rgba(255,255,255,.82)'};border-radius:16px;padding:12px 12px 10px">
           <div style="font-size:11px;font-weight:900;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">${opts.rightTitle}</div>
           <div style="display:grid;gap:10px">${renderBreakdownList(opts.rightItems,3)}</div>
         </div>
+      </div>
       </div>
     </div>`;
   };
@@ -10433,45 +10437,73 @@ function buildOblozenieLive(){
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch">
         ${renderMetricSummaryCard({
           title:'Zrealizowane',
-          headingColor:'#0f172a',
+          headingColor:'#5b35d5',
           monthLabel:currentMonthLabelUpper,
           value:currentMonthRows.length?fmt(currentMonthEarned)+' zł':'—',
           subtitle:'Przychód zrealizowany w tym miesiącu',
           leftTitle:'Kanały',
           leftItems:realizedChannelItems,
           rightTitle:'Obiekty',
-          rightItems:realizedSegmentItems
+          rightItems:realizedSegmentItems,
+          cardBackground:'linear-gradient(145deg,#ffffff 0%,#f4efff 52%,#efe7ff 100%)',
+          cardBorder:'#e9ddff',
+          cardShadow:'0 16px 36px rgba(111,76,255,.14)',
+          orbPrimary:'rgba(139,92,246,.16)',
+          orbSecondary:'rgba(196,181,253,.24)',
+          dividerColor:'rgba(139,92,246,.18)',
+          panelBackground:'rgba(255,255,255,.84)',
+          panelBorder:'rgba(233,221,255,.95)'
         })}
         ${renderMetricSummaryCard({
           title:'Cały miesiąc',
-          headingColor:'#0f172a',
+          headingColor:'#0f766e',
           monthLabel:currentMonthLabelUpper,
           value:currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—',
           subtitle:'Łączna wartość wszystkich rezerwacji miesiąca',
           leftTitle:'Kanały',
           leftItems:totalChannelItems,
           rightTitle:'Obiekty',
-          rightItems:totalSegmentItems
+          rightItems:totalSegmentItems,
+          cardBackground:'linear-gradient(145deg,#ffffff 0%,#ecfdf5 48%,#dcfce7 100%)',
+          cardBorder:'#c9f3db',
+          cardShadow:'0 16px 36px rgba(16,185,129,.12)',
+          orbPrimary:'rgba(52,211,153,.16)',
+          orbSecondary:'rgba(167,243,208,.24)',
+          dividerColor:'rgba(16,185,129,.16)',
+          panelBackground:'rgba(255,255,255,.84)',
+          panelBorder:'rgba(201,243,219,.95)'
         })}
         ${renderMetricSummaryCard({
           title:'Prognoza miesiąca',
-          headingColor:'#0f172a',
+          headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
           value:currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—',
           subtitle:'Szacowany wynik na koniec miesiąca',
           leftTitle:'Kanały',
           leftItems:forecastChannelItems,
           rightTitle:'Obiekty',
-          rightItems:forecastSegmentItems
+          rightItems:forecastSegmentItems,
+          cardBackground:'linear-gradient(145deg,#ffffff 0%,#eef6ff 48%,#dbeafe 100%)',
+          cardBorder:'#d5e7ff',
+          cardShadow:'0 16px 36px rgba(59,130,246,.12)',
+          orbPrimary:'rgba(96,165,250,.14)',
+          orbSecondary:'rgba(191,219,254,.24)',
+          dividerColor:'rgba(59,130,246,.14)',
+          panelBackground:'rgba(255,255,255,.84)',
+          panelBorder:'rgba(213,231,255,.95)'
         })}
-        <div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:18px 18px 16px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between;text-align:left">
+        <div style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#fff7ed 50%,#ffedd5 100%);border:1px solid #fed7aa;border-radius:20px;padding:18px 18px 16px;box-shadow:0 16px 36px rgba(249,115,22,.12);display:flex;flex-direction:column;justify-content:space-between;text-align:left">
+          <div style="position:absolute;inset:auto -42px -40px auto;width:170px;height:170px;border-radius:999px;background:rgba(251,146,60,.14);filter:blur(8px);pointer-events:none"></div>
+          <div style="position:absolute;top:-42px;right:70px;width:120px;height:120px;border-radius:999px;background:rgba(253,186,116,.22);filter:blur(10px);pointer-events:none"></div>
+          <div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;height:100%">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#0f172a">Rok temu</div>
+            <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#c2410c">Rok temu</div>
             <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${currentMonthLabelUpper}</div>
           </div>
           <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${currentMonthPrevioForecast?.lastYearTotal?fmt(currentMonthPrevioForecast.lastYearTotal)+' zł':'—'}</div>
           <div style="font-size:12px;color:var(--text-mid);margin-top:10px">Ten sam miesiąc w poprzednim roku</div>
-          ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e6ebf2;font-size:11px;color:var(--text-mid)">Rezerwacje: <strong style="color:var(--text)">${currentMonthPrevioForecast.lastYearRowCount}</strong></div>`:''}
+          ${_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(249,115,22,.16);font-size:11px;color:var(--text-mid)">Rezerwacje: <strong style="color:var(--text)">${currentMonthPrevioForecast.lastYearRowCount}</strong></div>`:''}
+          </div>
         </div>
         </div>
         ${renderStartCountryCard()}
