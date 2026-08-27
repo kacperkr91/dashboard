@@ -10181,18 +10181,6 @@ function buildOblozenieLive(){
     l25:currentMonthL25Total*forecastRatio,
     agata:currentMonthAgataTotal*forecastRatio,
   },currentMonthPrevioForecast?.forecastTotal||0);
-  const forecastVsPreviousPct=previousMonthTotal>0&&currentMonthPrevioForecast?.forecastTotal
-    ? ((currentMonthPrevioForecast.forecastTotal-previousMonthTotal)/previousMonthTotal)*100
-    : null;
-  const forecastVsPreviousMeta=forecastVsPreviousPct===null
-    ? ''
-    : `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.1;text-align:center">
-        <div style="font-size:14px;font-weight:900;color:${forecastVsPreviousPct>=0?'#15803d':'#dc2626'};white-space:nowrap">${forecastVsPreviousPct>=0?'+':'-'}${Math.abs(forecastVsPreviousPct).toFixed(1)}%</div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:2px;line-height:1.15">
-        <div>względem</div>
-        <div>poprzedniego miesiąca</div>
-        </div>
-      </div>`;
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -10513,7 +10501,6 @@ function buildOblozenieLive(){
           title:'Prognoza miesiąca',
           headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
-          monthMetaHtml:forecastVsPreviousMeta,
           value:currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—',
           subtitle:'Szacowany wynik na koniec miesiąca',
           leftTitle:'Kanały',
