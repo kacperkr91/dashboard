@@ -5829,6 +5829,98 @@ function saveSummaryCostsStore(store){
   syncPushSummaryCosts(_summaryCostsCache);
 }
 
+function normalizeSummaryCostMetaStore(store){
+  const data=store&&typeof store==='object'?store:{};
+  const uniq=list=>[...new Set((Array.isArray(list)?list:[]).map(value=>String(value||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pl'));
+  return {
+    contractors:uniq(data.contractors),
+    categories:uniq(data.categories),
+  };
+}
+
+function getSummaryCostMetaStore(){
+  if(_summaryCostMetaCache!==null)return _summaryCostMetaCache;
+  try{
+    _summaryCostMetaCache=normalizeSummaryCostMetaStore(JSON.parse(localStorage.getItem('summary_cost_meta')||'{}'));
+  }catch(e){
+    _summaryCostMetaCache={contractors:[],categories:[]};
+  }
+  return _summaryCostMetaCache;
+}
+
+function saveSummaryCostMetaStore(store){
+  _summaryCostMetaCache=normalizeSummaryCostMetaStore(store);
+  localStorage.setItem('summary_cost_meta',JSON.stringify(_summaryCostMetaCache));
+  syncPushSummaryCostMeta(_summaryCostMetaCache);
+}
+
+function ensureSummaryMetaValue(type,value){
+  const raw=String(value||'').trim();
+  if(!raw)return;
+  const meta=getSummaryCostMetaStore();
+  if(type==='contractor'){
+    if(meta.contractors.includes(raw))return;
+    saveSummaryCostMetaStore({...meta,contractors:[...meta.contractors,raw]});
+    return;
+  }
+  if(type==='category'){
+    if(meta.categories.includes(raw))return;
+    saveSummaryCostMetaStore({...meta,categories:[...meta.categories,raw]});
+  }
+}
+
+function removeSummaryMetaValue(type,value){
+  const raw=String(value||'').trim();
+  if(!raw)return;
+  const meta=getSummaryCostMetaStore();
+  if(type==='contractor'){
+    saveSummaryCostMetaStore({...meta,contractors:meta.contractors.filter(item=>item!==raw)});
+    return;
+  }
+  if(type==='category'){
+    saveSummaryCostMetaStore({...meta,categories:meta.categories.filter(item=>item!==raw)});
+  }
+}
+
+function closeSummaryMetaModal(){
+  document.getElementById('summaryMetaModal')?.remove();
+}
+
+function openSummaryMetaManager(){
+  const meta=getSummaryCostMetaStore();
+  const renderList=(type,list,emptyLabel)=>list.length
+    ? `<div style="display:flex;flex-direction:column;gap:8px">${list.map(item=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #dbe2ea;border-radius:12px;background:#fff">
+      <span style="font-size:14px;font-weight:600;color:#0f172a">${escapeHtml(item)}</span>
+      <button type="button" onclick="removeSummaryMetaValue('${type}','${String(item).replace(/'/g,"\\'")}');closeSummaryMetaModal();openSummaryMetaManager();" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:7px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Usuń</button>
+    </div>`).join('')}</div>`
+    : `<div style="padding:14px;border:1px dashed #cbd5e1;border-radius:12px;color:#64748b;background:#fff">${emptyLabel}</div>`;
+  closeSummaryMetaModal();
+  const modal=document.createElement('div');
+  modal.id='summaryMetaModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10010;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:760px;width:100%;max-height:84vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:24px;font-weight:800;color:#0f172a">Zarządzaj podpowiedziami</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Usuwasz tylko podpowiedzi z list, bez kasowania zapisanych kosztów z historii.</div>
+      </div>
+      <button type="button" onclick="closeSummaryMetaModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:16px;font-weight:800;color:#0f172a">Kontrahenci</div>
+        ${renderList('contractor',meta.contractors,'Brak zapisanych kontrahentów.')}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:16px;font-weight:800;color:#0f172a">Kategorie wydatku</div>
+        ${renderList('category',meta.categories,'Brak zapisanych kategorii.')}
+      </div>
+    </div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryMetaModal();});
+  document.body.appendChild(modal);
+}
+
 function getSummaryAllApartmentTargets(apartmentKeys=[]){
   const current=sortByDefaultOrder([...new Set((Array.isArray(apartmentKeys)?apartmentKeys:[]).filter(Boolean))]);
   const l25Static=Array.from({length:7},(_,idx)=>`L25/${18+idx}`);
@@ -5904,11 +5996,14 @@ function openSummaryCostModal(editId=''){
   if(!hasModuleAccess('summary'))return;
   const meta=window._summaryTargetMeta||getSummaryAllApartmentTargets([]);
   const store=getSummaryCostsStore();
+  const metaStore=getSummaryCostMetaStore();
   const editing=(store.items||[]).find(item=>item.id===editId)||null;
   const initialTargetType=editing?.targetType||'group';
   const initialTargetValue=editing?.targetType==='apartment'
     ? String(editing?.targetApartment||'').trim()
     : String(editing?.targetGroup||'otv').trim().toLowerCase();
+  const contractorOptions=(metaStore.contractors||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
+  const categoryOptions=(metaStore.categories||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
   const cardButton=(label,type,value,active)=>`<button type="button" data-summary-target data-summary-target-type="${type}" data-summary-target-value="${escapeHtml(value)}" onclick="setSummaryCostTarget('${type}','${String(value).replace(/'/g,"\\'")}')" style="border:1px solid ${active?'#2563eb':'#cbd5e1'};background:${active?'#dbeafe':'#fff'};color:${active?'#1d4ed8':'#334155'};border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(label)}</button>`;
   const apartmentPills=list=>`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${list.map(name=>cardButton(name,'apartment',name,initialTargetType==='apartment'&&initialTargetValue===name)).join('')}</div>`;
   closeSummaryCostModal();
@@ -5926,10 +6021,12 @@ function openSummaryCostModal(editId=''){
     <input id="summary-cost-id" type="hidden" value="${escapeHtml(editing?.id||'')}">
     <input id="summary-cost-target-type" type="hidden" value="${escapeHtml(initialTargetType)}">
     <input id="summary-cost-target-value" type="hidden" value="${escapeHtml(initialTargetValue)}">
+    <datalist id="summary-contractors-list">${contractorOptions}</datalist>
+    <datalist id="summary-categories-list">${categoryOptions}</datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-      <div class="field"><label>Kontrahent</label><input id="summary-cost-contractor" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
       <div class="field"><label>Nazwa wydatku</label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
-      <div class="field"><label>Kategoria wydatku</label><input id="summary-cost-category" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}"></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}"></div>
     </div>
     <div class="field" style="margin-top:14px"><label>Notatka</label><textarea id="summary-cost-notes" class="artur-input" rows="2" placeholder="Opcjonalne szczegóły do historii wpisu...">${escapeHtml(editing?.notes||'')}</textarea></div>
@@ -5981,6 +6078,8 @@ function saveSummaryCostFromModal(){
   if(!category){alert('Podaj kategorię wydatku.');return;}
   if(!(amountNet>0)){alert('Podaj kwotę netto większą od zera.');return;}
   if(!targetValue){alert('Wybierz grupę albo apartament.');return;}
+  if(contractor)ensureSummaryMetaValue('contractor',contractor);
+  ensureSummaryMetaValue('category',category);
   const store=getSummaryCostsStore();
   const items=Array.isArray(store.items)?store.items.slice():[];
   const existingIndex=id?items.findIndex(item=>item.id===id):-1;
@@ -8689,6 +8788,7 @@ let _ksefPaidCache=null;
 let _arturPaymentsCache=null;
 let _tasksCache=null;
 let _summaryCostsCache=null;
+let _summaryCostMetaCache=null;
 let _dyzuryCache=null;
 let _backgroundPrefetchStarted=false;
 let _previoSoftRefreshRequested={};
@@ -8705,6 +8805,7 @@ async function syncPull(){
       fetch(`${CONFIG.syncUrl}?action=getArturPayments${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getTasks${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getSummaryCosts${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getSummaryCostMeta${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getDyzury${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getAssignableUsers${tokenParam}`).then(r=>r.json()),
     ]);
@@ -8715,8 +8816,9 @@ async function syncPull(){
     const arturPaymentsData=results[4].status==='fulfilled'?results[4].value:null;
     const tasksData=results[5].status==='fulfilled'?results[5].value:null;
     const summaryCostsData=results[6].status==='fulfilled'?results[6].value:null;
-    const dyzuryData=results[7].status==='fulfilled'?results[7].value:null;
-    const assignableUsersData=results[8].status==='fulfilled'?results[8].value:null;
+    const summaryCostMetaData=results[7].status==='fulfilled'?results[7].value:null;
+    const dyzuryData=results[8].status==='fulfilled'?results[8].value:null;
+    const assignableUsersData=results[9].status==='fulfilled'?results[9].value:null;
     if(kalData?.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
@@ -8765,6 +8867,12 @@ async function syncPull(){
       _summaryCostsCache=summaryCostsData.costs;
       if(!Array.isArray(_summaryCostsCache.items))_summaryCostsCache.items=[];
       localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
+    }
+    if(summaryCostMetaData&&typeof summaryCostMetaData.meta==='object'&&summaryCostMetaData.meta!==null){
+      _summaryCostMetaCache=summaryCostMetaData.meta;
+      if(!Array.isArray(_summaryCostMetaCache.contractors))_summaryCostMetaCache.contractors=[];
+      if(!Array.isArray(_summaryCostMetaCache.categories))_summaryCostMetaCache.categories=[];
+      localStorage.setItem('summary_cost_meta',JSON.stringify(_summaryCostMetaCache));
     }
     if(dyzuryData&&typeof dyzuryData.dyzury==='object'&&dyzuryData.dyzury!==null){
       const remoteDyzury=normalizeDyzuryPayload(dyzuryData.dyzury);
@@ -8905,6 +9013,18 @@ async function syncPushSummaryCosts(costs){
       body:JSON.stringify({action:'saveSummaryCosts',token:_state.authToken,costs}),
     });
   }catch(e){console.warn('syncPushSummaryCosts failed:',e);}
+}
+
+async function syncPushSummaryCostMeta(meta){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveSummaryCostMeta',token:_state.authToken,meta}),
+    });
+  }catch(e){console.warn('syncPushSummaryCostMeta failed:',e);}
 }
 
 async function syncPushDyzury(dyzury){
