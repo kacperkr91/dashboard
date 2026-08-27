@@ -10442,10 +10442,11 @@ function buildOblozenieLive(){
         </div>
       </div>
       <div style="display:grid;grid-template-columns:180px minmax(0,1fr) 220px;gap:10px;margin-top:18px;align-items:stretch">
-        <div style="display:grid;grid-template-rows:auto 1fr 1fr;gap:10px">
-          <div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:16px 16px 14px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between">
+        <div style="display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:10px">
+          <div style="background:linear-gradient(180deg,#ffffff 0%,#fcfdff 100%);border:1px solid #e6ebf2;border-radius:20px;padding:16px 16px 14px;box-shadow:0 12px 32px rgba(15,23,42,.06);display:flex;flex-direction:column;justify-content:space-between;min-height:0">
             <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Data operacyjna</div>
             <div style="font-size:16px;font-weight:800;color:var(--text);margin-top:6px">${dateLabel(targetDate)}</div>
+            <div data-operational-clock style="font-size:22px;font-weight:900;color:#0f766e;letter-spacing:.04em;font-variant-numeric:tabular-nums;margin-top:2px">${formatOperationalClock(new Date())}</div>
             <div style="font-size:11px;color:var(--text-muted);opacity:.85;margin-top:6px">Dzień ${targetDate.getDate()} z ${daysInMonth} miesiąca</div>
             <div style="margin-top:8px;height:7px;background:#e2e8f0;border-radius:999px;overflow:hidden">
               <div style="height:100%;width:${monthDayProgress.toFixed(1)}%;background:linear-gradient(90deg,#0f766e,#14b8a6)"></div>
@@ -11771,7 +11772,36 @@ function getTodayBanner(){
   }catch(e){return'';}
 }
 
-const mount=html=>{document.getElementById('app').innerHTML=html;};
+function stopOperationalClock(){
+  if(window._operationalClockTimer){
+    clearInterval(window._operationalClockTimer);
+    window._operationalClockTimer=null;
+  }
+}
+
+function formatOperationalClock(date=new Date()){
+  return date.toLocaleTimeString('pl-PL',{
+    hour:'2-digit',
+    minute:'2-digit',
+    second:'2-digit'
+  });
+}
+
+function startOperationalClock(){
+  stopOperationalClock();
+  const update=()=>{
+    const node=document.querySelector('[data-operational-clock]');
+    if(!node)return;
+    node.textContent=formatOperationalClock(new Date());
+  };
+  update();
+  window._operationalClockTimer=setInterval(update,1000);
+}
+
+const mount=html=>{
+  stopOperationalClock();
+  document.getElementById('app').innerHTML=html;
+};
 
 function renderApp(){
   ensureAllowedSection();
@@ -11918,6 +11948,7 @@ function renderApp(){
 
   const todayBanner=shouldShowTodayBanner()?getTodayBanner():'';
   mount(header+navL1+(todayBanner?todayBanner:'')+navL2+content);
+  if(section==='oblozenie')startOperationalClock();
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
   if(section==='housekeeping')setTimeout(initHkChart,50);
