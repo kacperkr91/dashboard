@@ -10129,13 +10129,17 @@ function buildOblozenieLive(){
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
     const monthTitle=String(opts.monthLabel||'').toUpperCase();
+    const monthMetaHtml=opts.monthMetaHtml?`<div style="margin-top:4px;font-size:10px;line-height:1.35;text-align:right">${opts.monthMetaHtml}</div>`:'';
     return `<div style="position:relative;overflow:hidden;background:${opts.cardBackground||'linear-gradient(180deg,#ffffff 0%,#fcfdff 100%)'};border:1px solid ${opts.cardBorder||'#e6ebf2'};border-radius:20px;padding:18px 18px 16px;box-shadow:${opts.cardShadow||'0 12px 32px rgba(15,23,42,.06)'};display:flex;flex-direction:column;justify-content:space-between;min-height:280px;text-align:left">
       <div style="position:absolute;inset:auto -48px -44px auto;width:180px;height:180px;border-radius:999px;background:${opts.orbPrimary||'rgba(124,58,237,.10)'};filter:blur(8px);pointer-events:none"></div>
       <div style="position:absolute;top:-44px;right:72px;width:130px;height:130px;border-radius:999px;background:${opts.orbSecondary||'rgba(167,139,250,.14)'};filter:blur(10px);pointer-events:none"></div>
       <div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;min-height:246px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:${opts.headingColor}">${opts.title}</div>
-        <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:0">
+          <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>
+          ${monthMetaHtml}
+        </div>
       </div>
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${opts.value}</div>
       <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${opts.subtitle}</div>
@@ -10178,6 +10182,15 @@ function buildOblozenieLive(){
     l25:currentMonthL25Total*forecastRatio,
     agata:currentMonthAgataTotal*forecastRatio,
   },currentMonthPrevioForecast?.forecastTotal||0);
+  const forecastVsPreviousPct=previousMonthTotal>0&&currentMonthPrevioForecast?.forecastTotal
+    ? ((currentMonthPrevioForecast.forecastTotal-previousMonthTotal)/previousMonthTotal)*100
+    : null;
+  const forecastVsPreviousMeta=forecastVsPreviousPct===null
+    ? ''
+    : `${forecastVsPreviousPct>=0
+      ? `<span style="font-weight:900;color:#15803d">+${Math.abs(forecastVsPreviousPct).toFixed(1)}%</span>`
+      : `<span style="font-weight:900;color:#dc2626">-${Math.abs(forecastVsPreviousPct).toFixed(1)}%</span>`}
+      <span style="color:var(--text-muted)"> prawdopodobny ${forecastVsPreviousPct>=0?'wzrost':'spadek'} vs zeszły miesiąc</span>`;
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -10498,6 +10511,7 @@ function buildOblozenieLive(){
           title:'Prognoza miesiąca',
           headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
+          monthMetaHtml:forecastVsPreviousMeta,
           value:currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—',
           subtitle:'Szacowany wynik na koniec miesiąca',
           leftTitle:'Kanały',
