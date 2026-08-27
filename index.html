@@ -1382,6 +1382,28 @@ function parseDatePL(str){
   return null;
 }
 
+function userColor(seed=''){
+  const palette=['#2563eb','#7c3aed','#dc2626','#0f766e','#d97706','#db2777','#0891b2','#16a34a'];
+  const raw=String(seed||'').trim().toLowerCase();
+  let hash=0;
+  for(let i=0;i<raw.length;i+=1)hash=((hash<<5)-hash)+raw.charCodeAt(i);
+  return palette[Math.abs(hash)%palette.length];
+}
+
+function formatDateTimeLabel(value=''){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  const date=new Date(raw);
+  if(Number.isNaN(date.getTime()))return raw;
+  return date.toLocaleString('pl-PL',{
+    day:'2-digit',
+    month:'2-digit',
+    year:'numeric',
+    hour:'2-digit',
+    minute:'2-digit',
+  });
+}
+
 function parseMoneyLoose(value){
   return parseFloat(String(value||'0').replace(/[^\d.,-]/g,'').replace(',','.'))||0;
 }
@@ -5536,6 +5558,8 @@ function buildSummaryView(){
   const parkingByMonth=buildKsefParkingMonthMap(ksefData);
   const parkingResolved=resolveKsefMonthlyCost(monthKey,parkingByMonth);
   const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
+  const targetMeta=getSummaryAllApartmentTargets(apartmentKeys);
+  window._summaryTargetMeta=targetMeta;
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
   }
@@ -5546,6 +5570,10 @@ function buildSummaryView(){
   const parkingShare=(parkingResolved.entry?.netto&&pawelEligibleKeys.length)
     ? parkingResolved.entry.netto/pawelEligibleKeys.length
     : null;
+  const customCostsPayload=buildSummaryCustomCostMap(monthKey,targetMeta);
+  const customCostMap=customCostsPayload.map||{};
+  const customCostsItems=customCostsPayload.items||[];
+  const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
 
   const rows=apartmentKeys.map(apt=>{
     const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
@@ -5558,6 +5586,9 @@ function buildSummaryView(){
       }
       : baseCzynsz;
     const internetCost=getStaticInternetCostForApartment(apt);
+    const pawelCost=(apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0;
+    const parkingCost=(apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:0;
+    const customCost=Number(customCostMap[apt])||0;
     return{
       apt,
       gross:income.gross||0,
@@ -5574,11 +5605,12 @@ function buildSummaryView(){
       rent:czynsz.rent,
       advance:czynsz.advance,
       internet:internetCost,
-      pawel:(apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:null,
-      pawelFallback:apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null&&perfectPlusResolved.fallback,
-      parking:(apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:null,
-      parkingFallback:apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null&&parkingResolved.fallback,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-((apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0)-((apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:0),
+      pawel:pawelCost||null,
+      pawelFallback:!!(pawelCost&&perfectPlusResolved.fallback),
+      parking:parkingCost||null,
+      parkingFallback:!!(parkingCost&&parkingResolved.fallback),
+      customCost:customCost||null,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-pawelCost-parkingCost-customCost,
     };
   });
 
@@ -5603,9 +5635,10 @@ function buildSummaryView(){
     acc.internet+=r.internet||0;
     acc.pawel+=Number(r.pawel)||0;
     acc.parking+=Number(r.parking)||0;
+    acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,parking:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,parking:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
@@ -5614,6 +5647,7 @@ function buildSummaryView(){
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
     <div class="kpi-card c-purple"><div class="label">Paweł</div><div class="value"><span class="sym">zł</span>${fmt(totals.pawel)}</div><div class="sub">${perfectPlusResolved.fallback?'fallback z poprzedniego miesiąca':'Perfect Plus z KSeF'}</div></div>
     <div class="kpi-card c-red"><div class="label">Parking</div><div class="value"><span class="sym">zł</span>${fmt(totals.parking)}</div><div class="sub">${parkingResolved.fallback?'fallback z poprzedniego miesiąca':'Gmina Miejska Kraków z KSeF'}</div></div>
+    <div class="kpi-card c-blue"><div class="label">Dodane koszty</div><div class="value"><span class="sym">zł</span>${fmt(totals.customCost)}</div><div class="sub">${customCostsItems.length} wpisów w historii</div></div>
     <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, internecie, czynszu i zaliczce</div></div>
   </div>`;
 
@@ -5621,13 +5655,14 @@ function buildSummaryView(){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="font-size:15px">Filtry podsumowania</div>
-        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping, internet, czynsz i zaliczka eksploatacyjna. Pozostałe kolumny są przygotowane pod dalsze uzupełnienie.</div>
+        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping, internet, czynsz, zaliczka, Paweł i parking. Dodatkowe koszty możesz teraz dopinać ręcznie z historią zmian.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="summarySearchInput" type="search" value="${escapeHtml(_state.summarySearch)}" oninput="setSummarySearch(this.value)" placeholder="Szukaj apartamentu…" style="min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
         <button class="sort-btn ${filter==='all'?'active':''}" onclick="setSummaryFilter('all')">Wszystkie</button>
         <button class="sort-btn ${filter==='positive'?'active':''}" onclick="setSummaryFilter('positive')">Na plusie</button>
         <button class="sort-btn ${filter==='negative'?'active':''}" onclick="setSummaryFilter('negative')">Na minusie</button>
+        <button class="sort-btn active" style="background:#1d4ed8;border-color:#1d4ed8;color:#fff" onclick="openSummaryCostModal()">+ Dodaj koszt</button>
       </div>
     </div>
   </div>`;
@@ -5639,6 +5674,43 @@ function buildSummaryView(){
   const parkingCell=r=>r.parking!==null
     ? `<span style="${r.parkingFallback?'font-style:italic;color:#475569;':''}">${fmt(r.parking)} zł</span>`
     : bd;
+  const customCostCell=r=>r.customCost!==null
+    ? `<span style="font-weight:700;color:#1d4ed8">${fmt(r.customCost)} zł</span>`
+    : bd;
+  const historyHtml=summaryHistoryItems.length
+    ? summaryHistoryItems.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).map(item=>{
+      const isDeleted=item.active===false||!!item.deletedAt;
+      const authorColor=userColor(item.createdBy||item.updatedBy||'');
+      const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
+      const when=formatDateTimeLabel(item.updatedAt||item.createdAt||'');
+      const targetLabel=getSummaryCostTargetLabel(item);
+      return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="min-width:280px;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
+            <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
+            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
+            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f8fafc;color:#475569">${escapeHtml(targetLabel)}</span>
+            ${isDeleted?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fef2f2;color:#dc2626">Usunięte z aktywnych</span>':''}
+          </div>
+          <div style="margin-top:7px;font-size:13px;color:#475569;display:flex;gap:14px;flex-wrap:wrap">
+            <span>Kontrahent: <strong style="color:#0f172a">${escapeHtml(item.contractor||'—')}</strong></span>
+            <span>Dodał(a): <strong style="color:${authorColor}">${escapeHtml(who)}</strong></span>
+            <span>${escapeHtml(when||'')}</span>
+          </div>
+          ${item.notes?`<div style="margin-top:8px;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.5">${escapeHtml(item.notes)}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+          <div style="text-align:right;min-width:140px">
+            <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Kwota netto</div>
+            <div style="font-size:26px;font-weight:800;color:#0f172a">${fmt(item.amountNet||0)} zł</div>
+          </div>
+          ${!isDeleted?`<button type="button" onclick="openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
+          <button type="button" onclick="deleteSummaryCostEntry('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Usuń</button>`:''}
+        </div>
+      </div>`;
+    }).join('')
+    : `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b">Brak ręcznie dodanych kosztów dla ${escapeHtml(activeMonth.label)}.</div>`;
   const tableRows=filteredRows.map(r=>`<tr>
     <td style="font-weight:700">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
@@ -5651,16 +5723,30 @@ function buildSummaryView(){
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
     <td class="num">${pawelCell(r)}</td>
     <td class="num">${parkingCell(r)}</td>
+    <td class="num">${customCostCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
 
   return monthNav+kpis+filters+`
+    <div class="grid-card" style="animation:fadeUp 0.4s 0.08s ease both;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+        <div>
+          <div class="card-title">Historia kosztów</div>
+          <div class="card-subtitle">Każdy wpis zapisuje kontrahenta, kategorię, kwotę, przypisanie do grupy lub apartamentu oraz autora. Usunięte pozycje zostają w historii.</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
+          <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(customCostsPayload.total||0)} zł</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">${historyHtml}</div>
+    </div>
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną oraz kosztami Pawła i parkingu z KSeF. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
+      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną, kosztami Pawła i parkingu z KSeF oraz ręcznie dodanymi kosztami. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Parking</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Parking</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -5674,6 +5760,7 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.internet)} zł</td>
             <td class="num">${fmt(totals.pawel)} zł</td>
             <td class="num">${fmt(totals.parking)} zł</td>
+            <td class="num">${fmt(totals.customCost)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
@@ -5690,6 +5777,271 @@ function getStaticInternetCostForApartment(apt){
   if(raw.includes('stawowa'))return 72.94;
   if(raw.includes('katowicka'))return 93.01;
   return 97.84;
+}
+
+function normalizeSummaryCostsStore(store){
+  const data=store&&typeof store==='object'?store:{};
+  const items=Array.isArray(data.items)?data.items:[];
+  return {
+    items:items.map(item=>{
+      const targetType=String(item?.targetType||'apartment').trim().toLowerCase()==='group'?'group':'apartment';
+      return {
+        id:String(item?.id||'').trim(),
+        monthKey:String(item?.monthKey||'').trim(),
+        contractor:String(item?.contractor||'').trim(),
+        expenseName:String(item?.expenseName||'').trim(),
+        category:String(item?.category||'').trim(),
+        amountNet:parseMoneyValue(item?.amountNet||item?.amount||0),
+        targetType,
+        targetGroup:targetType==='group'?String(item?.targetGroup||item?.targetKey||'').trim().toLowerCase():'',
+        targetApartment:targetType==='apartment'?String(item?.targetApartment||item?.targetKey||'').trim():'',
+        targetLabel:String(item?.targetLabel||'').trim(),
+        targetApartments:Array.isArray(item?.targetApartments)?item.targetApartments.map(v=>String(v||'').trim()).filter(Boolean):[],
+        notes:String(item?.notes||'').trim(),
+        active:item?.active!==false,
+        createdAt:String(item?.createdAt||'').trim(),
+        createdBy:String(item?.createdBy||'').trim().toLowerCase(),
+        createdByName:String(item?.createdByName||'').trim(),
+        updatedAt:String(item?.updatedAt||'').trim(),
+        updatedBy:String(item?.updatedBy||'').trim().toLowerCase(),
+        updatedByName:String(item?.updatedByName||'').trim(),
+        deletedAt:String(item?.deletedAt||'').trim(),
+        deletedBy:String(item?.deletedBy||'').trim().toLowerCase(),
+        deletedByName:String(item?.deletedByName||'').trim(),
+      };
+    }).filter(item=>item.id&&item.monthKey&&item.expenseName&&item.category)
+  };
+}
+
+function getSummaryCostsStore(){
+  if(_summaryCostsCache!==null)return _summaryCostsCache;
+  try{
+    _summaryCostsCache=normalizeSummaryCostsStore(JSON.parse(localStorage.getItem('summary_costs')||'{}'));
+  }catch(e){
+    _summaryCostsCache={items:[]};
+  }
+  return _summaryCostsCache;
+}
+
+function saveSummaryCostsStore(store){
+  _summaryCostsCache=normalizeSummaryCostsStore(store);
+  localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
+  syncPushSummaryCosts(_summaryCostsCache);
+}
+
+function getSummaryAllApartmentTargets(apartmentKeys=[]){
+  const current=sortByDefaultOrder([...new Set((Array.isArray(apartmentKeys)?apartmentKeys:[]).filter(Boolean))]);
+  const l25Static=Array.from({length:7},(_,idx)=>`L25/${18+idx}`);
+  const l25=sortByDefaultOrder([...new Set([...current.filter(apt=>isL25PremiumApartment(apt)),...l25Static])]);
+  const otv=sortByDefaultOrder(current.filter(apt=>apt!=='Biuro'&&apt!=='Magazynek'&&!isL25PremiumApartment(apt)));
+  const others=sortByDefaultOrder([...new Set(current.filter(apt=>!otv.includes(apt)&&!l25.includes(apt)))]);
+  return {otv,l25,others,all:[...new Set([...otv,...l25,...others])]};
+}
+
+function getSummaryCostTargetLabel(item){
+  if(!item)return'';
+  if(String(item.targetType||'')==='group'){
+    if(String(item.targetGroup||'')==='l25')return 'L25 Premium Apartments';
+    return 'Old Town Vistula Premium Apartments';
+  }
+  return String(item.targetApartment||item.targetLabel||'').trim();
+}
+
+function resolveSummaryCostTargets(item,targetMeta){
+  if(!item)return [];
+  if(item.targetType==='group'){
+    const key=String(item.targetGroup||'').trim().toLowerCase();
+    const fromSaved=Array.isArray(item.targetApartments)?item.targetApartments.filter(Boolean):[];
+    if(fromSaved.length)return fromSaved;
+    return key==='l25'?[...(targetMeta?.l25||[])]:[...(targetMeta?.otv||[])];
+  }
+  return item.targetApartment?[String(item.targetApartment).trim()]:[];
+}
+
+function buildSummaryCustomCostMap(monthKey,targetMeta){
+  const items=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey&&item.active!==false&&!item.deletedAt);
+  const map={};
+  let total=0;
+  items.forEach(item=>{
+    const amount=parseMoneyValue(item.amountNet||0);
+    if(!(amount>0))return;
+    const targets=resolveSummaryCostTargets(item,targetMeta).filter(Boolean);
+    if(!targets.length)return;
+    const share=amount/targets.length;
+    total+=amount;
+    targets.forEach(apt=>{
+      map[apt]=(map[apt]||0)+share;
+    });
+  });
+  return {map,items,total};
+}
+
+function closeSummaryCostModal(){
+  document.getElementById('summaryCostModal')?.remove();
+}
+
+function setSummaryCostTarget(type,key){
+  const targetTypeInput=document.getElementById('summary-cost-target-type');
+  const targetValueInput=document.getElementById('summary-cost-target-value');
+  if(!targetTypeInput||!targetValueInput)return;
+  targetTypeInput.value=type==='group'?'group':'apartment';
+  targetValueInput.value=String(key||'').trim();
+  document.querySelectorAll('[data-summary-target]').forEach(node=>{
+    const active=node.dataset.summaryTargetType===targetTypeInput.value&&node.dataset.summaryTargetValue===targetValueInput.value;
+    node.style.background=active?'#dbeafe':'#fff';
+    node.style.borderColor=active?'#2563eb':'#cbd5e1';
+    node.style.color=active?'#1d4ed8':'#334155';
+  });
+  const label=document.getElementById('summary-cost-target-label');
+  if(label){
+    label.textContent=targetTypeInput.value==='group'
+      ? (targetValueInput.value==='l25'?'Wybrano całą grupę: L25 Premium Apartments':'Wybrano całą grupę: Old Town Vistula Premium Apartments')
+      : `Wybrano apartament: ${targetValueInput.value||'—'}`;
+  }
+}
+
+function openSummaryCostModal(editId=''){
+  if(!hasModuleAccess('summary'))return;
+  const meta=window._summaryTargetMeta||getSummaryAllApartmentTargets([]);
+  const store=getSummaryCostsStore();
+  const editing=(store.items||[]).find(item=>item.id===editId)||null;
+  const initialTargetType=editing?.targetType||'group';
+  const initialTargetValue=editing?.targetType==='apartment'
+    ? String(editing?.targetApartment||'').trim()
+    : String(editing?.targetGroup||'otv').trim().toLowerCase();
+  const cardButton=(label,type,value,active)=>`<button type="button" data-summary-target data-summary-target-type="${type}" data-summary-target-value="${escapeHtml(value)}" onclick="setSummaryCostTarget('${type}','${String(value).replace(/'/g,"\\'")}')" style="border:1px solid ${active?'#2563eb':'#cbd5e1'};background:${active?'#dbeafe':'#fff'};color:${active?'#1d4ed8':'#334155'};border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(label)}</button>`;
+  const apartmentPills=list=>`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${list.map(name=>cardButton(name,'apartment',name,initialTargetType==='apartment'&&initialTargetValue===name)).join('')}</div>`;
+  closeSummaryCostModal();
+  const modal=document.createElement('div');
+  modal.id='summaryCostModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:860px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px 24px 20px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:24px;font-weight:800;color:#0f172a">${editing?'Edytuj koszt':'Dodaj koszt'}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Wpis zapisze się w historii i będzie widoczny na wszystkich komputerach.</div>
+      </div>
+      <button type="button" onclick="closeSummaryCostModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <input id="summary-cost-id" type="hidden" value="${escapeHtml(editing?.id||'')}">
+    <input id="summary-cost-target-type" type="hidden" value="${escapeHtml(initialTargetType)}">
+    <input id="summary-cost-target-value" type="hidden" value="${escapeHtml(initialTargetValue)}">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
+      <div class="field"><label>Kontrahent</label><input id="summary-cost-contractor" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
+      <div class="field"><label>Nazwa wydatku</label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
+      <div class="field"><label>Kategoria wydatku</label><input id="summary-cost-category" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}"></div>
+      <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}"></div>
+    </div>
+    <div class="field" style="margin-top:14px"><label>Notatka</label><textarea id="summary-cost-notes" class="artur-input" rows="2" placeholder="Opcjonalne szczegóły do historii wpisu...">${escapeHtml(editing?.notes||'')}</textarea></div>
+    <div style="margin-top:18px;padding:18px;border:1px solid #dbeafe;border-radius:18px;background:linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%)">
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:12px">Przypisanie kosztu</div>
+      <div id="summary-cost-target-label" style="font-size:13px;color:#1d4ed8;font-weight:700;margin-bottom:12px">${initialTargetType==='group'?(initialTargetValue==='l25'?'Wybrano całą grupę: L25 Premium Apartments':'Wybrano całą grupę: Old Town Vistula Premium Apartments'):`Wybrano apartament: ${escapeHtml(initialTargetValue||'—')}`}</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
+        <details open style="border:1px solid #cbd5e1;border-radius:18px;background:#fff;padding:14px 14px 12px">
+          <summary style="cursor:pointer;list-style:none;font-size:15px;font-weight:800;color:#0f172a;display:flex;align-items:center;justify-content:space-between">OTV <span style="font-size:12px;color:#64748b">${meta.otv.length} apartamentów</span></summary>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+            ${cardButton('Cała grupa OTV','group','otv',initialTargetType==='group'&&initialTargetValue==='otv')}
+            ${apartmentPills(meta.otv)}
+          </div>
+        </details>
+        <details open style="border:1px solid #cbd5e1;border-radius:18px;background:#fff;padding:14px 14px 12px">
+          <summary style="cursor:pointer;list-style:none;font-size:15px;font-weight:800;color:#0f172a;display:flex;align-items:center;justify-content:space-between">L25 <span style="font-size:12px;color:#64748b">${meta.l25.length} apartamentów</span></summary>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+            ${cardButton('Cała grupa L25','group','l25',initialTargetType==='group'&&initialTargetValue==='l25')}
+            ${apartmentPills(meta.l25)}
+          </div>
+        </details>
+      </div>
+      ${meta.others.length?`<div style="margin-top:14px;border:1px solid #cbd5e1;border-radius:18px;background:#fff;padding:14px">
+        <div style="font-size:15px;font-weight:800;color:#0f172a">Pozostałe pozycje</div>
+        ${apartmentPills(meta.others)}
+      </div>`:''}
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
+      <button type="button" onclick="closeSummaryCostModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:11px 16px;font:inherit;font-weight:700;cursor:pointer">Anuluj</button>
+      <button type="button" onclick="saveSummaryCostFromModal()" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:12px;padding:11px 16px;font:inherit;font-weight:800;cursor:pointer">${editing?'Zapisz zmiany':'Dodaj koszt'}</button>
+    </div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostModal();});
+  document.body.appendChild(modal);
+}
+
+function saveSummaryCostFromModal(){
+  const id=document.getElementById('summary-cost-id')?.value.trim()||'';
+  const contractor=document.getElementById('summary-cost-contractor')?.value.trim()||'';
+  const expenseName=document.getElementById('summary-cost-name')?.value.trim()||'';
+  const category=document.getElementById('summary-cost-category')?.value.trim()||'';
+  const amountNet=parseMoneyValue(document.getElementById('summary-cost-amount')?.value||0);
+  const notes=document.getElementById('summary-cost-notes')?.value.trim()||'';
+  const targetType=document.getElementById('summary-cost-target-type')?.value==='group'?'group':'apartment';
+  const targetValue=document.getElementById('summary-cost-target-value')?.value.trim()||'';
+  const monthKey=_state.summaryMonth;
+  const meta=window._summaryTargetMeta||getSummaryAllApartmentTargets([]);
+  if(!expenseName){alert('Podaj nazwę wydatku.');return;}
+  if(!category){alert('Podaj kategorię wydatku.');return;}
+  if(!(amountNet>0)){alert('Podaj kwotę netto większą od zera.');return;}
+  if(!targetValue){alert('Wybierz grupę albo apartament.');return;}
+  const store=getSummaryCostsStore();
+  const items=Array.isArray(store.items)?store.items.slice():[];
+  const existingIndex=id?items.findIndex(item=>item.id===id):-1;
+  const existing=existingIndex>=0?items[existingIndex]:null;
+  const now=new Date().toISOString();
+  const targetApartments=targetType==='group'
+    ? (targetValue==='l25'?[...meta.l25]:[...meta.otv])
+    : [targetValue];
+  const next={
+    id:id||`cost_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    monthKey,
+    contractor,
+    expenseName,
+    category,
+    amountNet,
+    targetType,
+    targetGroup:targetType==='group'?targetValue:'',
+    targetApartment:targetType==='apartment'?targetValue:'',
+    targetLabel:targetType==='group'
+      ? (targetValue==='l25'?'L25 Premium Apartments':'Old Town Vistula Premium Apartments')
+      : targetValue,
+    targetApartments,
+    notes,
+    active:true,
+    createdAt:existing?.createdAt||now,
+    createdBy:existing?.createdBy||String(_state.authUser?.login||'').trim().toLowerCase(),
+    createdByName:existing?.createdByName||String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+    updatedAt:now,
+    updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+    updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+    deletedAt:'',
+    deletedBy:'',
+    deletedByName:'',
+  };
+  if(existingIndex>=0)items.splice(existingIndex,1,next);
+  else items.unshift(next);
+  saveSummaryCostsStore({items});
+  closeSummaryCostModal();
+  if(_state.section==='summary')renderApp();
+}
+
+function deleteSummaryCostEntry(id){
+  if(!id)return;
+  const store=getSummaryCostsStore();
+  const items=Array.isArray(store.items)?store.items.slice():[];
+  const idx=items.findIndex(item=>item.id===id);
+  if(idx<0)return;
+  const current=items[idx];
+  const now=new Date().toISOString();
+  items[idx]={
+    ...current,
+    active:false,
+    updatedAt:now,
+    updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+    updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+    deletedAt:now,
+    deletedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+    deletedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+  };
+  saveSummaryCostsStore({items});
+  if(_state.section==='summary')renderApp();
 }
 
 function openOtvDrawer(date){
@@ -8336,6 +8688,7 @@ let _paidCache=null;
 let _ksefPaidCache=null;
 let _arturPaymentsCache=null;
 let _tasksCache=null;
+let _summaryCostsCache=null;
 let _dyzuryCache=null;
 let _backgroundPrefetchStarted=false;
 let _previoSoftRefreshRequested={};
@@ -8351,6 +8704,7 @@ async function syncPull(){
       fetch(`${CONFIG.syncUrl}?action=getKsefPaid${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getArturPayments${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getTasks${tokenParam}`).then(r=>r.json()),
+      fetch(`${CONFIG.syncUrl}?action=getSummaryCosts${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getDyzury${tokenParam}`).then(r=>r.json()),
       fetch(`${CONFIG.syncUrl}?action=getAssignableUsers${tokenParam}`).then(r=>r.json()),
     ]);
@@ -8360,8 +8714,9 @@ async function syncPull(){
     const ksefPaidData=results[3].status==='fulfilled'?results[3].value:null;
     const arturPaymentsData=results[4].status==='fulfilled'?results[4].value:null;
     const tasksData=results[5].status==='fulfilled'?results[5].value:null;
-    const dyzuryData=results[6].status==='fulfilled'?results[6].value:null;
-    const assignableUsersData=results[7].status==='fulfilled'?results[7].value:null;
+    const summaryCostsData=results[6].status==='fulfilled'?results[6].value:null;
+    const dyzuryData=results[7].status==='fulfilled'?results[7].value:null;
+    const assignableUsersData=results[8].status==='fulfilled'?results[8].value:null;
     if(kalData?.events){
       _kalCache=kalData.events;
       localStorage.setItem('kal_events',JSON.stringify(_kalCache));
@@ -8405,6 +8760,11 @@ async function syncPull(){
       _tasksCache=tasksData.tasks;
       if(!Array.isArray(_tasksCache.items))_tasksCache.items=[];
       localStorage.setItem('dashboard_tasks',JSON.stringify(_tasksCache));
+    }
+    if(summaryCostsData&&typeof summaryCostsData.costs==='object'&&summaryCostsData.costs!==null){
+      _summaryCostsCache=summaryCostsData.costs;
+      if(!Array.isArray(_summaryCostsCache.items))_summaryCostsCache.items=[];
+      localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
     }
     if(dyzuryData&&typeof dyzuryData.dyzury==='object'&&dyzuryData.dyzury!==null){
       const remoteDyzury=normalizeDyzuryPayload(dyzuryData.dyzury);
@@ -8533,6 +8893,18 @@ async function syncPushTasks(tasks){
       body:JSON.stringify({action:'saveTasks',token:_state.authToken,tasks}),
     });
   }catch(e){console.warn('syncPushTasks failed:',e);}
+}
+
+async function syncPushSummaryCosts(costs){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveSummaryCosts',token:_state.authToken,costs}),
+    });
+  }catch(e){console.warn('syncPushSummaryCosts failed:',e);}
 }
 
 async function syncPushDyzury(dyzury){
