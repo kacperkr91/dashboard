@@ -5531,10 +5531,16 @@ function buildSummaryView(){
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
   const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
+  const perfectPlusByMonth=buildKsefPerfectPlusMonthMap(ksefData);
+  const perfectPlusResolved=resolvePerfectPlusForMonth(monthKey,perfectPlusByMonth);
   const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
   }
+  const pawelEligibleKeys=apartmentKeys.filter(apt=>apt!=='Biuro'&&apt!=='Magazynek');
+  const pawelShare=(perfectPlusResolved.invoice?.netto&&pawelEligibleKeys.length)
+    ? perfectPlusResolved.invoice.netto/pawelEligibleKeys.length
+    : null;
 
   const rows=apartmentKeys.map(apt=>{
     const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
@@ -5563,7 +5569,9 @@ function buildSummaryView(){
       rent:czynsz.rent,
       advance:czynsz.advance,
       internet:internetCost,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0),
+      pawel:(apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:null,
+      pawelFallback:apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null&&perfectPlusResolved.fallback,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-((apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0),
     };
   });
 
@@ -5586,15 +5594,17 @@ function buildSummaryView(){
     acc.rent+=Number(r.rent)||0;
     acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
+    acc.pawel+=Number(r.pawel)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
+    <div class="kpi-card c-purple"><div class="label">Paweł</div><div class="value"><span class="sym">zł</span>${fmt(totals.pawel)}</div><div class="sub">${perfectPlusResolved.fallback?'fallback z poprzedniego miesiąca':'Perfect Plus z KSeF'}</div></div>
     <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, internecie, czynszu i zaliczce</div></div>
   </div>`;
 
@@ -5614,6 +5624,9 @@ function buildSummaryView(){
   </div>`;
 
   const bd=`<span style="color:var(--text-muted)">b.d.</span>`;
+  const pawelCell=r=>r.pawel!==null
+    ? `<span style="${r.pawelFallback?'font-style:italic;color:#475569;':''}">${fmt(r.pawel)} zł</span>`
+    : bd;
   const tableRows=filteredRows.map(r=>`<tr>
     <td style="font-weight:700">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
@@ -5624,6 +5637,7 @@ function buildSummaryView(){
     <td class="num">${r.rent!==null?`${fmt(r.rent)} zł`:bd}</td>
     <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
+    <td class="num">${pawelCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
@@ -5631,9 +5645,9 @@ function buildSummaryView(){
   return monthNav+kpis+filters+`
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem i zaliczką eksploatacyjną.</div>
+      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną i kosztem Pawła z KSeF. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -5645,6 +5659,7 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.rent)} zł</td>
             <td class="num">${fmt(totals.advance)} zł</td>
             <td class="num">${fmt(totals.internet)} zł</td>
+            <td class="num">${fmt(totals.pawel)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
@@ -6857,6 +6872,58 @@ function buildKsefBiuroMonthMap(rows=[]){
     };
   });
   return result;
+}
+
+function getPreviousMonthKey(monthKey){
+  const match=String(monthKey||'').match(/^(\d{4})-(\d{2})$/);
+  if(!match)return '';
+  const year=Number(match[1]);
+  const month=Number(match[2]);
+  const prev=new Date(year,month-2,1);
+  return `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+}
+
+function buildKsefPerfectPlusMonthMap(rows=[]){
+  const monthMap={};
+  (Array.isArray(rows)?rows:[]).forEach(item=>{
+    const seller=String(item?.seller||'').trim().toLowerCase();
+    if(!seller.includes('perfect')||!seller.includes('plus'))return;
+    const parsed=parseDateDMY(item?.issueDate)||parseDatePL(item?.issueDate)||parseHKDate(item?.issueDate);
+    const monthKey=parsed?getMonthKeyFromDate(parsed):'';
+    if(!monthKey)return;
+    const nettoValue=parseMoneyValue(item?.netto||0);
+    if(!(nettoValue>0))return;
+    if(!monthMap[monthKey])monthMap[monthKey]=[];
+    monthMap[monthKey].push({
+      netto:nettoValue,
+      seller:String(item?.seller||'').trim(),
+      issueDate:String(item?.issueDate||'').trim(),
+      invoiceNumber:String(item?.invoiceNumber||item?.number||'').trim(),
+      ksefNumber:String(item?.ksefNumber||'').trim(),
+    });
+  });
+  const result={};
+  Object.entries(monthMap).forEach(([monthKey,list])=>{
+    const target=list
+      .slice()
+      .filter(item=>item.netto>=7000&&item.netto<=13000)
+      .sort((a,b)=>Math.abs(a.netto-10000)-Math.abs(b.netto-10000))[0]
+      || list.slice().sort((a,b)=>Math.abs(a.netto-10000)-Math.abs(b.netto-10000))[0]
+      || null;
+    if(target)result[monthKey]=target;
+  });
+  return result;
+}
+
+function resolvePerfectPlusForMonth(monthKey,monthMap){
+  let cursor=String(monthKey||'').trim();
+  let fallback=false;
+  for(let i=0;i<24&&cursor;i+=1){
+    if(monthMap?.[cursor])return{invoice:monthMap[cursor],fallback};
+    cursor=getPreviousMonthKey(cursor);
+    fallback=true;
+  }
+  return{invoice:null,fallback:false};
 }
 
 // Get Thursday-Wednesday period containing a date
