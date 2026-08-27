@@ -10135,11 +10135,11 @@ function buildOblozenieLive(){
       <div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:space-between;min-height:232px">
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 176px;align-items:start;gap:12px">
         <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:${opts.headingColor};min-width:0">${opts.title}</div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;min-width:0;min-height:34px;text-align:center">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;min-width:0;min-height:34px;text-align:center;position:relative">
           <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>
-          ${opts.monthMetaHtml?`<div style="margin-top:4px;line-height:1.1;text-align:center;width:100%">${opts.monthMetaHtml}</div>`:''}
         </div>
       </div>
+      ${opts.monthMetaHtml?`<div style="position:absolute;top:38px;right:0;width:176px;display:flex;justify-content:center;pointer-events:none">${opts.monthMetaHtml}</div>`:''}
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:8px;line-height:1.05">${opts.value}</div>
       <div style="font-size:12px;color:var(--text-mid);margin-top:8px">${opts.subtitle}</div>
       <div style="height:1px;background:${opts.dividerColor||'#e6ebf2'};margin:12px 0 12px"></div>
@@ -10186,10 +10186,12 @@ function buildOblozenieLive(){
     : null;
   const forecastVsPreviousMeta=forecastVsPreviousPct===null
     ? ''
-    : `<div style="font-size:14px;font-weight:900;color:${forecastVsPreviousPct>=0?'#15803d':'#dc2626'};white-space:nowrap">${forecastVsPreviousPct>=0?'+':'-'}${Math.abs(forecastVsPreviousPct).toFixed(1)}%</div>
-      <div style="font-size:9px;color:var(--text-muted);margin-top:2px;text-align:center;line-height:1.15">
+    : `<div style="display:flex;flex-direction:column;align-items:center;line-height:1.1;text-align:center">
+        <div style="font-size:14px;font-weight:900;color:${forecastVsPreviousPct>=0?'#15803d':'#dc2626'};white-space:nowrap">${forecastVsPreviousPct>=0?'+':'-'}${Math.abs(forecastVsPreviousPct).toFixed(1)}%</div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:2px;line-height:1.15">
         <div>względem</div>
         <div>poprzedniego miesiąca</div>
+        </div>
       </div>`;
 
   const dzien=_state.oblozenieDzien||'dzis';
