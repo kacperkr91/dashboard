@@ -10129,7 +10129,7 @@ function buildOblozenieLive(){
     </div>`).join('');
   const renderMetricSummaryCard=(opts)=>{
     const monthTitle=String(opts.monthLabel||'').toUpperCase();
-    const monthMetaHtml=opts.monthMetaHtml?`<div style="margin-top:4px;font-size:10px;line-height:1.35;text-align:right">${opts.monthMetaHtml}</div>`:'';
+    const monthMetaHtml=opts.monthMetaHtml?`<div style="margin-top:4px;line-height:1.15;text-align:right">${opts.monthMetaHtml}</div>`:'';
     return `<div style="position:relative;overflow:hidden;background:${opts.cardBackground||'linear-gradient(180deg,#ffffff 0%,#fcfdff 100%)'};border:1px solid ${opts.cardBorder||'#e6ebf2'};border-radius:20px;padding:18px 18px 16px;box-shadow:${opts.cardShadow||'0 12px 32px rgba(15,23,42,.06)'};display:flex;flex-direction:column;justify-content:space-between;min-height:280px;text-align:left">
       <div style="position:absolute;inset:auto -48px -44px auto;width:180px;height:180px;border-radius:999px;background:${opts.orbPrimary||'rgba(124,58,237,.10)'};filter:blur(8px);pointer-events:none"></div>
       <div style="position:absolute;top:-44px;right:72px;width:130px;height:130px;border-radius:999px;background:${opts.orbSecondary||'rgba(167,139,250,.14)'};filter:blur(10px);pointer-events:none"></div>
@@ -10187,10 +10187,8 @@ function buildOblozenieLive(){
     : null;
   const forecastVsPreviousMeta=forecastVsPreviousPct===null
     ? ''
-    : `${forecastVsPreviousPct>=0
-      ? `<span style="font-weight:900;color:#15803d">+${Math.abs(forecastVsPreviousPct).toFixed(1)}%</span>`
-      : `<span style="font-weight:900;color:#dc2626">-${Math.abs(forecastVsPreviousPct).toFixed(1)}%</span>`}
-      <span style="color:var(--text-muted)"> prawdopodobny ${forecastVsPreviousPct>=0?'wzrost':'spadek'} vs zeszły miesiąc</span>`;
+    : `<div style="font-size:15px;font-weight:900;color:${forecastVsPreviousPct>=0?'#15803d':'#dc2626'};white-space:nowrap">${forecastVsPreviousPct>=0?'+':'-'}${Math.abs(forecastVsPreviousPct).toFixed(1)}%</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:2px;white-space:nowrap">względem poprzedniego miesiąca</div>`;
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
