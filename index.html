@@ -5533,6 +5533,8 @@ function buildSummaryView(){
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
   const perfectPlusByMonth=buildKsefPerfectPlusMonthMap(ksefData);
   const perfectPlusResolved=resolvePerfectPlusForMonth(monthKey,perfectPlusByMonth);
+  const parkingByMonth=buildKsefParkingMonthMap(ksefData);
+  const parkingResolved=resolveKsefMonthlyCost(monthKey,parkingByMonth);
   const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
@@ -5540,6 +5542,9 @@ function buildSummaryView(){
   const pawelEligibleKeys=apartmentKeys.filter(apt=>apt!=='Biuro'&&apt!=='Magazynek');
   const pawelShare=(perfectPlusResolved.invoice?.netto&&pawelEligibleKeys.length)
     ? perfectPlusResolved.invoice.netto/pawelEligibleKeys.length
+    : null;
+  const parkingShare=(parkingResolved.entry?.netto&&pawelEligibleKeys.length)
+    ? parkingResolved.entry.netto/pawelEligibleKeys.length
     : null;
 
   const rows=apartmentKeys.map(apt=>{
@@ -5571,7 +5576,9 @@ function buildSummaryView(){
       internet:internetCost,
       pawel:(apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:null,
       pawelFallback:apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null&&perfectPlusResolved.fallback,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-((apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0),
+      parking:(apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:null,
+      parkingFallback:apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null&&parkingResolved.fallback,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-((apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0)-((apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:0),
     };
   });
 
@@ -5595,9 +5602,10 @@ function buildSummaryView(){
     acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
     acc.pawel+=Number(r.pawel)||0;
+    acc.parking+=Number(r.parking)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,parking:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
@@ -5605,6 +5613,7 @@ function buildSummaryView(){
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
     <div class="kpi-card c-purple"><div class="label">Paweł</div><div class="value"><span class="sym">zł</span>${fmt(totals.pawel)}</div><div class="sub">${perfectPlusResolved.fallback?'fallback z poprzedniego miesiąca':'Perfect Plus z KSeF'}</div></div>
+    <div class="kpi-card c-red"><div class="label">Parking</div><div class="value"><span class="sym">zł</span>${fmt(totals.parking)}</div><div class="sub">${parkingResolved.fallback?'fallback z poprzedniego miesiąca':'Gmina Miejska Kraków z KSeF'}</div></div>
     <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, internecie, czynszu i zaliczce</div></div>
   </div>`;
 
@@ -5627,6 +5636,9 @@ function buildSummaryView(){
   const pawelCell=r=>r.pawel!==null
     ? `<span style="${r.pawelFallback?'font-style:italic;color:#475569;':''}">${fmt(r.pawel)} zł</span>`
     : bd;
+  const parkingCell=r=>r.parking!==null
+    ? `<span style="${r.parkingFallback?'font-style:italic;color:#475569;':''}">${fmt(r.parking)} zł</span>`
+    : bd;
   const tableRows=filteredRows.map(r=>`<tr>
     <td style="font-weight:700">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
@@ -5638,6 +5650,7 @@ function buildSummaryView(){
     <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
     <td class="num">${pawelCell(r)}</td>
+    <td class="num">${parkingCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
@@ -5645,9 +5658,9 @@ function buildSummaryView(){
   return monthNav+kpis+filters+`
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną i kosztem Pawła z KSeF. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
+      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną oraz kosztami Pawła i parkingu z KSeF. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Parking</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -5660,6 +5673,7 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.advance)} zł</td>
             <td class="num">${fmt(totals.internet)} zł</td>
             <td class="num">${fmt(totals.pawel)} zł</td>
+            <td class="num">${fmt(totals.parking)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
@@ -6924,6 +6938,45 @@ function resolvePerfectPlusForMonth(monthKey,monthMap){
     fallback=true;
   }
   return{invoice:null,fallback:false};
+}
+
+function buildKsefParkingMonthMap(rows=[]){
+  const monthMap={};
+  (Array.isArray(rows)?rows:[]).forEach(item=>{
+    const seller=String(item?.seller||'').trim().toLowerCase();
+    if(!seller.includes('gmin')||!seller.includes('miejsk')||!seller.includes('krak'))return;
+    const parsed=parseDateDMY(item?.issueDate)||parseDatePL(item?.issueDate)||parseHKDate(item?.issueDate);
+    const monthKey=parsed?getMonthKeyFromDate(parsed):'';
+    if(!monthKey)return;
+    const nettoValue=parseMoneyValue(item?.netto||0);
+    if(!monthMap[monthKey])monthMap[monthKey]=[];
+    monthMap[monthKey].push({
+      netto:nettoValue,
+      seller:String(item?.seller||'').trim(),
+      issueDate:String(item?.issueDate||'').trim(),
+      invoiceNumber:String(item?.invoiceNumber||item?.number||'').trim(),
+      ksefNumber:String(item?.ksefNumber||'').trim(),
+    });
+  });
+  const result={};
+  Object.entries(monthMap).forEach(([monthKey,list])=>{
+    result[monthKey]={
+      netto:list.reduce((sum,item)=>sum+(Number(item.netto)||0),0),
+      invoices:list,
+    };
+  });
+  return result;
+}
+
+function resolveKsefMonthlyCost(monthKey,monthMap){
+  let cursor=String(monthKey||'').trim();
+  let fallback=false;
+  for(let i=0;i<24&&cursor;i+=1){
+    if(monthMap?.[cursor])return{entry:monthMap[cursor],fallback};
+    cursor=getPreviousMonthKey(cursor);
+    fallback=true;
+  }
+  return{entry:null,fallback:false};
 }
 
 // Get Thursday-Wednesday period containing a date
