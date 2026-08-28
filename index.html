@@ -5553,27 +5553,15 @@ function buildSummaryView(){
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
   const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
-  const perfectPlusByMonth=buildKsefPerfectPlusMonthMap(ksefData);
-  const perfectPlusResolved=resolvePerfectPlusForMonth(monthKey,perfectPlusByMonth);
-  const parkingByMonth=buildKsefParkingMonthMap(ksefData);
-  const parkingResolved=resolveKsefMonthlyCost(monthKey,parkingByMonth);
   const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
   const targetMeta=getSummaryAllApartmentTargets(apartmentKeys);
   window._summaryTargetMeta=targetMeta;
   if(!apartmentKeys.length){
     return monthNav+`<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych OTV dla ${activeMonth.label}</p></div>`;
   }
-  const pawelEligibleKeys=apartmentKeys.filter(apt=>apt!=='Biuro'&&apt!=='Magazynek');
-  const pawelShare=(perfectPlusResolved.invoice?.netto&&pawelEligibleKeys.length)
-    ? perfectPlusResolved.invoice.netto/pawelEligibleKeys.length
-    : null;
-  const parkingShare=(parkingResolved.entry?.netto&&pawelEligibleKeys.length)
-    ? parkingResolved.entry.netto/pawelEligibleKeys.length
-    : null;
   const customCostsPayload=buildSummaryCustomCostMap(monthKey,targetMeta);
   const customCostMap=customCostsPayload.map||{};
   const customCostsItems=customCostsPayload.items||[];
-  const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
 
   const rows=apartmentKeys.map(apt=>{
     const income=incomeMap[apt]||{gross:0,commission:0,transactionFee:0,cost:0,net:0};
@@ -5586,8 +5574,6 @@ function buildSummaryView(){
       }
       : baseCzynsz;
     const internetCost=getStaticInternetCostForApartment(apt);
-    const pawelCost=(apt!=='Biuro'&&apt!=='Magazynek'&&pawelShare!==null)?pawelShare:0;
-    const parkingCost=(apt!=='Biuro'&&apt!=='Magazynek'&&parkingShare!==null)?parkingShare:0;
     const customCost=Number(customCostMap[apt])||0;
     return{
       apt,
@@ -5605,12 +5591,8 @@ function buildSummaryView(){
       rent:czynsz.rent,
       advance:czynsz.advance,
       internet:internetCost,
-      pawel:pawelCost||null,
-      pawelFallback:!!(pawelCost&&perfectPlusResolved.fallback),
-      parking:parkingCost||null,
-      parkingFallback:!!(parkingCost&&parkingResolved.fallback),
       customCost:customCost||null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-pawelCost-parkingCost-customCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(czynsz.rent)||0)-(Number(czynsz.advance)||0)-customCost,
     };
   });
 
@@ -5633,20 +5615,16 @@ function buildSummaryView(){
     acc.rent+=Number(r.rent)||0;
     acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
-    acc.pawel+=Number(r.pawel)||0;
-    acc.parking+=Number(r.parking)||0;
     acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,pawel:0,parking:0,customCost:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
-    <div class="kpi-card c-purple"><div class="label">Paweł</div><div class="value"><span class="sym">zł</span>${fmt(totals.pawel)}</div><div class="sub">${perfectPlusResolved.fallback?'fallback z poprzedniego miesiąca':'Perfect Plus z KSeF'}</div></div>
-    <div class="kpi-card c-red"><div class="label">Parking</div><div class="value"><span class="sym">zł</span>${fmt(totals.parking)}</div><div class="sub">${parkingResolved.fallback?'fallback z poprzedniego miesiąca':'Gmina Miejska Kraków z KSeF'}</div></div>
     <div class="kpi-card c-blue"><div class="label">Dodane koszty</div><div class="value"><span class="sym">zł</span>${fmt(totals.customCost)}</div><div class="sub">${customCostsItems.length} wpisów w historii</div></div>
     <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, internecie, czynszu i zaliczce</div></div>
   </div>`;
@@ -5655,13 +5633,14 @@ function buildSummaryView(){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="font-size:15px">Filtry podsumowania</div>
-        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping, internet, czynsz, zaliczka, Paweł i parking. Dodatkowe koszty możesz teraz dopinać ręcznie z historią zmian.</div>
+        <div class="card-subtitle">Koszty liczone automatycznie: kanał, housekeeping, internet, czynsz i zaliczka. Pozostałe dopinasz ręcznie jako własne koszty.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="summarySearchInput" type="search" value="${escapeHtml(_state.summarySearch)}" oninput="setSummarySearch(this.value)" placeholder="Szukaj apartamentu…" style="min-width:220px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
         <button class="sort-btn ${filter==='all'?'active':''}" onclick="setSummaryFilter('all')">Wszystkie</button>
         <button class="sort-btn ${filter==='positive'?'active':''}" onclick="setSummaryFilter('positive')">Na plusie</button>
         <button class="sort-btn ${filter==='negative'?'active':''}" onclick="setSummaryFilter('negative')">Na minusie</button>
+        <button class="sort-btn" onclick="openSummaryCostHistoryModal('${monthKey}')">Historia kosztów</button>
         <button class="sort-btn" onclick="openSummaryMetaManager()">Kategorie i kontrahenci</button>
         <button class="sort-btn active" style="background:#1d4ed8;border-color:#1d4ed8;color:#fff" onclick="openSummaryCostModal()">+ Dodaj koszt</button>
       </div>
@@ -5669,49 +5648,9 @@ function buildSummaryView(){
   </div>`;
 
   const bd=`<span style="color:var(--text-muted)">b.d.</span>`;
-  const pawelCell=r=>r.pawel!==null
-    ? `<span style="${r.pawelFallback?'font-style:italic;color:#475569;':''}">${fmt(r.pawel)} zł</span>`
-    : bd;
-  const parkingCell=r=>r.parking!==null
-    ? `<span style="${r.parkingFallback?'font-style:italic;color:#475569;':''}">${fmt(r.parking)} zł</span>`
-    : bd;
   const customCostCell=r=>r.customCost!==null
     ? `<span style="font-weight:700;color:#1d4ed8">${fmt(r.customCost)} zł</span>`
     : bd;
-  const historyHtml=summaryHistoryItems.length
-    ? summaryHistoryItems.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).map(item=>{
-      const isDeleted=item.active===false||!!item.deletedAt;
-      const authorColor=userColor(item.createdBy||item.updatedBy||'');
-      const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
-      const when=formatDateTimeLabel(item.updatedAt||item.createdAt||'');
-      const targetLabel=getSummaryCostTargetLabel(item);
-      return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
-        <div style="min-width:280px;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
-            <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
-            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
-            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f8fafc;color:#475569">${escapeHtml(targetLabel)}</span>
-            ${isDeleted?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fef2f2;color:#dc2626">Usunięte z aktywnych</span>':''}
-          </div>
-          <div style="margin-top:7px;font-size:13px;color:#475569;display:flex;gap:14px;flex-wrap:wrap">
-            <span>Kontrahent: <strong style="color:#0f172a">${escapeHtml(item.contractor||'—')}</strong></span>
-            <span>Dodał(a): <strong style="color:${authorColor}">${escapeHtml(who)}</strong></span>
-            <span>${escapeHtml(when||'')}</span>
-          </div>
-          ${item.notes?`<div style="margin-top:8px;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.5">${escapeHtml(item.notes)}</div>`:''}
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;justify-content:flex-end">
-          <div style="text-align:right;min-width:140px">
-            <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Kwota netto</div>
-            <div style="font-size:26px;font-weight:800;color:#0f172a">${fmt(item.amountNet||0)} zł</div>
-          </div>
-          ${!isDeleted?`<button type="button" onclick="openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
-          <button type="button" onclick="deleteSummaryCostEntry('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Usuń</button>`:''}
-        </div>
-      </div>`;
-    }).join('')
-    : `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b">Brak ręcznie dodanych kosztów dla ${escapeHtml(activeMonth.label)}.</div>`;
   const tableRows=filteredRows.map(r=>`<tr>
     <td style="font-weight:700">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
@@ -5722,32 +5661,17 @@ function buildSummaryView(){
     <td class="num">${r.rent!==null?`${fmt(r.rent)} zł`:bd}</td>
     <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
-    <td class="num">${pawelCell(r)}</td>
-    <td class="num">${parkingCell(r)}</td>
     <td class="num">${customCostCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
 
   return monthNav+kpis+filters+`
-    <div class="grid-card" style="animation:fadeUp 0.4s 0.08s ease both;margin-bottom:18px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
-        <div>
-          <div class="card-title">Historia kosztów</div>
-          <div class="card-subtitle">Każdy wpis zapisuje kontrahenta, kategorię, kwotę, przypisanie do grupy lub apartamentu oraz autora. Usunięte pozycje zostają w historii.</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
-          <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(customCostsPayload.total||0)} zł</div>
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">${historyHtml}</div>
-    </div>
     <div class="grid-card" style="animation:fadeUp 0.4s 0.1s ease both">
       <div class="card-title">Podsumowanie OTV per apartament</div>
-      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną, kosztami Pawła i parkingu z KSeF oraz ręcznie dodanymi kosztami. Kursywa oznacza fallback z poprzedniego miesiąca.</div>
+      <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną oraz ręcznie dodanymi kosztami.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Paweł</th><th class="num">Parking</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -5759,8 +5683,6 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.rent)} zł</td>
             <td class="num">${fmt(totals.advance)} zł</td>
             <td class="num">${fmt(totals.internet)} zł</td>
-            <td class="num">${fmt(totals.pawel)} zł</td>
-            <td class="num">${fmt(totals.parking)} zł</td>
             <td class="num">${fmt(totals.customCost)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
@@ -5994,8 +5916,79 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
   return {map,items,total};
 }
 
+function buildSummaryHistoryHtml(monthKey){
+  const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{label:monthKey};
+  const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
+  return summaryHistoryItems.length
+    ? summaryHistoryItems.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).map(item=>{
+      const isDeleted=item.active===false||!!item.deletedAt;
+      const authorColor=userColor(item.createdBy||item.updatedBy||'');
+      const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
+      const when=formatDateTimeLabel(item.updatedAt||item.createdAt||'');
+      const targetLabel=getSummaryCostTargetLabel(item);
+      return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="min-width:280px;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
+            <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
+            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
+            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f8fafc;color:#475569">${escapeHtml(targetLabel)}</span>
+            ${isDeleted?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fef2f2;color:#dc2626">Usunięte z aktywnych</span>':''}
+          </div>
+          <div style="margin-top:7px;font-size:13px;color:#475569;display:flex;gap:14px;flex-wrap:wrap">
+            <span>Kontrahent: <strong style="color:#0f172a">${escapeHtml(item.contractor||'—')}</strong></span>
+            <span>Dodał(a): <strong style="color:${authorColor}">${escapeHtml(who)}</strong></span>
+            <span>${escapeHtml(when||'')}</span>
+          </div>
+          ${item.notes?`<div style="margin-top:8px;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.5">${escapeHtml(item.notes)}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+          <div style="text-align:right;min-width:140px">
+            <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Kwota netto</div>
+            <div style="font-size:26px;font-weight:800;color:#0f172a">${fmt(item.amountNet||0)} zł</div>
+          </div>
+          ${!isDeleted?`<button type="button" onclick="closeSummaryCostHistoryModal();openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
+          <button type="button" onclick="deleteSummaryCostEntry('${String(item.id).replace(/'/g,"\\'")}');closeSummaryCostHistoryModal();openSummaryCostHistoryModal('${monthKey}')" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Usuń</button>`:''}
+        </div>
+      </div>`;
+    }).join('')
+    : `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b">Brak ręcznie dodanych kosztów dla ${escapeHtml(activeMonth.label)}.</div>`;
+}
+
 function closeSummaryCostModal(){
   document.getElementById('summaryCostModal')?.remove();
+}
+
+function closeSummaryCostHistoryModal(){
+  document.getElementById('summaryCostHistoryModal')?.remove();
+}
+
+function openSummaryCostHistoryModal(monthKey=''){
+  const currentMonth=String(monthKey||_state.summaryMonth||'').trim();
+  const activeMonth=PREVIO_MONTHS.find(m=>m.key===currentMonth)||{label:currentMonth};
+  const customCostsPayload=buildSummaryCustomCostMap(currentMonth,window._summaryTargetMeta||getSummaryAllApartmentTargets([]));
+  closeSummaryCostHistoryModal();
+  const modal=document.createElement('div');
+  modal.id='summaryCostHistoryModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10005;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:980px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+      <div>
+        <div style="font-size:24px;font-weight:800;color:#0f172a">Historia kosztów</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">${escapeHtml(activeMonth.label)} · pełna historia wpisów kosztowych dla tego miesiąca.</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
+          <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(customCostsPayload.total||0)} zł</div>
+        </div>
+        <button type="button" onclick="closeSummaryCostHistoryModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Zamknij</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">${buildSummaryHistoryHtml(currentMonth)}</div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostHistoryModal();});
+  document.body.appendChild(modal);
 }
 
 function setSummaryCostTarget(type,key){
