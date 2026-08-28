@@ -5998,6 +5998,140 @@ function refreshSummaryCostVatPreview(){
   if(grossHint)grossHint.textContent='Podsumowanie nadal liczy ten koszt po kwocie netto.';
 }
 
+function inferSummaryVatKeyFromKsefItem(item){
+  const netto=parseMoneyValue(item?.netto||0);
+  const brutto=parseMoneyValue(item?.brutto||item?.bruttoValue||0);
+  if(!(netto>0) || !(brutto>0) || brutto<=netto)return '0';
+  const ratio=((brutto/netto)-1)*100;
+  const variants=[
+    {key:'23',rate:23},
+    {key:'8',rate:8},
+    {key:'5',rate:5},
+    {key:'0',rate:0},
+  ];
+  return variants.slice().sort((a,b)=>Math.abs(a.rate-ratio)-Math.abs(b.rate-ratio))[0]?.key||'23';
+}
+
+function closeSummaryKsefPickerModal(){
+  document.getElementById('summaryKsefPickerModal')?.remove();
+}
+
+function fillSummaryCostFromKsef(ksefNumber){
+  const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
+  const item=rows.find(row=>String(row?.ksefNumber||'').trim()===String(ksefNumber||'').trim());
+  if(!item)return;
+  const contractorInput=document.getElementById('summary-cost-contractor');
+  const nameInput=document.getElementById('summary-cost-name');
+  const categoryInput=document.getElementById('summary-cost-category');
+  const amountInput=document.getElementById('summary-cost-amount');
+  const notesInput=document.getElementById('summary-cost-notes');
+  if(contractorInput)contractorInput.value=String(item.seller||'').trim();
+  if(nameInput){
+    const invoiceLabel=String(item.invoiceNumber||'').trim()||String(item.ksefNumber||'').trim();
+    nameInput.value=invoiceLabel?`Faktura ${invoiceLabel}`:'Faktura z KSeF';
+  }
+  if(categoryInput && !String(categoryInput.value||'').trim())categoryInput.value='Koszt z KSeF';
+  if(amountInput)amountInput.value=(parseMoneyValue(item.netto||0)||0).toFixed(2);
+  setSummaryCostVatRate(inferSummaryVatKeyFromKsefItem(item));
+  if(notesInput){
+    const lines=[
+      `KSeF: ${String(item.ksefNumber||'').trim()||'—'}`,
+      `Nr faktury: ${String(item.invoiceNumber||'').trim()||'—'}`,
+      `Dostawca: ${String(item.seller||'').trim()||'—'}`,
+      `Termin płatności: ${String(item.dueDate||'').trim()||'Brak terminu'}`,
+    ];
+    notesInput.value=lines.join('\n');
+  }
+  refreshSummaryCostTargetMode();
+  refreshSummaryCostVatPreview();
+  closeSummaryKsefPickerModal();
+}
+
+function buildSummaryKsefPickerListHtml(search=''){
+  const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
+  const normalized=String(search||'').trim().toLowerCase();
+  const filtered=rows
+    .filter(item=>{
+      if(!item)return false;
+      const haystack=[
+        item.seller,item.invoiceNumber,item.ksefNumber,item.nip,item.issueDate,item.dueDate,item.netto,item.brutto
+      ].join(' ').toLowerCase();
+      return !normalized || haystack.includes(normalized);
+    })
+    .sort((a,b)=>{
+      const stateOrder={overdue:0,'due-soon':1,upcoming:2,missing:3};
+      const aState=stateOrder[a?.urgencyStatus]??9;
+      const bState=stateOrder[b?.urgencyStatus]??9;
+      if(aState!==bState)return aState-bState;
+      return String(b?.issueDate||'').localeCompare(String(a?.issueDate||'')) || (parseMoneyValue(b?.bruttoValue||0)-parseMoneyValue(a?.bruttoValue||0));
+    })
+    .slice(0,120);
+  if(!filtered.length){
+    return `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:16px;background:#fff;color:#64748b">Brak pasujących faktur KSeF.</div>`;
+  }
+  return `<div style="display:flex;flex-direction:column;gap:10px">${filtered.map(item=>{
+    const status=item.paymentState==='paid'?'Opłacona':item.paymentState==='partial'?'Częściowo opłacona':(item.urgencyStatus==='overdue'?'Po terminie':item.urgencyStatus==='due-soon'?'Termin blisko':'Otwarte');
+    const statusBg=item.paymentState==='paid'?'#ecfdf5':item.paymentState==='partial'?'#eff6ff':(item.urgencyStatus==='overdue'?'#fef2f2':item.urgencyStatus==='due-soon'?'#fff7ed':'#f8fafc');
+    const statusColor=item.paymentState==='paid'?'#166534':item.paymentState==='partial'?'#1d4ed8':(item.urgencyStatus==='overdue'?'#dc2626':item.urgencyStatus==='due-soon'?'#c2410c':'#475569');
+    return `<div style="padding:14px 16px;border:1px solid #dbe2ea;border-radius:18px;background:#fff;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div style="min-width:320px;flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
+          <span style="font-size:12px;font-weight:700;padding:4px 8px;border-radius:999px;background:${statusBg};color:${statusColor}">${escapeHtml(status)}</span>
+        </div>
+        <div style="margin-top:7px;font-size:13px;color:#475569;display:flex;gap:14px;flex-wrap:wrap">
+          <span>Nr faktury: <strong style="color:#0f172a">${escapeHtml(item.invoiceNumber||'—')}</strong></span>
+          <span>KSeF: <strong style="color:#0f172a">${escapeHtml(item.ksefNumber||'—')}</strong></span>
+        </div>
+        <div style="margin-top:5px;font-size:12px;color:#64748b;display:flex;gap:12px;flex-wrap:wrap">
+          <span>Wystawienie: ${escapeHtml(item.issueDate||'—')}</span>
+          <span>Termin: ${escapeHtml(item.dueDate||'Brak terminu')}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;justify-content:flex-end">
+        <div style="text-align:right;min-width:130px">
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Netto</div>
+          <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(parseMoneyValue(item.netto||0))} zł</div>
+          <div style="font-size:12px;color:#64748b;margin-top:4px">Brutto: ${fmt(parseMoneyValue(item.brutto||item.bruttoValue||0))} zł</div>
+        </div>
+        <button type="button" onclick="fillSummaryCostFromKsef('${String(item.ksefNumber||'').replace(/'/g,"\\'")}')" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:10px;padding:10px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Użyj w koszcie</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function filterSummaryKsefPicker(value=''){
+  const wrap=document.getElementById('summary-ksef-picker-list');
+  if(wrap)wrap.innerHTML=buildSummaryKsefPickerListHtml(value);
+}
+
+function openSummaryKsefPickerModal(){
+  const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
+  if(!rows.length){
+    alert('Brak danych KSeF do pobrania.');
+    return;
+  }
+  closeSummaryKsefPickerModal();
+  const modal=document.createElement('div');
+  modal.id='summaryKsefPickerModal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10020;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:980px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+      <div>
+        <div style="font-size:24px;font-weight:800;color:#0f172a">Pobierz z KSeF</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Wybierz fakturę z modułu KSeF, a formularz kosztu uzupełni się automatycznie.</div>
+      </div>
+      <button type="button" onclick="closeSummaryKsefPickerModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Zamknij</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <input id="summary-ksef-picker-search" class="artur-input" type="search" placeholder="Szukaj po dostawcy, nr faktury, numerze KSeF, NIP..." oninput="filterSummaryKsefPicker(this.value)">
+    </div>
+    <div id="summary-ksef-picker-list">${buildSummaryKsefPickerListHtml('')}</div>
+  </div>`;
+  modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryKsefPickerModal();});
+  document.body.appendChild(modal);
+}
+
 function buildSummaryHistoryHtml(monthKey){
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{label:monthKey};
   const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
@@ -6192,7 +6326,7 @@ function openSummaryCostModal(editId=''){
     <datalist id="summary-categories-list">${categoryOptions}</datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
-      <div class="field"><label>Nazwa wydatku</label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}" oninput="refreshSummaryCostTargetMode()"></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
     </div>
