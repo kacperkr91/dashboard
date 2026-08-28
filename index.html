@@ -5732,6 +5732,7 @@ function normalizeSummaryCostsStore(store){
         contractor:String(item?.contractor||'').trim(),
         expenseName:String(item?.expenseName||'').trim(),
         category:String(item?.category||'').trim(),
+        ksefNumber:String(item?.ksefNumber||'').trim(),
         amountNet:parseMoneyValue(item?.amountNet||item?.amount||0),
         vatRateKey:vatOption.key,
         vatRateValue:vatOption.rate,
@@ -6002,6 +6003,11 @@ function getSummaryBuiltinCategories(){
   return ['Inne','Koszt z KSeF','Czynsz'];
 }
 
+function getSummaryAllCategoryOptions(){
+  const metaStore=getSummaryCostMetaStore();
+  return [...new Set([...getSummaryBuiltinCategories(),...(metaStore.categories||[])])];
+}
+
 function syncSummaryExpenseNameFromCategory(force=false){
   const categoryInput=document.getElementById('summary-cost-category');
   const nameInput=document.getElementById('summary-cost-name');
@@ -6019,15 +6025,6 @@ function markSummaryExpenseNameManual(){
   const nameInput=document.getElementById('summary-cost-name');
   if(!nameInput)return;
   nameInput.dataset.autoName='';
-}
-
-function prepareSummaryCategorySelection(){
-  const categoryInput=document.getElementById('summary-cost-category');
-  if(!categoryInput)return;
-  const currentValue=String(categoryInput.value||'').trim();
-  if(currentValue==='Koszt z KSeF')categoryInput.value='';
-  categoryInput.focus();
-  categoryInput.dispatchEvent(new Event('input',{bubbles:true}));
 }
 
 function inferSummaryVatKeyFromKsefItem(item){
@@ -6048,6 +6045,30 @@ function closeSummaryKsefPickerModal(){
   document.getElementById('summaryKsefPickerModal')?.remove();
 }
 
+function extractSummaryKsefNumber(item){
+  const direct=String(item?.ksefNumber||'').trim();
+  if(direct)return direct;
+  const notes=String(item?.notes||'');
+  const match=notes.match(/KSeF:\s*([^\n\r]+)/i);
+  return match?String(match[1]||'').trim():'';
+}
+
+function buildSummaryKsefUsageMap(){
+  const usage={};
+  (getSummaryCostsStore().items||[]).forEach(item=>{
+    if(item?.active===false || item?.deletedAt) return;
+    const ksefNumber=extractSummaryKsefNumber(item);
+    if(!ksefNumber)return;
+    if(!usage[ksefNumber])usage[ksefNumber]=[];
+    const monthKey=String(item.monthKey||'').trim();
+    if(monthKey && !usage[ksefNumber].includes(monthKey))usage[ksefNumber].push(monthKey);
+  });
+  Object.keys(usage).forEach(key=>{
+    usage[key]=usage[key].slice().sort((a,b)=>b.localeCompare(a,'pl'));
+  });
+  return usage;
+}
+
 function fillSummaryCostFromKsef(ksefNumber){
   const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
   const item=rows.find(row=>String(row?.ksefNumber||'').trim()===String(ksefNumber||'').trim());
@@ -6057,14 +6078,16 @@ function fillSummaryCostFromKsef(ksefNumber){
   const categoryInput=document.getElementById('summary-cost-category');
   const amountInput=document.getElementById('summary-cost-amount');
   const notesInput=document.getElementById('summary-cost-notes');
+  const ksefInput=document.getElementById('summary-cost-ksef-number');
   if(contractorInput)contractorInput.value=String(item.seller||'').trim();
   if(nameInput){
     const invoiceLabel=String(item.invoiceNumber||'').trim()||String(item.ksefNumber||'').trim();
     nameInput.value=invoiceLabel?`Faktura ${invoiceLabel}`:'Faktura z KSeF';
     nameInput.dataset.autoName='';
   }
-  if(categoryInput && !String(categoryInput.value||'').trim())categoryInput.value='Inne';
+  if(categoryInput)categoryInput.value='Koszt z KSeF';
   if(amountInput)amountInput.value=(parseMoneyValue(item.netto||0)||0).toFixed(2);
+  if(ksefInput)ksefInput.value=String(item.ksefNumber||'').trim();
   setSummaryCostVatRate(inferSummaryVatKeyFromKsefItem(item));
   if(notesInput){
     const lines=[
@@ -6105,6 +6128,7 @@ function buildSummaryKsefPickerListHtml(search='',monthFilter=''){
   const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
   const normalized=String(search||'').trim().toLowerCase();
   const monthKey=String(monthFilter||'').trim();
+  const usageMap=buildSummaryKsefUsageMap();
   const filtered=rows
     .filter(item=>{
       if(!item)return false;
@@ -6137,27 +6161,31 @@ function buildSummaryKsefPickerListHtml(search='',monthFilter=''){
       <div style="text-align:right">Akcja</div>
     </div>
     ${filtered.map((item,idx)=>{
+      const usageMonths=usageMap[String(item.ksefNumber||'').trim()]||[];
+      const usageLabel=usageMonths.map(m=>PREVIO_MONTHS.find(pm=>pm.key===m)?.label||m).join(', ');
+      const isUsed=usageMonths.length>0;
       const status=item.paymentState==='paid'?'Opłacona':item.paymentState==='partial'?'Częściowo':(item.urgencyStatus==='overdue'?'Po terminie':item.urgencyStatus==='due-soon'?'Blisko terminu':'Otwarte');
       const statusBg=item.paymentState==='paid'?'#ecfdf5':item.paymentState==='partial'?'#eff6ff':(item.urgencyStatus==='overdue'?'#fef2f2':item.urgencyStatus==='due-soon'?'#fff7ed':'#f8fafc');
       const statusColor=item.paymentState==='paid'?'#166534':item.paymentState==='partial'?'#1d4ed8':(item.urgencyStatus==='overdue'?'#dc2626':item.urgencyStatus==='due-soon'?'#c2410c':'#475569');
       return `<div style="display:grid;grid-template-columns:minmax(240px,2.2fr) minmax(160px,1.2fr) minmax(150px,1fr) minmax(110px,.8fr) minmax(110px,.8fr) 90px;gap:12px;align-items:center;padding:10px 14px;background:${idx%2===0?'#fff':'#fbfdff'};border-bottom:${idx===filtered.length-1?'none':'1px solid #eef2f7'}">
         <div style="min-width:0">
           <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <strong style="font-size:14px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
+            <strong style="font-size:14px;color:${isUsed?'#94a3b8':'#0f172a'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
             <span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:${statusBg};color:${statusColor};flex:0 0 auto">${escapeHtml(status)}</span>
+            ${isUsed?`<span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;flex:0 0 auto">Dodane: ${escapeHtml(usageLabel)}</span>`:''}
           </div>
           <div style="margin-top:4px;font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.nip||'')}</div>
         </div>
         <div style="min-width:0;font-size:12px;line-height:1.35;color:#334155">
-          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>FV:</strong> ${escapeHtml(item.invoiceNumber||'—')}</div>
-          <div style="color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>KSeF:</strong> ${escapeHtml(item.ksefNumber||'—')}</div>
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'};color:${isUsed?'#94a3b8':'#334155'}"><strong>FV:</strong> ${escapeHtml(item.invoiceNumber||'—')}</div>
+          <div style="color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}"><strong>KSeF:</strong> ${escapeHtml(item.ksefNumber||'—')}</div>
         </div>
         <div style="min-width:0;font-size:12px;line-height:1.35;color:#334155">
           <div>${escapeHtml(item.issueDate||'—')}</div>
           <div style="color:#64748b;margin-top:2px">${escapeHtml(item.dueDate||'Brak terminu')}</div>
         </div>
-        <div style="text-align:right;font-size:13px;font-weight:800;color:#0f172a">${fmt(parseMoneyValue(item.netto||0))} zł</div>
-        <div style="text-align:right;font-size:13px;color:#475569">${fmt(parseMoneyValue(item.brutto||item.bruttoValue||0))} zł</div>
+        <div style="text-align:right;font-size:13px;font-weight:800;color:${isUsed?'#94a3b8':'#0f172a'};text-decoration:${isUsed?'line-through':'none'}">${fmt(parseMoneyValue(item.netto||0))} zł</div>
+        <div style="text-align:right;font-size:13px;color:${isUsed?'#94a3b8':'#475569'};text-decoration:${isUsed?'line-through':'none'}">${fmt(parseMoneyValue(item.brutto||item.bruttoValue||0))} zł</div>
         <div style="display:flex;justify-content:flex-end">
           <button type="button" onclick="fillSummaryCostFromKsef('${String(item.ksefNumber||'').replace(/'/g,"\\'")}')" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:10px;padding:7px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Użyj</button>
         </div>
@@ -6380,7 +6408,7 @@ function openSummaryCostModal(editId=''){
     ? String(editing?.targetApartment||'').trim()
     : String(editing?.targetGroup||'otv').trim().toLowerCase();
   const contractorOptions=(metaStore.contractors||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
-  const categoryOptions=[...new Set([...getSummaryBuiltinCategories(),...(metaStore.categories||[])])].map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
+  const categoryOptions=getSummaryAllCategoryOptions().map(item=>`<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
   const cardButton=(label,type,value,active)=>`<button type="button" data-summary-target data-summary-target-type="${type}" data-summary-target-value="${escapeHtml(value)}" onclick="setSummaryCostTarget('${type}','${String(value).replace(/'/g,"\\'")}')" style="border:1px solid ${active?'#2563eb':'#cbd5e1'};background:${active?'#dbeafe':'#fff'};color:${active?'#1d4ed8':'#334155'};border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(label)}</button>`;
   const vatButton=option=>`<button type="button" data-summary-vat-rate="${option.key}" onclick="setSummaryCostVatRate('${option.key}')" style="border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(option.label)}</button>`;
   const apartmentPills=list=>`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${list.map(name=>cardButton(name,'apartment',name,initialTargetType==='apartment'&&initialTargetValue===name)).join('')}</div>`;
@@ -6402,12 +6430,12 @@ function openSummaryCostModal(editId=''){
     <input id="summary-cost-target-type" type="hidden" value="${escapeHtml(initialTargetType)}">
     <input id="summary-cost-target-value" type="hidden" value="${escapeHtml(initialTargetValue)}">
     <input id="summary-cost-vat-rate" type="hidden" value="${escapeHtml(initialVatOption.key)}">
+    <input id="summary-cost-ksef-number" type="hidden" value="${escapeHtml(editing?.ksefNumber||'')}">
     <datalist id="summary-contractors-list">${contractorOptions}</datalist>
-    <datalist id="summary-categories-list">${categoryOptions}</datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}" oninput="markSummaryExpenseNameManual()"></div>
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><span style="display:inline-flex;align-items:center;gap:10px"><button type="button" onclick="prepareSummaryCategorySelection()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Wybierz inną</button><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></span></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}" oninput="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory()"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><select id="summary-cost-category" class="artur-input" onchange="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory()">${categoryOptions}</select></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
     </div>
     <div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:18px;background:#fff">
@@ -6464,6 +6492,17 @@ function openSummaryCostModal(editId=''){
   </div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostModal();});
   document.body.appendChild(modal);
+  const categorySelect=document.getElementById('summary-cost-category');
+  if(categorySelect){
+    const initialCategory=String(editing?.category||'').trim()||'Inne';
+    if(![...categorySelect.options].find(option=>option.value===initialCategory)){
+      const extra=document.createElement('option');
+      extra.value=initialCategory;
+      extra.textContent=initialCategory;
+      categorySelect.appendChild(extra);
+    }
+    categorySelect.value=initialCategory;
+  }
   const nameInput=document.getElementById('summary-cost-name');
   if(nameInput)nameInput.dataset.autoName=String(editing?.expenseName||'').trim();
   refreshSummaryCostTargetMode();
@@ -6475,6 +6514,7 @@ function saveSummaryCostFromModal(){
   const contractor=document.getElementById('summary-cost-contractor')?.value.trim()||'';
   const expenseName=document.getElementById('summary-cost-name')?.value.trim()||'';
   const category=document.getElementById('summary-cost-category')?.value.trim()||'';
+  const ksefNumber=document.getElementById('summary-cost-ksef-number')?.value.trim()||'';
   const amountNet=parseMoneyValue(document.getElementById('summary-cost-amount')?.value||0);
   const vatOption=getSummaryVatOption(document.getElementById('summary-cost-vat-rate')?.value||'23');
   const amountGross=amountNet*(1+(vatOption.rate/100));
@@ -6523,6 +6563,7 @@ function saveSummaryCostFromModal(){
     contractor,
     expenseName,
     category,
+    ksefNumber,
     amountNet,
     vatRateKey:vatOption.key,
     vatRateValue:vatOption.rate,
