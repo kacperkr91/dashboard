@@ -5706,12 +5706,26 @@ function getStaticInternetCostForApartment(apt){
   return 97.84;
 }
 
+const SUMMARY_VAT_OPTIONS=[
+  {key:'23',label:'23%',rate:23},
+  {key:'8',label:'8%',rate:8},
+  {key:'5',label:'5%',rate:5},
+  {key:'0',label:'0%',rate:0},
+  {key:'zw',label:'zw.',rate:0},
+];
+
+function getSummaryVatOption(key){
+  const normalized=String(key||'23').trim().toLowerCase();
+  return SUMMARY_VAT_OPTIONS.find(item=>item.key===normalized)||SUMMARY_VAT_OPTIONS[0];
+}
+
 function normalizeSummaryCostsStore(store){
   const data=store&&typeof store==='object'?store:{};
   const items=Array.isArray(data.items)?data.items:[];
   return {
     items:items.map(item=>{
       const targetType=String(item?.targetType||'apartment').trim().toLowerCase()==='group'?'group':'apartment';
+      const vatOption=getSummaryVatOption(item?.vatRateKey||item?.vatRate||'23');
       return {
         id:String(item?.id||'').trim(),
         monthKey:String(item?.monthKey||'').trim(),
@@ -5719,6 +5733,9 @@ function normalizeSummaryCostsStore(store){
         expenseName:String(item?.expenseName||'').trim(),
         category:String(item?.category||'').trim(),
         amountNet:parseMoneyValue(item?.amountNet||item?.amount||0),
+        vatRateKey:vatOption.key,
+        vatRateValue:vatOption.rate,
+        amountGross:parseMoneyValue(item?.amountGross||0),
         targetType,
         targetGroup:targetType==='group'?String(item?.targetGroup||item?.targetKey||'').trim().toLowerCase():'',
         targetApartment:targetType==='apartment'?String(item?.targetApartment||item?.targetKey||'').trim():'',
@@ -5954,6 +5971,33 @@ function getSummaryExistingRentValue(monthKey,apartment){
   return baseRent;
 }
 
+function setSummaryCostVatRate(rateKey){
+  const hidden=document.getElementById('summary-cost-vat-rate');
+  if(!hidden)return;
+  hidden.value=getSummaryVatOption(rateKey).key;
+  refreshSummaryCostVatPreview();
+}
+
+function refreshSummaryCostVatPreview(){
+  const hidden=document.getElementById('summary-cost-vat-rate');
+  const netInput=document.getElementById('summary-cost-amount');
+  const vatOption=getSummaryVatOption(hidden?.value||'23');
+  const amountNet=parseMoneyValue(netInput?.value||0);
+  const amountGross=amountNet*(1+(vatOption.rate/100));
+  document.querySelectorAll('[data-summary-vat-rate]').forEach(node=>{
+    const active=node.dataset.summaryVatRate===vatOption.key;
+    node.style.background=active?'#dbeafe':'#fff';
+    node.style.borderColor=active?'#2563eb':'#cbd5e1';
+    node.style.color=active?'#1d4ed8':'#334155';
+  });
+  const rateLabel=document.getElementById('summary-cost-vat-label');
+  if(rateLabel)rateLabel.textContent=`Wybrana stawka VAT: ${vatOption.label}`;
+  const grossNode=document.getElementById('summary-cost-gross-preview');
+  if(grossNode)grossNode.textContent=`${fmt(amountGross)} zł`;
+  const grossHint=document.getElementById('summary-cost-gross-hint');
+  if(grossHint)grossHint.textContent='Podsumowanie nadal liczy ten koszt po kwocie netto.';
+}
+
 function buildSummaryHistoryHtml(monthKey){
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{label:monthKey};
   const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
@@ -5964,12 +6008,15 @@ function buildSummaryHistoryHtml(monthKey){
       const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
       const when=formatDateTimeLabel(item.updatedAt||item.createdAt||'');
       const targetLabel=getSummaryCostTargetLabel(item);
+      const vatOption=getSummaryVatOption(item.vatRateKey||item.vatRateValue||'23');
+      const grossValue=parseMoneyValue(item.amountGross||((parseMoneyValue(item.amountNet||0))*(1+(vatOption.rate/100))));
       return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
         <div style="min-width:280px;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
             <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
+            <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f5f3ff;color:#7c3aed">VAT ${escapeHtml(vatOption.label)}</span>
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f8fafc;color:#475569">${escapeHtml(targetLabel)}</span>
             ${isDeleted?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fef2f2;color:#dc2626">Usunięte z aktywnych</span>':''}
           </div>
@@ -5984,6 +6031,7 @@ function buildSummaryHistoryHtml(monthKey){
           <div style="text-align:right;min-width:140px">
             <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Kwota netto</div>
             <div style="font-size:26px;font-weight:800;color:#0f172a">${fmt(item.amountNet||0)} zł</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">Brutto: ${fmt(grossValue)} zł</div>
           </div>
           ${!isDeleted?`<button type="button" onclick="closeSummaryCostHistoryModal();openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
           <button type="button" onclick="deleteSummaryCostEntry('${String(item.id).replace(/'/g,"\\'")}');closeSummaryCostHistoryModal();openSummaryCostHistoryModal('${monthKey}')" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Usuń</button>`:''}
@@ -6062,9 +6110,11 @@ function setSummaryCostTarget(type,key){
 
 function refreshSummaryCostTargetMode(){
   const categoryInput=document.getElementById('summary-cost-category');
+  const nameInput=document.getElementById('summary-cost-name');
   const hint=document.getElementById('summary-cost-category-hint');
   const disabledNote=document.getElementById('summary-cost-group-disabled-note');
   const isRent=isSummaryRentCategory(categoryInput?.value||'');
+  if(isRent&&nameInput)nameInput.value='Czynsz';
   document.querySelectorAll('[data-summary-target-type="group"]').forEach(node=>{
     if(isRent){
       node.style.opacity='0.45';
@@ -6118,11 +6168,14 @@ function openSummaryCostModal(editId=''){
   const contractorOptions=(metaStore.contractors||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
   const categoryOptions=(metaStore.categories||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
   const cardButton=(label,type,value,active)=>`<button type="button" data-summary-target data-summary-target-type="${type}" data-summary-target-value="${escapeHtml(value)}" onclick="setSummaryCostTarget('${type}','${String(value).replace(/'/g,"\\'")}')" style="border:1px solid ${active?'#2563eb':'#cbd5e1'};background:${active?'#dbeafe':'#fff'};color:${active?'#1d4ed8':'#334155'};border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(label)}</button>`;
+  const vatButton=option=>`<button type="button" data-summary-vat-rate="${option.key}" onclick="setSummaryCostVatRate('${option.key}')" style="border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(option.label)}</button>`;
   const apartmentPills=list=>`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${list.map(name=>cardButton(name,'apartment',name,initialTargetType==='apartment'&&initialTargetValue===name)).join('')}</div>`;
   closeSummaryCostModal();
   const modal=document.createElement('div');
   modal.id='summaryCostModal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
+  const initialVatOption=getSummaryVatOption(editing?.vatRateKey||editing?.vatRateValue||'23');
+  const initialGross=parseMoneyValue(editing?.amountGross||((parseMoneyValue(editing?.amountNet||0))*(1+(initialVatOption.rate/100))));
   modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:860px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px 24px 20px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
       <div>
@@ -6134,13 +6187,26 @@ function openSummaryCostModal(editId=''){
     <input id="summary-cost-id" type="hidden" value="${escapeHtml(editing?.id||'')}">
     <input id="summary-cost-target-type" type="hidden" value="${escapeHtml(initialTargetType)}">
     <input id="summary-cost-target-value" type="hidden" value="${escapeHtml(initialTargetValue)}">
+    <input id="summary-cost-vat-rate" type="hidden" value="${escapeHtml(initialVatOption.key)}">
     <datalist id="summary-contractors-list">${contractorOptions}</datalist>
     <datalist id="summary-categories-list">${categoryOptions}</datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
       <div class="field"><label>Nazwa wydatku</label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}" oninput="refreshSummaryCostTargetMode()"></div>
-      <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}"></div>
+      <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
+    </div>
+    <div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:18px;background:#fff">
+      <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:10px">Stawka VAT</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${SUMMARY_VAT_OPTIONS.map(vatButton).join('')}</div>
+      <div id="summary-cost-vat-label" style="font-size:12px;color:#64748b;margin-top:10px">Wybrana stawka VAT: ${escapeHtml(initialVatOption.label)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-top:12px">
+        <div>
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Kwota brutto</div>
+          <div id="summary-cost-gross-preview" style="font-size:26px;font-weight:800;color:#0f172a">${fmt(initialGross)} zł</div>
+        </div>
+        <div id="summary-cost-gross-hint" style="font-size:12px;color:#64748b">Podsumowanie nadal liczy ten koszt po kwocie netto.</div>
+      </div>
     </div>
     <div class="field" style="margin-top:14px"><label>Notatka</label><textarea id="summary-cost-notes" class="artur-input" rows="2" placeholder="Opcjonalne szczegóły do historii wpisu...">${escapeHtml(editing?.notes||'')}</textarea></div>
     <div style="margin-top:18px;padding:18px;border:1px solid #dbeafe;border-radius:18px;background:linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%)">
@@ -6185,6 +6251,7 @@ function openSummaryCostModal(editId=''){
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostModal();});
   document.body.appendChild(modal);
   refreshSummaryCostTargetMode();
+  refreshSummaryCostVatPreview();
 }
 
 function saveSummaryCostFromModal(){
@@ -6193,6 +6260,8 @@ function saveSummaryCostFromModal(){
   const expenseName=document.getElementById('summary-cost-name')?.value.trim()||'';
   const category=document.getElementById('summary-cost-category')?.value.trim()||'';
   const amountNet=parseMoneyValue(document.getElementById('summary-cost-amount')?.value||0);
+  const vatOption=getSummaryVatOption(document.getElementById('summary-cost-vat-rate')?.value||'23');
+  const amountGross=amountNet*(1+(vatOption.rate/100));
   const notes=document.getElementById('summary-cost-notes')?.value.trim()||'';
   const targetType=document.getElementById('summary-cost-target-type')?.value==='group'?'group':'apartment';
   const targetValue=document.getElementById('summary-cost-target-value')?.value.trim()||'';
@@ -6239,6 +6308,9 @@ function saveSummaryCostFromModal(){
     expenseName,
     category,
     amountNet,
+    vatRateKey:vatOption.key,
+    vatRateValue:vatOption.rate,
+    amountGross,
     targetType,
     targetGroup:targetType==='group'?targetValue:'',
     targetApartment:targetType==='apartment'?targetValue:'',
