@@ -5562,6 +5562,7 @@ function buildSummaryView(){
   const customCostsPayload=buildSummaryCustomCostMap(monthKey,targetMeta);
   const customCostMap=customCostsPayload.map||{};
   const rentOverrideMap=customCostsPayload.rentOverrides||{};
+  const advanceOverrideMap=customCostsPayload.advanceOverrides||{};
   const customCostsItems=customCostsPayload.items||[];
 
   const rows=apartmentKeys.map(apt=>{
@@ -5577,6 +5578,9 @@ function buildSummaryView(){
     const resolvedRent=Object.prototype.hasOwnProperty.call(rentOverrideMap,apt)
       ? Number(rentOverrideMap[apt])||0
       : czynsz.rent;
+    const resolvedAdvance=Object.prototype.hasOwnProperty.call(advanceOverrideMap,apt)
+      ? Number(advanceOverrideMap[apt])||0
+      : czynsz.advance;
     const internetCost=getStaticInternetCostForApartment(apt);
     const customCost=Number(customCostMap[apt])||0;
     return{
@@ -5593,10 +5597,10 @@ function buildSummaryView(){
       energy:null,
       gas:null,
       rent:resolvedRent,
-      advance:czynsz.advance,
+      advance:resolvedAdvance,
       internet:internetCost,
       customCost:customCost||null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(czynsz.advance)||0)-customCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-customCost,
     };
   });
 
@@ -5836,6 +5840,11 @@ function addSummaryMetaValueFromInput(type){
     return;
   }
   ensureSummaryMetaValue(type,value);
+  if(type==='category'){
+    refreshSummaryCategorySelect(value);
+    syncSummaryExpenseNameFromCategory(true);
+  }
+  if(input)input.value='';
   closeSummaryMetaModal();
   openSummaryMetaManager();
 }
@@ -5931,6 +5940,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
   const items=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey&&item.active!==false&&!item.deletedAt);
   const map={};
   const rentOverrides={};
+  const advanceOverrides={};
   let total=0;
   items.forEach(item=>{
     const amount=parseMoneyValue(item.amountNet||0);
@@ -5943,13 +5953,19 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
+    if(isSummaryAdvanceCategory(item.category)){
+      const advanceTarget=targets[0];
+      if(advanceTarget)advanceOverrides[advanceTarget]=amount;
+      total+=amount;
+      return;
+    }
     const share=amount/targets.length;
     total+=amount;
     targets.forEach(apt=>{
       map[apt]=(map[apt]||0)+share;
     });
   });
-  return {map,items,total,rentOverrides};
+  return {map,items,total,rentOverrides,advanceOverrides};
 }
 
 function getSummaryExistingRentValue(monthKey,apartment){
@@ -5970,6 +5986,26 @@ function getSummaryExistingRentValue(monthKey,apartment){
     return parseMoneyValue(latest?.amountNet||0);
   }
   return baseRent;
+}
+
+function getSummaryExistingAdvanceValue(monthKey,apartment){
+  const apt=normalizeSummaryApartmentKey(apartment);
+  if(!monthKey||!apt)return 0;
+  const czynszeMap=buildCzynszeApartmentMap(_state.data?.czynsze?.[monthKey]);
+  const baseAdvance=Number(czynszeMap?.[apt]?.advance)||0;
+  const storeItems=(getSummaryCostsStore().items||[]).filter(item=>
+    item.monthKey===monthKey&&
+    item.active!==false&&
+    !item.deletedAt&&
+    isSummaryAdvanceCategory(item.category)&&
+    String(item.targetType||'')==='apartment'&&
+    normalizeSummaryApartmentKey(item.targetApartment)===apt
+  );
+  if(storeItems.length){
+    const latest=storeItems.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))[0];
+    return parseMoneyValue(latest?.amountNet||0);
+  }
+  return baseAdvance;
 }
 
 function setSummaryCostVatRate(rateKey){
@@ -6000,12 +6036,30 @@ function refreshSummaryCostVatPreview(){
 }
 
 function getSummaryBuiltinCategories(){
-  return ['Inne','Koszt z KSeF','Czynsz'];
+  return ['Inne','Koszt z KSeF','Czynsz','Zaliczka eksploatacyjna'];
 }
 
 function getSummaryAllCategoryOptions(){
   const metaStore=getSummaryCostMetaStore();
   return [...new Set([...getSummaryBuiltinCategories(),...(metaStore.categories||[])])];
+}
+
+function refreshSummaryCategorySelect(selectedValue=''){
+  const select=document.getElementById('summary-cost-category');
+  if(!select)return;
+  const current=String(selectedValue || select.value || '').trim();
+  const options=getSummaryAllCategoryOptions();
+  select.innerHTML=options.map(item=>`<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+  if(current && options.includes(current))select.value=current;
+  else if(current){
+    const extra=document.createElement('option');
+    extra.value=current;
+    extra.textContent=current;
+    select.appendChild(extra);
+    select.value=current;
+  }else{
+    select.value=options.includes('Inne')?'Inne':(options[0]||'');
+  }
 }
 
 function syncSummaryExpenseNameFromCategory(force=false){
@@ -6025,6 +6079,11 @@ function markSummaryExpenseNameManual(){
   const nameInput=document.getElementById('summary-cost-name');
   if(!nameInput)return;
   nameInput.dataset.autoName='';
+}
+
+function isSummaryAdvanceCategory(category){
+  const normalized=String(category||'').trim().toLowerCase();
+  return normalized==='zaliczka eksploatacyjna';
 }
 
 function inferSummaryVatKeyFromKsefItem(item){
@@ -6324,8 +6383,8 @@ function setSummaryCostTarget(type,key){
   const targetValueInput=document.getElementById('summary-cost-target-value');
   if(!targetTypeInput||!targetValueInput)return;
   const categoryValue=document.getElementById('summary-cost-category')?.value||'';
-  if(isSummaryRentCategory(categoryValue)&&type==='group'){
-    alert('Kategoria "Czynsz" może być przypisana tylko do jednego apartamentu.');
+  if((isSummaryRentCategory(categoryValue)||isSummaryAdvanceCategory(categoryValue))&&type==='group'){
+    alert(`Kategoria "${isSummaryRentCategory(categoryValue)?'Czynsz':'Zaliczka eksploatacyjna'}" może być przypisana tylko do jednego apartamentu.`);
     return;
   }
   targetTypeInput.value=type==='group'?'group':'apartment';
@@ -6355,10 +6414,12 @@ function refreshSummaryCostTargetMode(){
   const nameInput=document.getElementById('summary-cost-name');
   const hint=document.getElementById('summary-cost-category-hint');
   const disabledNote=document.getElementById('summary-cost-group-disabled-note');
-  const isRent=isSummaryRentCategory(categoryInput?.value||'');
-  if(isRent&&nameInput)syncSummaryExpenseNameFromCategory(true);
+  const categoryValue=categoryInput?.value||'';
+  const isRent=isSummaryRentCategory(categoryValue);
+  const isAdvance=isSummaryAdvanceCategory(categoryValue);
+  if((isRent||isAdvance)&&nameInput)syncSummaryExpenseNameFromCategory(true);
   document.querySelectorAll('[data-summary-target-type="group"]').forEach(node=>{
-    if(isRent){
+    if(isRent||isAdvance){
       node.style.opacity='0.45';
       node.style.pointerEvents='none';
       node.style.filter='grayscale(0.2)';
@@ -6371,10 +6432,12 @@ function refreshSummaryCostTargetMode(){
   if(hint){
     hint.textContent=isRent
       ? 'Dla kategorii "Czynsz" możesz wskazać tylko jeden apartament. Taki wpis nadpisze wartość w kolumnie Czynsz.'
-      : 'Koszt możesz przypisać do całej grupy albo pojedynczego apartamentu.';
+      : isAdvance
+        ? 'Dla kategorii "Zaliczka eksploatacyjna" możesz wskazać tylko jeden apartament. Taki wpis nadpisze wartość w kolumnie zaliczki.'
+        : 'Koszt możesz przypisać do całej grupy albo pojedynczego apartamentu.';
   }
-  if(disabledNote)disabledNote.style.display=isRent?'block':'none';
-  if(isRent){
+  if(disabledNote)disabledNote.style.display=(isRent||isAdvance)?'block':'none';
+  if(isRent||isAdvance){
     const targetTypeInput=document.getElementById('summary-cost-target-type');
     const targetValueInput=document.getElementById('summary-cost-target-value');
     if(targetTypeInput?.value==='group'){
@@ -6386,7 +6449,7 @@ function refreshSummaryCostTargetMode(){
         targetTypeInput.value='apartment';
         targetValueInput.value='';
         const label=document.getElementById('summary-cost-target-label');
-        if(label)label.textContent='Wybierz apartament dla kategorii "Czynsz".';
+        if(label)label.textContent=`Wybierz apartament dla kategorii "${isRent?'Czynsz':'Zaliczka eksploatacyjna'}".`;
         document.querySelectorAll('[data-summary-target]').forEach(node=>{
           node.style.background='#fff';
           node.style.borderColor='#cbd5e1';
@@ -6524,12 +6587,13 @@ function saveSummaryCostFromModal(){
   const monthKey=_state.summaryMonth;
   const meta=window._summaryTargetMeta||getSummaryAllApartmentTargets([]);
   const isRentCategory=isSummaryRentCategory(category);
+  const isAdvanceCategory=isSummaryAdvanceCategory(category);
   if(!expenseName){alert('Podaj nazwę wydatku.');return;}
   if(!category){alert('Podaj kategorię wydatku.');return;}
   if(!(amountNet>0)){alert('Podaj kwotę netto większą od zera.');return;}
   if(!targetValue){alert('Wybierz grupę albo apartament.');return;}
-  if(isRentCategory&&targetType!=='apartment'){
-    alert('Kategoria "Czynsz" może być przypisana tylko do jednego apartamentu.');
+  if((isRentCategory||isAdvanceCategory)&&targetType!=='apartment'){
+    alert(`Kategoria "${isRentCategory?'Czynsz':'Zaliczka eksploatacyjna'}" może być przypisana tylko do jednego apartamentu.`);
     return;
   }
   if(contractor)ensureSummaryMetaValue('contractor',contractor);
@@ -6554,6 +6618,15 @@ function saveSummaryCostFromModal(){
     const compareValue=editingSameRent?0:existingRentValue;
     if(compareValue>0){
       const ok=confirm(`Dla apartamentu ${targetValue} istnieje już wartość w kolumnie Czynsz: ${fmt(compareValue)} zł.\n\nCzy chcesz ją zastąpić nową kwotą ${fmt(amountNet)} zł?`);
+      if(!ok)return;
+    }
+  }
+  if(isAdvanceCategory){
+    const existingAdvanceValue=getSummaryExistingAdvanceValue(monthKey,targetValue);
+    const editingSameAdvance=existing&&isSummaryAdvanceCategory(existing.category)&&normalizeSummaryApartmentKey(existing.targetApartment)===normalizeSummaryApartmentKey(targetValue);
+    const compareValue=editingSameAdvance?0:existingAdvanceValue;
+    if(compareValue>0){
+      const ok=confirm(`Dla apartamentu ${targetValue} istnieje już wartość w kolumnie Zaliczka eksploatacyjna: ${fmt(compareValue)} zł.\n\nCzy chcesz ją zastąpić nową kwotą ${fmt(amountNet)} zł?`);
       if(!ok)return;
     }
   }
