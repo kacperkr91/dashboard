@@ -5998,6 +5998,38 @@ function refreshSummaryCostVatPreview(){
   if(grossHint)grossHint.textContent='Podsumowanie nadal liczy ten koszt po kwocie netto.';
 }
 
+function getSummaryBuiltinCategories(){
+  return ['Inne','Koszt z KSeF','Czynsz'];
+}
+
+function syncSummaryExpenseNameFromCategory(force=false){
+  const categoryInput=document.getElementById('summary-cost-category');
+  const nameInput=document.getElementById('summary-cost-name');
+  if(!categoryInput||!nameInput)return;
+  const categoryValue=String(categoryInput.value||'').trim();
+  const previousAuto=String(nameInput.dataset.autoName||'').trim();
+  const currentName=String(nameInput.value||'').trim();
+  const canReplace=force || !currentName || currentName===previousAuto || currentName==='Koszt z KSeF' || currentName==='Czynsz';
+  if(!canReplace)return;
+  nameInput.value=categoryValue||'';
+  nameInput.dataset.autoName=categoryValue||'';
+}
+
+function markSummaryExpenseNameManual(){
+  const nameInput=document.getElementById('summary-cost-name');
+  if(!nameInput)return;
+  nameInput.dataset.autoName='';
+}
+
+function prepareSummaryCategorySelection(){
+  const categoryInput=document.getElementById('summary-cost-category');
+  if(!categoryInput)return;
+  const currentValue=String(categoryInput.value||'').trim();
+  if(currentValue==='Koszt z KSeF')categoryInput.value='';
+  categoryInput.focus();
+  categoryInput.dispatchEvent(new Event('input',{bubbles:true}));
+}
+
 function inferSummaryVatKeyFromKsefItem(item){
   const netto=parseMoneyValue(item?.netto||0);
   const brutto=parseMoneyValue(item?.brutto||item?.bruttoValue||0);
@@ -6029,8 +6061,9 @@ function fillSummaryCostFromKsef(ksefNumber){
   if(nameInput){
     const invoiceLabel=String(item.invoiceNumber||'').trim()||String(item.ksefNumber||'').trim();
     nameInput.value=invoiceLabel?`Faktura ${invoiceLabel}`:'Faktura z KSeF';
+    nameInput.dataset.autoName='';
   }
-  if(categoryInput && !String(categoryInput.value||'').trim())categoryInput.value='Koszt z KSeF';
+  if(categoryInput && !String(categoryInput.value||'').trim())categoryInput.value='Inne';
   if(amountInput)amountInput.value=(parseMoneyValue(item.netto||0)||0).toFixed(2);
   setSummaryCostVatRate(inferSummaryVatKeyFromKsefItem(item));
   if(notesInput){
@@ -6295,7 +6328,7 @@ function refreshSummaryCostTargetMode(){
   const hint=document.getElementById('summary-cost-category-hint');
   const disabledNote=document.getElementById('summary-cost-group-disabled-note');
   const isRent=isSummaryRentCategory(categoryInput?.value||'');
-  if(isRent&&nameInput)nameInput.value='Czynsz';
+  if(isRent&&nameInput)syncSummaryExpenseNameFromCategory(true);
   document.querySelectorAll('[data-summary-target-type="group"]').forEach(node=>{
     if(isRent){
       node.style.opacity='0.45';
@@ -6347,7 +6380,7 @@ function openSummaryCostModal(editId=''){
     ? String(editing?.targetApartment||'').trim()
     : String(editing?.targetGroup||'otv').trim().toLowerCase();
   const contractorOptions=(metaStore.contractors||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
-  const categoryOptions=(metaStore.categories||[]).map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
+  const categoryOptions=[...new Set([...getSummaryBuiltinCategories(),...(metaStore.categories||[])])].map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
   const cardButton=(label,type,value,active)=>`<button type="button" data-summary-target data-summary-target-type="${type}" data-summary-target-value="${escapeHtml(value)}" onclick="setSummaryCostTarget('${type}','${String(value).replace(/'/g,"\\'")}')" style="border:1px solid ${active?'#2563eb':'#cbd5e1'};background:${active?'#dbeafe':'#fff'};color:${active?'#1d4ed8':'#334155'};border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(label)}</button>`;
   const vatButton=option=>`<button type="button" data-summary-vat-rate="${option.key}" onclick="setSummaryCostVatRate('${option.key}')" style="border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">${escapeHtml(option.label)}</button>`;
   const apartmentPills=list=>`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${list.map(name=>cardButton(name,'apartment',name,initialTargetType==='apartment'&&initialTargetValue===name)).join('')}</div>`;
@@ -6373,8 +6406,8 @@ function openSummaryCostModal(editId=''){
     <datalist id="summary-categories-list">${categoryOptions}</datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}"></div>
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}" oninput="refreshSummaryCostTargetMode()"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}" oninput="markSummaryExpenseNameManual()"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><span style="display:inline-flex;align-items:center;gap:10px"><button type="button" onclick="prepareSummaryCategorySelection()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Wybierz inną</button><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></span></label><input id="summary-cost-category" list="summary-categories-list" class="artur-input" type="text" placeholder="Np. Serwis / Media / Wyposażenie" value="${escapeHtml(editing?.category||'')}" oninput="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory()"></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
     </div>
     <div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:18px;background:#fff">
@@ -6431,6 +6464,8 @@ function openSummaryCostModal(editId=''){
   </div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostModal();});
   document.body.appendChild(modal);
+  const nameInput=document.getElementById('summary-cost-name');
+  if(nameInput)nameInput.dataset.autoName=String(editing?.expenseName||'').trim();
   refreshSummaryCostTargetMode();
   refreshSummaryCostVatPreview();
 }
