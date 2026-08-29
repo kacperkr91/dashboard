@@ -6046,6 +6046,10 @@ function getSummaryAllCategoryOptions(){
   return [...new Set([...getSummaryBuiltinCategories(),...(metaStore.categories||[])])];
 }
 
+function normalizeSummaryContractorKey(value){
+  return String(value||'').trim().toLowerCase();
+}
+
 function refreshSummaryCategorySelect(selectedValue=''){
   const select=document.getElementById('summary-cost-category');
   if(!select)return;
@@ -6081,6 +6085,64 @@ function markSummaryExpenseNameManual(){
   const nameInput=document.getElementById('summary-cost-name');
   if(!nameInput)return;
   nameInput.dataset.autoName='';
+}
+
+function buildSummaryContractorMemory(){
+  const items=(getSummaryCostsStore().items||[])
+    .filter(item=>item?.active!==false && !item?.deletedAt)
+    .slice()
+    .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const memory={};
+  items.forEach(item=>{
+    const contractorKey=normalizeSummaryContractorKey(item?.contractor);
+    if(!contractorKey)return;
+    if(!memory[contractorKey]){
+      memory[contractorKey]={
+        lastCategory:'',
+        lastExpenseName:'',
+        expenseNames:[],
+      };
+    }
+    const entry=memory[contractorKey];
+    if(!entry.lastCategory && String(item?.category||'').trim())entry.lastCategory=String(item.category||'').trim();
+    if(!entry.lastExpenseName && String(item?.expenseName||'').trim())entry.lastExpenseName=String(item.expenseName||'').trim();
+    const expenseName=String(item?.expenseName||'').trim();
+    if(expenseName && !entry.expenseNames.includes(expenseName))entry.expenseNames.push(expenseName);
+  });
+  return memory;
+}
+
+function refreshSummaryExpenseNamesDatalist(contractorValue=''){
+  const datalist=document.getElementById('summary-expense-names-list');
+  if(!datalist)return;
+  const contractorKey=normalizeSummaryContractorKey(contractorValue || document.getElementById('summary-cost-contractor')?.value || '');
+  const memory=buildSummaryContractorMemory();
+  const names=contractorKey && memory[contractorKey]?.expenseNames ? memory[contractorKey].expenseNames : [];
+  datalist.innerHTML=names.map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
+}
+
+function applySummaryContractorMemory(force=false){
+  const contractorInput=document.getElementById('summary-cost-contractor');
+  const categorySelect=document.getElementById('summary-cost-category');
+  const nameInput=document.getElementById('summary-cost-name');
+  if(!contractorInput||!categorySelect||!nameInput)return;
+  const contractorKey=normalizeSummaryContractorKey(contractorInput.value);
+  refreshSummaryExpenseNamesDatalist(contractorInput.value);
+  if(!contractorKey)return;
+  const memory=buildSummaryContractorMemory()[contractorKey];
+  if(!memory)return;
+  const currentCategory=String(categorySelect.value||'').trim();
+  if(memory.lastCategory && (force || !currentCategory || currentCategory==='Inne')){
+    refreshSummaryCategorySelect(memory.lastCategory);
+  }
+  const currentName=String(nameInput.value||'').trim();
+  const previousAuto=String(nameInput.dataset.autoName||'').trim();
+  const canReplaceName=force || !currentName || currentName===previousAuto || currentName==='Koszt z KSeF' || currentName==='Czynsz' || currentName==='Zaliczka eksploatacyjna';
+  if(memory.lastExpenseName && canReplaceName){
+    nameInput.value=memory.lastExpenseName;
+    nameInput.dataset.autoName=memory.lastExpenseName;
+  }
+  refreshSummaryCostTargetMode();
 }
 
 function isSummaryAdvanceCategory(category){
@@ -6512,6 +6574,7 @@ function openSummaryCostModal(editId=''){
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
   const initialVatOption=getSummaryVatOption(editing?.vatRateKey||editing?.vatRateValue||'23');
   const initialGross=parseMoneyValue(editing?.amountGross||((parseMoneyValue(editing?.amountNet||0))*(1+(initialVatOption.rate/100))));
+  const initialContractor=String(editing?.contractor||'').trim();
   modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:860px;width:100%;max-height:88vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px 24px 20px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px">
       <div>
@@ -6526,9 +6589,10 @@ function openSummaryCostModal(editId=''){
     <input id="summary-cost-vat-rate" type="hidden" value="${escapeHtml(initialVatOption.key)}">
     <input id="summary-cost-ksef-number" type="hidden" value="${escapeHtml(editing?.ksefNumber||'')}">
     <datalist id="summary-contractors-list">${contractorOptions}</datalist>
+    <datalist id="summary-expense-names-list"></datalist>
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}"></div>
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}" oninput="markSummaryExpenseNameManual()"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}" oninput="applySummaryContractorMemory(false)" onchange="applySummaryContractorMemory(true)"></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" list="summary-expense-names-list" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}" oninput="markSummaryExpenseNameManual()"></div>
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><select id="summary-cost-category" class="artur-input" onchange="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory()">${categoryOptions}</select></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
     </div>
@@ -6608,6 +6672,10 @@ function openSummaryCostModal(editId=''){
   }
   const nameInput=document.getElementById('summary-cost-name');
   if(nameInput)nameInput.dataset.autoName=String(editing?.expenseName||'').trim();
+  refreshSummaryExpenseNamesDatalist(initialContractor);
+  if(initialContractor && !editing?.ksefNumber){
+    applySummaryContractorMemory(true);
+  }
   refreshSummaryCostTargetMode();
   refreshSummaryCostVatPreview();
 }
