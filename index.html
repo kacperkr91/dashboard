@@ -5737,6 +5737,7 @@ function normalizeSummaryCostsStore(store){
         expenseName:String(item?.expenseName||'').trim(),
         category:String(item?.category||'').trim(),
         ksefNumber:String(item?.ksefNumber||'').trim(),
+        extraordinary:item?.extraordinary===true || String(item?.extraordinary||'').trim().toLowerCase()==='true',
         amountNet:parseMoneyValue(item?.amountNet||item?.amount||0),
         vatRateKey:vatOption.key,
         vatRateValue:vatOption.rate,
@@ -6346,6 +6347,7 @@ function buildSummaryHistoryHtml(monthKey){
             <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
             <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
+            ${item.extraordinary?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fff7ed;color:#c2410c">Wydatek nadzwyczajny</span>':''}
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f5f3ff;color:#7c3aed">VAT ${escapeHtml(vatOption.label)}</span>
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#f8fafc;color:#475569">${escapeHtml(targetLabel)}</span>
             ${isDeleted?'<span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#fef2f2;color:#dc2626">Usunięte z aktywnych</span>':''}
@@ -6542,6 +6544,15 @@ function openSummaryCostModal(editId=''){
         <div id="summary-cost-gross-hint" style="font-size:12px;color:#64748b">Podsumowanie nadal liczy ten koszt po kwocie netto.</div>
       </div>
     </div>
+    <div style="margin-top:14px;padding:14px 16px;border:1px solid #fed7aa;border-radius:18px;background:linear-gradient(180deg,#fffaf5 0%,#fff7ed 100%)">
+      <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">
+        <input id="summary-cost-extraordinary" type="checkbox" ${editing?.extraordinary?'checked':''} style="margin-top:2px;accent-color:#ea580c">
+        <span>
+          <span style="display:block;font-size:14px;font-weight:800;color:#9a3412">Wydatek nadzwyczajny</span>
+          <span style="display:block;font-size:12px;color:#9a3412;margin-top:4px">Zapisujemy ten znacznik do bazy, żeby później można było go wykorzystać w raportach.</span>
+        </span>
+      </label>
+    </div>
     <div class="field" style="margin-top:14px"><label>Notatka</label><textarea id="summary-cost-notes" class="artur-input" rows="2" placeholder="Opcjonalne szczegóły do historii wpisu...">${escapeHtml(editing?.notes||'')}</textarea></div>
     <div style="margin-top:18px;padding:18px;border:1px solid #dbeafe;border-radius:18px;background:linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%)">
       <div style="font-size:14px;font-weight:800;color:#0f172a;margin-bottom:12px">Przypisanie kosztu</div>
@@ -6607,6 +6618,7 @@ function saveSummaryCostFromModal(){
   const expenseName=document.getElementById('summary-cost-name')?.value.trim()||'';
   const category=document.getElementById('summary-cost-category')?.value.trim()||'';
   const ksefNumber=document.getElementById('summary-cost-ksef-number')?.value.trim()||'';
+  const extraordinary=!!document.getElementById('summary-cost-extraordinary')?.checked;
   const amountNet=parseMoneyValue(document.getElementById('summary-cost-amount')?.value||0);
   const vatOption=getSummaryVatOption(document.getElementById('summary-cost-vat-rate')?.value||'23');
   const amountGross=amountNet*(1+(vatOption.rate/100));
@@ -6666,6 +6678,7 @@ function saveSummaryCostFromModal(){
     expenseName,
     category,
     ksefNumber,
+    extraordinary,
     amountNet,
     vatRateKey:vatOption.key,
     vatRateValue:vatOption.rate,
