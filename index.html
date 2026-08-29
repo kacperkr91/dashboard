@@ -6112,12 +6112,32 @@ function buildSummaryContractorMemory(){
   return memory;
 }
 
-function refreshSummaryExpenseNamesDatalist(contractorValue=''){
+function buildSummaryCategoryExpenseMemory(){
+  const items=(getSummaryCostsStore().items||[])
+    .filter(item=>item?.active!==false && !item?.deletedAt)
+    .slice()
+    .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const memory={};
+  items.forEach(item=>{
+    const categoryKey=String(item?.category||'').trim().toLowerCase();
+    if(!categoryKey)return;
+    if(!memory[categoryKey])memory[categoryKey]=[];
+    const expenseName=String(item?.expenseName||'').trim();
+    if(expenseName && !memory[categoryKey].includes(expenseName))memory[categoryKey].push(expenseName);
+  });
+  return memory;
+}
+
+function refreshSummaryExpenseNamesDatalist(contractorValue='',categoryValue=''){
   const datalist=document.getElementById('summary-expense-names-list');
   if(!datalist)return;
   const contractorKey=normalizeSummaryContractorKey(contractorValue || document.getElementById('summary-cost-contractor')?.value || '');
-  const memory=buildSummaryContractorMemory();
-  const names=contractorKey && memory[contractorKey]?.expenseNames ? memory[contractorKey].expenseNames : [];
+  const selectedCategory=String(categoryValue || document.getElementById('summary-cost-category')?.value || '').trim().toLowerCase();
+  const contractorMemory=buildSummaryContractorMemory();
+  const categoryMemory=buildSummaryCategoryExpenseMemory();
+  const contractorNames=contractorKey && contractorMemory[contractorKey]?.expenseNames ? contractorMemory[contractorKey].expenseNames : [];
+  const categoryNames=selectedCategory && categoryMemory[selectedCategory] ? categoryMemory[selectedCategory] : [];
+  const names=[...new Set([...contractorNames,...categoryNames])];
   datalist.innerHTML=names.map(item=>`<option value="${escapeHtml(item)}"></option>`).join('');
 }
 
@@ -6127,7 +6147,7 @@ function applySummaryContractorMemory(force=false){
   const nameInput=document.getElementById('summary-cost-name');
   if(!contractorInput||!categorySelect||!nameInput)return;
   const contractorKey=normalizeSummaryContractorKey(contractorInput.value);
-  refreshSummaryExpenseNamesDatalist(contractorInput.value);
+  refreshSummaryExpenseNamesDatalist(contractorInput.value,categorySelect.value);
   if(!contractorKey)return;
   const memory=buildSummaryContractorMemory()[contractorKey];
   if(!memory)return;
@@ -6143,6 +6163,13 @@ function applySummaryContractorMemory(force=false){
     nameInput.dataset.autoName=memory.lastExpenseName;
   }
   refreshSummaryCostTargetMode();
+}
+
+function applySummaryCategoryExpenseMemory(){
+  const contractorInput=document.getElementById('summary-cost-contractor');
+  const categorySelect=document.getElementById('summary-cost-category');
+  if(!categorySelect)return;
+  refreshSummaryExpenseNamesDatalist(contractorInput?.value||'',categorySelect.value);
 }
 
 function isSummaryAdvanceCategory(category){
@@ -6239,6 +6266,7 @@ function fillSummaryCostFromKsef(ksefNumber){
     ];
     notesInput.value=lines.join('\n');
   }
+  applySummaryCategoryExpenseMemory();
   refreshSummaryCostTargetMode();
   refreshSummaryCostVatPreview();
   closeSummaryKsefPickerModal();
@@ -6593,7 +6621,7 @@ function openSummaryCostModal(editId=''){
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kontrahent</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><input id="summary-cost-contractor" list="summary-contractors-list" class="artur-input" type="text" placeholder="Np. Tauron / Serwis / Właściciel" value="${escapeHtml(editing?.contractor||'')}" oninput="applySummaryContractorMemory(false)" onchange="applySummaryContractorMemory(true)"></div>
       <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Nazwa wydatku</span><button type="button" onclick="openSummaryKsefPickerModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Pobierz z KSeF</button></label><input id="summary-cost-name" list="summary-expense-names-list" class="artur-input" type="text" placeholder="Np. Czyszczenie klimatyzacji" value="${escapeHtml(editing?.expenseName||'')}" oninput="markSummaryExpenseNameManual()"></div>
-      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><select id="summary-cost-category" class="artur-input" onchange="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory()">${categoryOptions}</select></div>
+      <div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Kategoria wydatku</span><button type="button" onclick="openSummaryMetaManager()" style="background:none;border:none;padding:0;color:#1d4ed8;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Zarządzaj listą</button></label><select id="summary-cost-category" class="artur-input" onchange="refreshSummaryCostTargetMode();syncSummaryExpenseNameFromCategory();applySummaryCategoryExpenseMemory()">${categoryOptions}</select></div>
       <div class="field"><label>Kwota netto</label><input id="summary-cost-amount" class="artur-input" type="number" min="0" step="0.01" placeholder="0,00" value="${editing?.amountNet?Number(editing.amountNet.toFixed(2)):''}" oninput="refreshSummaryCostVatPreview()"></div>
     </div>
     <div style="margin-top:14px;padding:16px;border:1px solid #e2e8f0;border-radius:18px;background:#fff">
@@ -6672,10 +6700,11 @@ function openSummaryCostModal(editId=''){
   }
   const nameInput=document.getElementById('summary-cost-name');
   if(nameInput)nameInput.dataset.autoName=String(editing?.expenseName||'').trim();
-  refreshSummaryExpenseNamesDatalist(initialContractor);
+  refreshSummaryExpenseNamesDatalist(initialContractor,categorySelect?.value||'');
   if(initialContractor && !editing?.ksefNumber){
     applySummaryContractorMemory(true);
   }
+  applySummaryCategoryExpenseMemory();
   refreshSummaryCostTargetMode();
   refreshSummaryCostVatPreview();
 }
