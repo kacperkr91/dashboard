@@ -5784,6 +5784,7 @@ function normalizeSummaryCostMetaStore(store){
   return {
     contractors:uniq(data.contractors),
     categories:uniq(data.categories),
+    ignoredKsefNumbers:uniq(data.ignoredKsefNumbers),
   };
 }
 
@@ -5792,7 +5793,7 @@ function getSummaryCostMetaStore(){
   try{
     _summaryCostMetaCache=normalizeSummaryCostMetaStore(JSON.parse(localStorage.getItem('summary_cost_meta')||'{}'));
   }catch(e){
-    _summaryCostMetaCache={contractors:[],categories:[]};
+    _summaryCostMetaCache={contractors:[],categories:[],ignoredKsefNumbers:[]};
   }
   return _summaryCostMetaCache;
 }
@@ -6128,6 +6129,24 @@ function buildSummaryKsefUsageMap(){
   return usage;
 }
 
+function isSummaryKsefIgnored(ksefNumber){
+  const normalized=String(ksefNumber||'').trim();
+  if(!normalized)return false;
+  return (getSummaryCostMetaStore().ignoredKsefNumbers||[]).includes(normalized);
+}
+
+function toggleSummaryIgnoredKsef(ksefNumber){
+  const normalized=String(ksefNumber||'').trim();
+  if(!normalized)return;
+  const meta=getSummaryCostMetaStore();
+  const current=Array.isArray(meta.ignoredKsefNumbers)?meta.ignoredKsefNumbers:[];
+  const nextIgnored=current.includes(normalized)
+    ? current.filter(item=>item!==normalized)
+    : [...current,normalized];
+  saveSummaryCostMetaStore({...meta,ignoredKsefNumbers:nextIgnored});
+  filterSummaryKsefPicker();
+}
+
 function fillSummaryCostFromKsef(ksefNumber){
   const rows=Array.isArray(_state?.data?.ksef)?_state.data.ksef:[];
   const item=rows.find(row=>String(row?.ksefNumber||'').trim()===String(ksefNumber||'').trim());
@@ -6223,29 +6242,38 @@ function buildSummaryKsefPickerListHtml(search='',monthFilter=''){
       const usageMonths=usageMap[String(item.ksefNumber||'').trim()]||[];
       const usageLabel=usageMonths.map(m=>PREVIO_MONTHS.find(pm=>pm.key===m)?.label||m).join(', ');
       const isUsed=usageMonths.length>0;
+      const isIgnored=isSummaryKsefIgnored(item.ksefNumber);
       const status=item.paymentState==='paid'?'Opłacona':item.paymentState==='partial'?'Częściowo':(item.urgencyStatus==='overdue'?'Po terminie':item.urgencyStatus==='due-soon'?'Blisko terminu':'Otwarte');
       const statusBg=item.paymentState==='paid'?'#ecfdf5':item.paymentState==='partial'?'#eff6ff':(item.urgencyStatus==='overdue'?'#fef2f2':item.urgencyStatus==='due-soon'?'#fff7ed':'#f8fafc');
       const statusColor=item.paymentState==='paid'?'#166534':item.paymentState==='partial'?'#1d4ed8':(item.urgencyStatus==='overdue'?'#dc2626':item.urgencyStatus==='due-soon'?'#c2410c':'#475569');
-      return `<div style="display:grid;grid-template-columns:minmax(240px,2.2fr) minmax(160px,1.2fr) minmax(150px,1fr) minmax(110px,.8fr) minmax(110px,.8fr) 90px;gap:12px;align-items:center;padding:10px 14px;background:${idx%2===0?'#fff':'#fbfdff'};border-bottom:${idx===filtered.length-1?'none':'1px solid #eef2f7'}">
+      const sellerColor=isIgnored?'#b91c1c':(isUsed?'#94a3b8':'#0f172a');
+      const infoColor=isIgnored?'#dc2626':(isUsed?'#94a3b8':'#334155');
+      const amountColor=isIgnored?'#b91c1c':(isUsed?'#94a3b8':'#0f172a');
+      const grossColor=isIgnored?'#ef4444':(isUsed?'#94a3b8':'#475569');
+      const strike=isUsed||isIgnored?'line-through':'none';
+      const rowBg=isIgnored?(idx%2===0?'#fff5f5':'#fff1f2'):(idx%2===0?'#fff':'#fbfdff');
+      return `<div style="display:grid;grid-template-columns:minmax(240px,2.2fr) minmax(160px,1.2fr) minmax(150px,1fr) minmax(110px,.8fr) minmax(110px,.8fr) 168px;gap:12px;align-items:center;padding:10px 14px;background:${rowBg};border-bottom:${idx===filtered.length-1?'none':'1px solid #eef2f7'}">
         <div style="min-width:0">
           <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <strong title="${escapeHtml(item.seller||'Nieznany dostawca')}" style="font-size:14px;color:${isUsed?'#94a3b8':'#0f172a'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
+            <strong title="${escapeHtml(item.seller||'Nieznany dostawca')}" style="font-size:14px;color:${sellerColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${strike}">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
             <span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:${statusBg};color:${statusColor};flex:0 0 auto">${escapeHtml(status)}</span>
             ${isUsed?`<span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;flex:0 0 auto">Dodane: ${escapeHtml(usageLabel)}</span>`:''}
+            ${isIgnored?`<span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:#fee2e2;color:#b91c1c;flex:0 0 auto">Skreślone ręcznie</span>`:''}
           </div>
           <div style="margin-top:4px;font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.nip||'')}</div>
         </div>
-        <div style="min-width:0;font-size:12px;line-height:1.35;color:#334155">
-          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'};color:${isUsed?'#94a3b8':'#334155'}"><strong>FV:</strong> ${escapeHtml(item.invoiceNumber||'—')}</div>
-          <div style="color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}"><strong>KSeF:</strong> ${escapeHtml(item.ksefNumber||'—')}</div>
+        <div style="min-width:0;font-size:12px;line-height:1.35;color:${infoColor}">
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${strike};color:${infoColor}"><strong>FV:</strong> ${escapeHtml(item.invoiceNumber||'—')}</div>
+          <div style="color:${isIgnored?'#ef4444':'#64748b'};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${strike}"><strong>KSeF:</strong> ${escapeHtml(item.ksefNumber||'—')}</div>
         </div>
         <div style="min-width:0;font-size:12px;line-height:1.35;color:#334155">
           <div>${escapeHtml(item.issueDate||'—')}</div>
           <div style="color:#64748b;margin-top:2px">${escapeHtml(item.dueDate||'Brak terminu')}</div>
         </div>
-        <div style="text-align:right;font-size:13px;font-weight:800;color:${isUsed?'#94a3b8':'#0f172a'};text-decoration:${isUsed?'line-through':'none'}">${fmt(parseMoneyValue(item.netto||0))} zł</div>
-        <div style="text-align:right;font-size:13px;color:${isUsed?'#94a3b8':'#475569'};text-decoration:${isUsed?'line-through':'none'}">${fmt(parseMoneyValue(item.brutto||item.bruttoValue||0))} zł</div>
-        <div style="display:flex;justify-content:flex-end">
+        <div style="text-align:right;font-size:13px;font-weight:800;color:${amountColor};text-decoration:${strike}">${fmt(parseMoneyValue(item.netto||0))} zł</div>
+        <div style="text-align:right;font-size:13px;color:${grossColor};text-decoration:${strike}">${fmt(parseMoneyValue(item.brutto||item.bruttoValue||0))} zł</div>
+        <div style="display:flex;justify-content:flex-end;gap:6px">
+          <button type="button" onclick="toggleSummaryIgnoredKsef('${String(item.ksefNumber||'').replace(/'/g,"\\'")}')" style="background:${isIgnored?'#fff':'#fff5f5'};border:1px solid ${isIgnored?'#fca5a5':'#fecaca'};color:#b91c1c;border-radius:10px;padding:7px 9px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">${isIgnored?'Przywróć':'Skreśl'}</button>
           <button type="button" onclick="fillSummaryCostFromKsef('${String(item.ksefNumber||'').replace(/'/g,"\\'")}')" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:10px;padding:7px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer">Użyj</button>
         </div>
       </div>`;
