@@ -6229,7 +6229,7 @@ function buildSummaryKsefPickerListHtml(search='',monthFilter=''){
       return `<div style="display:grid;grid-template-columns:minmax(240px,2.2fr) minmax(160px,1.2fr) minmax(150px,1fr) minmax(110px,.8fr) minmax(110px,.8fr) 90px;gap:12px;align-items:center;padding:10px 14px;background:${idx%2===0?'#fff':'#fbfdff'};border-bottom:${idx===filtered.length-1?'none':'1px solid #eef2f7'}">
         <div style="min-width:0">
           <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <strong style="font-size:14px;color:${isUsed?'#94a3b8':'#0f172a'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
+            <strong title="${escapeHtml(item.seller||'Nieznany dostawca')}" style="font-size:14px;color:${isUsed?'#94a3b8':'#0f172a'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:${isUsed?'line-through':'none'}">${escapeHtml(item.seller||'Nieznany dostawca')}</strong>
             <span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:${statusBg};color:${statusColor};flex:0 0 auto">${escapeHtml(status)}</span>
             ${isUsed?`<span style="font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;flex:0 0 auto">Dodane: ${escapeHtml(usageLabel)}</span>`:''}
           </div>
@@ -6271,6 +6271,7 @@ function openSummaryKsefPickerModal(){
   modal.id='summaryKsefPickerModal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10020;display:flex;align-items:center;justify-content:center;padding:18px';
   const monthOptions=getSummaryKsefMonthOptions();
+  const defaultMonth=String(_state.summaryMonth||'').trim();
   modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:1120px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px">
       <div>
@@ -6284,7 +6285,7 @@ function openSummaryKsefPickerModal(){
         <label>Miesiąc wystawienia</label>
         <select id="summary-ksef-picker-month" class="artur-input" onchange="filterSummaryKsefPicker()">
           <option value="">Wszystkie miesiące</option>
-          ${monthOptions.map(item=>`<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`).join('')}
+          ${monthOptions.map(item=>`<option value="${escapeHtml(item.key)}" ${item.key===defaultMonth?'selected':''}>${escapeHtml(item.label)}</option>`).join('')}
         </select>
       </div>
       <div class="field" style="margin:0">
