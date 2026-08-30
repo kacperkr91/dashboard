@@ -5956,7 +5956,13 @@ function resolveSummaryCostTargets(item,targetMeta){
       ? [...new Set((targetMeta?.l25||[]).map(normalizeSummaryApartmentKey).filter(Boolean))]
       : [...new Set((targetMeta?.otv||[]).map(normalizeSummaryApartmentKey).filter(Boolean))];
   }
-  return item.targetApartment?[normalizeSummaryApartmentKey(item.targetApartment)]:[];
+  const directTarget=normalizeSummaryApartmentKey(item.targetApartment);
+  if(directTarget)return [directTarget];
+  const savedTargets=Array.isArray(item.targetApartments)?item.targetApartments.map(normalizeSummaryApartmentKey).filter(Boolean):[];
+  if(savedTargets.length)return [...new Set(savedTargets)];
+  const labelTarget=normalizeSummaryApartmentKey(item.targetLabel);
+  if(labelTarget)return [labelTarget];
+  return [];
 }
 
 function buildSummaryCustomCostMap(monthKey,targetMeta){
