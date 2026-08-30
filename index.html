@@ -5981,8 +5981,10 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
+    const categoryBucket=normalizeSummaryPersonBucket(item.category);
     const contractorBucket=normalizeSummaryPersonBucket(item.contractor);
-    const specialKey=contractorBucket==='artur'?'artur':contractorBucket==='kacper'?'kacper':contractorBucket==='pawel'?'pawel':'';
+    const specialSource=categoryBucket||contractorBucket;
+    const specialKey=specialSource==='artur'?'artur':specialSource==='kacper'?'kacper':specialSource==='pawel'?'pawel':'';
     if(specialKey){
       const share=amount/targets.length;
       total+=amount;
