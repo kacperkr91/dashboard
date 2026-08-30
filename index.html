@@ -5843,6 +5843,22 @@ function mergeSummaryCostsStores(localStore,remoteStore){
   };
 }
 
+function areSummaryItemsEquivalent(localItem,remoteItem){
+  if(!localItem||!remoteItem)return false;
+  return JSON.stringify(normalizeSummaryCostsStore({items:[localItem]}).items[0]||null)===JSON.stringify(normalizeSummaryCostsStore({items:[remoteItem]}).items[0]||null);
+}
+
+function hasSummaryRemoteCaughtUp(localStore,remoteStore){
+  const local=normalizeSummaryCostsStore(localStore);
+  const remote=normalizeSummaryCostsStore(remoteStore);
+  const remoteMap=new Map(remote.items.map(item=>[item.id,item]));
+  return local.items.every(localItem=>{
+    if(!localItem?.id)return true;
+    const remoteItem=remoteMap.get(localItem.id);
+    return !!remoteItem && areSummaryItemsEquivalent(localItem,remoteItem);
+  });
+}
+
 function saveSummaryCostsStore(store){
   _summaryCostsCache=normalizeSummaryCostsStore(store);
   localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
@@ -6825,7 +6841,7 @@ function openSummaryCostModal(editId=''){
 }
 
 function saveSummaryCostFromModal(){
-  const id=document.getElementById('summary-cost-id')?.value.trim()||'';
+  let id=document.getElementById('summary-cost-id')?.value.trim()||'';
   const contractor=document.getElementById('summary-cost-contractor')?.value.trim()||'';
   const expenseName=document.getElementById('summary-cost-name')?.value.trim()||'';
   const category=document.getElementById('summary-cost-category')?.value.trim()||'';
@@ -6853,6 +6869,22 @@ function saveSummaryCostFromModal(){
   ensureSummaryMetaValue('category',category);
   const store=getSummaryCostsStore();
   const items=Array.isArray(store.items)?store.items.slice():[];
+  if(!id){
+    const deletedMatch=items.find(item=>
+      item?.active===false &&
+      !!item?.deletedAt &&
+      String(item?.monthKey||'').trim()===monthKey &&
+      String(item?.ksefNumber||'').trim() &&
+      String(item?.ksefNumber||'').trim()===ksefNumber &&
+      String(item?.targetType||'').trim()===targetType &&
+      (
+        targetType==='group'
+          ? String(item?.targetGroup||'').trim()===targetValue
+          : normalizeSummaryApartmentKey(item?.targetApartment||'')===normalizeSummaryApartmentKey(targetValue)
+      )
+    );
+    if(deletedMatch)id=String(deletedMatch.id||'').trim();
+  }
   const existingIndex=id?items.findIndex(item=>item.id===id):-1;
   const existing=existingIndex>=0?items[existingIndex]:null;
   const now=new Date().toISOString();
@@ -9678,7 +9710,11 @@ async function syncPull(){
         : remoteSummaryCosts;
       localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
       if(hasPendingSummaryCosts){
-        syncPushSummaryCosts(_summaryCostsCache,{preserveDirty:true});
+        if(hasSummaryRemoteCaughtUp(_summaryCostsCache,remoteSummaryCosts)){
+          clearSummaryCostsDirty();
+        }else{
+          syncPushSummaryCosts(_summaryCostsCache,{preserveDirty:true});
+        }
       }
     }
     if(summaryCostMetaData&&typeof summaryCostMetaData.meta==='object'&&summaryCostMetaData.meta!==null){
@@ -9826,7 +9862,6 @@ async function syncPushSummaryCosts(costs,options={}){
       headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveSummaryCosts',token:_state.authToken,costs}),
     });
-    if(!options?.preserveDirty)clearSummaryCostsDirty();
   }catch(e){console.warn('syncPushSummaryCosts failed:',e);}
 }
 
