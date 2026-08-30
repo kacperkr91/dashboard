@@ -5792,9 +5792,61 @@ function getSummaryCostsStore(){
   return _summaryCostsCache;
 }
 
+function getSummaryCostsDirtyAt(){
+  const raw=localStorage.getItem('summary_costs_dirty_at');
+  const value=Number(raw||0);
+  return Number.isFinite(value)&&value>0?value:0;
+}
+
+function markSummaryCostsDirty(){
+  const now=Date.now();
+  localStorage.setItem('summary_costs_dirty_at',String(now));
+  return now;
+}
+
+function clearSummaryCostsDirty(){
+  localStorage.removeItem('summary_costs_dirty_at');
+}
+
+function getSummaryItemVersion(item){
+  if(!item||typeof item!=='object')return 0;
+  const stamps=[
+    item.updatedAt,
+    item.deletedAt,
+    item.createdAt,
+  ].map(value=>{
+    const time=Date.parse(String(value||'').trim());
+    return Number.isFinite(time)?time:0;
+  });
+  return Math.max(...stamps,0);
+}
+
+function mergeSummaryCostsStores(localStore,remoteStore){
+  const local=normalizeSummaryCostsStore(localStore);
+  const remote=normalizeSummaryCostsStore(remoteStore);
+  const mergedMap=new Map();
+  [...remote.items,...local.items].forEach(item=>{
+    if(!item?.id)return;
+    const existing=mergedMap.get(item.id);
+    if(!existing){
+      mergedMap.set(item.id,item);
+      return;
+    }
+    const existingVersion=getSummaryItemVersion(existing);
+    const candidateVersion=getSummaryItemVersion(item);
+    if(candidateVersion>=existingVersion){
+      mergedMap.set(item.id,item);
+    }
+  });
+  return {
+    items:[...mergedMap.values()].sort((a,b)=>getSummaryItemVersion(b)-getSummaryItemVersion(a)),
+  };
+}
+
 function saveSummaryCostsStore(store){
   _summaryCostsCache=normalizeSummaryCostsStore(store);
   localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
+  markSummaryCostsDirty();
   syncPushSummaryCosts(_summaryCostsCache);
 }
 
@@ -9618,9 +9670,16 @@ async function syncPull(){
       localStorage.setItem('dashboard_tasks',JSON.stringify(_tasksCache));
     }
     if(summaryCostsData&&typeof summaryCostsData.costs==='object'&&summaryCostsData.costs!==null){
-      _summaryCostsCache=summaryCostsData.costs;
-      if(!Array.isArray(_summaryCostsCache.items))_summaryCostsCache.items=[];
+      const remoteSummaryCosts=normalizeSummaryCostsStore(summaryCostsData.costs);
+      const localSummaryCosts=normalizeSummaryCostsStore(JSON.parse(localStorage.getItem('summary_costs')||'{}'));
+      const hasPendingSummaryCosts=getSummaryCostsDirtyAt()>0;
+      _summaryCostsCache=hasPendingSummaryCosts
+        ? mergeSummaryCostsStores(localSummaryCosts,remoteSummaryCosts)
+        : remoteSummaryCosts;
       localStorage.setItem('summary_costs',JSON.stringify(_summaryCostsCache));
+      if(hasPendingSummaryCosts){
+        syncPushSummaryCosts(_summaryCostsCache,{preserveDirty:true});
+      }
     }
     if(summaryCostMetaData&&typeof summaryCostMetaData.meta==='object'&&summaryCostMetaData.meta!==null){
       _summaryCostMetaCache=summaryCostMetaData.meta;
@@ -9757,15 +9816,17 @@ async function syncPushTasks(tasks){
   }catch(e){console.warn('syncPushTasks failed:',e);}
 }
 
-async function syncPushSummaryCosts(costs){
+async function syncPushSummaryCosts(costs,options={}){
   if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
+      keepalive:true,
       headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveSummaryCosts',token:_state.authToken,costs}),
     });
+    if(!options?.preserveDirty)clearSummaryCostsDirty();
   }catch(e){console.warn('syncPushSummaryCosts failed:',e);}
 }
 
