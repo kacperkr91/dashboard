@@ -5563,6 +5563,7 @@ function buildSummaryView(){
   const customCostMap=customCostsPayload.map||{};
   const rentOverrideMap=customCostsPayload.rentOverrides||{};
   const advanceOverrideMap=customCostsPayload.advanceOverrides||{};
+  const contractorCostMaps=customCostsPayload.contractorMaps||{artur:{},kacper:{},pawel:{}};
   const customCostsItems=customCostsPayload.items||[];
 
   const rows=apartmentKeys.map(apt=>{
@@ -5582,6 +5583,9 @@ function buildSummaryView(){
       ? Number(advanceOverrideMap[apt])||0
       : czynsz.advance;
     const internetCost=getStaticInternetCostForApartment(apt);
+    const arturCost=Number(contractorCostMaps.artur?.[apt])||0;
+    const kacperCost=Number(contractorCostMaps.kacper?.[apt])||0;
+    const pawelCost=Number(contractorCostMaps.pawel?.[apt])||0;
     const customCost=Number(customCostMap[apt])||0;
     return{
       apt,
@@ -5599,8 +5603,11 @@ function buildSummaryView(){
       rent:resolvedRent,
       advance:resolvedAdvance,
       internet:internetCost,
+      arturCost:arturCost||null,
+      kacperCost:kacperCost||null,
+      pawelCost:pawelCost||null,
       customCost:customCost||null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-customCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-arturCost-kacperCost-pawelCost-customCost,
     };
   });
 
@@ -5623,10 +5630,13 @@ function buildSummaryView(){
     acc.rent+=Number(r.rent)||0;
     acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
+    acc.arturCost+=Number(r.arturCost)||0;
+    acc.kacperCost+=Number(r.kacperCost)||0;
+    acc.pawelCost+=Number(r.pawelCost)||0;
     acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,customCost:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
@@ -5656,6 +5666,9 @@ function buildSummaryView(){
   </div>`;
 
   const bd=`<span style="color:var(--text-muted)">b.d.</span>`;
+  const personCostCell=value=>value!==null&&value!==undefined
+    ? `<span style="font-weight:700;color:#7c3aed">${fmt(value)} zł</span>`
+    : bd;
   const customCostCell=r=>r.customCost!==null
     ? `<span style="font-weight:700;color:#1d4ed8">${fmt(r.customCost)} zł</span>`
     : bd;
@@ -5669,6 +5682,9 @@ function buildSummaryView(){
     <td class="num">${r.rent!==null?`${fmt(r.rent)} zł`:bd}</td>
     <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
     <td class="num">${r.internet?`${fmt(r.internet)} zł`:bd}</td>
+    <td class="num">${personCostCell(r.arturCost)}</td>
+    <td class="num">${personCostCell(r.kacperCost)}</td>
+    <td class="num">${personCostCell(r.pawelCost)}</td>
     <td class="num">${customCostCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
@@ -5679,7 +5695,7 @@ function buildSummaryView(){
       <div class="card-title">Podsumowanie OTV per apartament</div>
       <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną oraz ręcznie dodanymi kosztami.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Artur</th><th class="num">Kacper</th><th class="num">Paweł</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -5691,6 +5707,9 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.rent)} zł</td>
             <td class="num">${fmt(totals.advance)} zł</td>
             <td class="num">${fmt(totals.internet)} zł</td>
+            <td class="num">${fmt(totals.arturCost)} zł</td>
+            <td class="num">${fmt(totals.kacperCost)} zł</td>
+            <td class="num">${fmt(totals.pawelCost)} zł</td>
             <td class="num">${fmt(totals.customCost)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
@@ -5943,6 +5962,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
   const map={};
   const rentOverrides={};
   const advanceOverrides={};
+  const contractorMaps={artur:{},kacper:{},pawel:{}};
   let total=0;
   items.forEach(item=>{
     const amount=parseMoneyValue(item.amountNet||0);
@@ -5961,13 +5981,23 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
+    const contractorBucket=normalizeSummaryPersonBucket(item.contractor);
+    const specialKey=contractorBucket==='artur'?'artur':contractorBucket==='kacper'?'kacper':contractorBucket==='pawel'?'pawel':'';
+    if(specialKey){
+      const share=amount/targets.length;
+      total+=amount;
+      targets.forEach(apt=>{
+        contractorMaps[specialKey][apt]=(contractorMaps[specialKey][apt]||0)+share;
+      });
+      return;
+    }
     const share=amount/targets.length;
     total+=amount;
     targets.forEach(apt=>{
       map[apt]=(map[apt]||0)+share;
     });
   });
-  return {map,items,total,rentOverrides,advanceOverrides};
+  return {map,items,total,rentOverrides,advanceOverrides,contractorMaps};
 }
 
 function getSummaryExistingRentValue(monthKey,apartment){
@@ -6048,6 +6078,14 @@ function getSummaryAllCategoryOptions(){
 
 function normalizeSummaryContractorKey(value){
   return String(value||'').trim().toLowerCase();
+}
+
+function normalizeSummaryPersonBucket(value){
+  return String(value||'')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'');
 }
 
 function refreshSummaryCategorySelect(selectedValue=''){
