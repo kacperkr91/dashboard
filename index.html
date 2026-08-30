@@ -5947,10 +5947,15 @@ function isSummaryRentCategory(category){
 
 function resolveSummaryCostTargets(item,targetMeta){
   if(!item)return [];
+  const allKnownTargets=new Set([
+    ...((targetMeta?.all||[]).map(normalizeSummaryApartmentKey).filter(Boolean)),
+    ...Array.from({length:7},(_,idx)=>`L25/${18+idx}`)
+  ]);
   if(item.targetType==='group'){
     const key=String(item.targetGroup||'').trim().toLowerCase();
     const fromSaved=Array.isArray(item.targetApartments)?item.targetApartments.map(normalizeSummaryApartmentKey).filter(Boolean):[];
-    if(fromSaved.length)return fromSaved;
+    const validSaved=fromSaved.filter(target=>allKnownTargets.has(target));
+    if(validSaved.length)return [...new Set(validSaved)];
     if(key==='both')return [...new Set([...(targetMeta?.otv||[]),...(targetMeta?.l25||[])].map(normalizeSummaryApartmentKey).filter(Boolean))];
     return key==='l25'
       ? [...new Set((targetMeta?.l25||[]).map(normalizeSummaryApartmentKey).filter(Boolean))]
@@ -5989,7 +5994,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
-    const specialKey=detectSummaryPersonBucket(item.category,item.contractor);
+    const specialKey=detectSummaryPersonBucket(item.category,item.contractor,item.expenseName,item.notes);
     if(specialKey){
       const share=amount/targets.length;
       total+=amount;
@@ -6095,10 +6100,12 @@ function normalizeSummaryPersonBucket(value){
     .replace(/[\u0300-\u036f]/g,'');
 }
 
-function detectSummaryPersonBucket(categoryValue='',contractorValue=''){
+function detectSummaryPersonBucket(categoryValue='',contractorValue='',expenseNameValue='',notesValue=''){
   const category=normalizeSummaryPersonBucket(categoryValue);
   const contractor=normalizeSummaryPersonBucket(contractorValue);
-  const source=`${category} ${contractor}`.trim();
+  const expenseName=normalizeSummaryPersonBucket(expenseNameValue);
+  const notes=normalizeSummaryPersonBucket(notesValue);
+  const source=`${category} ${contractor} ${expenseName} ${notes}`.trim();
   if(!source)return '';
   if(source.includes('artur'))return 'artur';
   if(source.includes('kacper'))return 'kacper';
