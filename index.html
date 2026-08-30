@@ -5949,12 +5949,14 @@ function resolveSummaryCostTargets(item,targetMeta){
   if(!item)return [];
   if(item.targetType==='group'){
     const key=String(item.targetGroup||'').trim().toLowerCase();
-    const fromSaved=Array.isArray(item.targetApartments)?item.targetApartments.filter(Boolean):[];
+    const fromSaved=Array.isArray(item.targetApartments)?item.targetApartments.map(normalizeSummaryApartmentKey).filter(Boolean):[];
     if(fromSaved.length)return fromSaved;
-    if(key==='both')return [...new Set([...(targetMeta?.otv||[]),...(targetMeta?.l25||[])])];
-    return key==='l25'?[...(targetMeta?.l25||[])]:[...(targetMeta?.otv||[])];
+    if(key==='both')return [...new Set([...(targetMeta?.otv||[]),...(targetMeta?.l25||[])].map(normalizeSummaryApartmentKey).filter(Boolean))];
+    return key==='l25'
+      ? [...new Set((targetMeta?.l25||[]).map(normalizeSummaryApartmentKey).filter(Boolean))]
+      : [...new Set((targetMeta?.otv||[]).map(normalizeSummaryApartmentKey).filter(Boolean))];
   }
-  return item.targetApartment?[String(item.targetApartment).trim()]:[];
+  return item.targetApartment?[normalizeSummaryApartmentKey(item.targetApartment)]:[];
 }
 
 function buildSummaryCustomCostMap(monthKey,targetMeta){
