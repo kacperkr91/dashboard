@@ -5981,10 +5981,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
-    const categoryBucket=normalizeSummaryPersonBucket(item.category);
-    const contractorBucket=normalizeSummaryPersonBucket(item.contractor);
-    const specialSource=categoryBucket||contractorBucket;
-    const specialKey=specialSource==='artur'?'artur':specialSource==='kacper'?'kacper':specialSource==='pawel'?'pawel':'';
+    const specialKey=detectSummaryPersonBucket(item.category,item.contractor);
     if(specialKey){
       const share=amount/targets.length;
       total+=amount;
@@ -6088,6 +6085,17 @@ function normalizeSummaryPersonBucket(value){
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g,'');
+}
+
+function detectSummaryPersonBucket(categoryValue='',contractorValue=''){
+  const category=normalizeSummaryPersonBucket(categoryValue);
+  const contractor=normalizeSummaryPersonBucket(contractorValue);
+  const source=`${category} ${contractor}`.trim();
+  if(!source)return '';
+  if(source.includes('artur'))return 'artur';
+  if(source.includes('kacper'))return 'kacper';
+  if(source.includes('pawel'))return 'pawel';
+  return '';
 }
 
 function refreshSummaryCategorySelect(selectedValue=''){
