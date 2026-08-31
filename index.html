@@ -6551,11 +6551,57 @@ function openSummaryKsefPickerModal(){
   filterSummaryKsefPicker();
 }
 
-function buildSummaryHistoryHtml(monthKey){
+function getSummaryHistoryCategoryFilter(){
+  return String(document.getElementById('summary-history-category-filter')?.value||'').trim();
+}
+
+function getSummaryHistoryItems(monthKey,categoryFilter=''){
+  const normalizedFilter=String(categoryFilter||'').trim().toLowerCase();
+  return (getSummaryCostsStore().items||[])
+    .filter(item=>String(item?.monthKey||'').trim()===String(monthKey||'').trim())
+    .filter(item=>!normalizedFilter||String(item?.category||'').trim().toLowerCase()===normalizedFilter)
+    .slice()
+    .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+}
+
+function getSummaryHistoryCategoryOptions(monthKey){
+  return [...new Set(
+    (getSummaryCostsStore().items||[])
+      .filter(item=>String(item?.monthKey||'').trim()===String(monthKey||'').trim())
+      .map(item=>String(item?.category||'').trim())
+      .filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b,'pl'));
+}
+
+function getSummaryHistoryStats(monthKey,categoryFilter=''){
+  const items=getSummaryHistoryItems(monthKey,categoryFilter);
+  return items.reduce((acc,item)=>{
+    const amount=parseMoneyValue(item?.amountNet||0);
+    if(item?.active!==false && !item?.deletedAt){
+      acc.activeCount+=1;
+      acc.activeTotal+=amount;
+    }else{
+      acc.deletedCount+=1;
+      acc.deletedTotal+=amount;
+    }
+    return acc;
+  },{activeCount:0,activeTotal:0,deletedCount:0,deletedTotal:0,totalCount:items.length});
+}
+
+function getSummaryHistoryCleanNotes(item){
+  const lines=String(item?.notes||'')
+    .split(/\r?\n/)
+    .map(line=>String(line||'').trim())
+    .filter(Boolean)
+    .filter(line=>!/^KSeF:/i.test(line)&&!/^Termin płatności:/i.test(line));
+  return lines.join('\n');
+}
+
+function buildSummaryHistoryHtml(monthKey,categoryFilter=''){
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{label:monthKey};
-  const summaryHistoryItems=(getSummaryCostsStore().items||[]).filter(item=>item.monthKey===monthKey);
+  const summaryHistoryItems=getSummaryHistoryItems(monthKey,categoryFilter);
   return summaryHistoryItems.length
-    ? summaryHistoryItems.slice().sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).map(item=>{
+    ? summaryHistoryItems.map(item=>{
       const isDeleted=item.active===false||!!item.deletedAt;
       const authorColor=userColor(item.createdBy||item.updatedBy||'');
       const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
@@ -6563,6 +6609,7 @@ function buildSummaryHistoryHtml(monthKey){
       const targetLabel=getSummaryCostTargetLabel(item);
       const vatOption=getSummaryVatOption(item.vatRateKey||item.vatRateValue||'23');
       const grossValue=parseMoneyValue(item.amountGross||((parseMoneyValue(item.amountNet||0))*(1+(vatOption.rate/100))));
+      const cleanNotes=getSummaryHistoryCleanNotes(item);
       return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
         <div style="min-width:280px;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -6579,7 +6626,7 @@ function buildSummaryHistoryHtml(monthKey){
             <span>Dodał(a): <strong style="color:${authorColor}">${escapeHtml(who)}</strong></span>
             <span>${escapeHtml(when||'')}</span>
           </div>
-          ${item.notes?`<div style="margin-top:8px;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.5">${escapeHtml(item.notes)}</div>`:''}
+          ${cleanNotes?`<div style="margin-top:8px;font-size:13px;color:#334155;white-space:pre-wrap;line-height:1.5">${escapeHtml(cleanNotes)}</div>`:''}
         </div>
         <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;justify-content:flex-end">
           <div style="text-align:right;min-width:140px">
@@ -6592,7 +6639,7 @@ function buildSummaryHistoryHtml(monthKey){
         </div>
       </div>`;
     }).join('')
-    : `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b">Brak ręcznie dodanych kosztów dla ${escapeHtml(activeMonth.label)}.</div>`;
+    : `<div style="padding:18px;border:1px dashed #cbd5e1;border-radius:18px;background:#fff;color:#64748b">Brak kosztów dla ${escapeHtml(activeMonth.label)}${categoryFilter?` w kategorii ${escapeHtml(categoryFilter)}`:''}.</div>`;
 }
 
 function closeSummaryCostModal(){
@@ -6606,7 +6653,9 @@ function closeSummaryCostHistoryModal(){
 function openSummaryCostHistoryModal(monthKey=''){
   const currentMonth=String(monthKey||_state.summaryMonth||'').trim();
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===currentMonth)||{label:currentMonth};
-  const customCostsPayload=buildSummaryCustomCostMap(currentMonth,window._summaryTargetMeta||getSummaryAllApartmentTargets([]));
+  const categoryOptions=getSummaryHistoryCategoryOptions(currentMonth);
+  const selectedCategory='';
+  const stats=getSummaryHistoryStats(currentMonth,selectedCategory);
   closeSummaryCostHistoryModal();
   const modal=document.createElement('div');
   modal.id='summaryCostHistoryModal';
@@ -6620,15 +6669,52 @@ function openSummaryCostHistoryModal(monthKey=''){
       <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
         <div style="text-align:right">
           <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
-          <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(customCostsPayload.total||0)} zł</div>
+          <div id="summary-history-active-total" style="font-size:24px;font-weight:800;color:#0f172a">${fmt(stats.activeTotal||0)} zł</div>
         </div>
         <button type="button" onclick="closeSummaryCostHistoryModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Zamknij</button>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:12px">${buildSummaryHistoryHtml(currentMonth)}</div>
+    <div style="display:grid;grid-template-columns:minmax(220px,1.1fr) repeat(3,minmax(150px,.9fr));gap:12px;align-items:end;margin-bottom:18px">
+      <div class="field" style="margin:0">
+        <label>Kategoria</label>
+        <select id="summary-history-category-filter" class="artur-input" onchange="refreshSummaryCostHistoryModal('${currentMonth}')">
+          <option value="">Wszystkie kategorie</option>
+          ${categoryOptions.map(category=>`<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="padding:12px 14px;border:1px solid #dbeafe;border-radius:16px;background:#f8fbff">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne wpisy</div>
+        <div id="summary-history-active-count" style="font-size:22px;font-weight:800;color:#0f172a">${stats.activeCount}</div>
+      </div>
+      <div style="padding:12px 14px;border:1px solid #fef3c7;border-radius:16px;background:#fffbeb">
+        <div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:.05em">Usunięte wpisy</div>
+        <div id="summary-history-deleted-count" style="font-size:22px;font-weight:800;color:#b45309">${stats.deletedCount}</div>
+      </div>
+      <div style="padding:12px 14px;border:1px solid #dcfce7;border-radius:16px;background:#f0fdf4">
+        <div style="font-size:11px;color:#166534;text-transform:uppercase;letter-spacing:.05em">Suma kategorii</div>
+        <div id="summary-history-category-total" style="font-size:22px;font-weight:800;color:#166534">${fmt(stats.activeTotal||0)} zł</div>
+      </div>
+    </div>
+    <div id="summary-history-list" style="display:flex;flex-direction:column;gap:12px">${buildSummaryHistoryHtml(currentMonth,selectedCategory)}</div>
   </div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostHistoryModal();});
   document.body.appendChild(modal);
+}
+
+function refreshSummaryCostHistoryModal(monthKey=''){
+  const currentMonth=String(monthKey||_state.summaryMonth||'').trim();
+  const categoryFilter=getSummaryHistoryCategoryFilter();
+  const stats=getSummaryHistoryStats(currentMonth,categoryFilter);
+  const list=document.getElementById('summary-history-list');
+  if(list)list.innerHTML=buildSummaryHistoryHtml(currentMonth,categoryFilter);
+  const activeTotal=document.getElementById('summary-history-active-total');
+  if(activeTotal)activeTotal.textContent=`${fmt(stats.activeTotal||0)} zł`;
+  const activeCount=document.getElementById('summary-history-active-count');
+  if(activeCount)activeCount.textContent=String(stats.activeCount||0);
+  const deletedCount=document.getElementById('summary-history-deleted-count');
+  if(deletedCount)deletedCount.textContent=String(stats.deletedCount||0);
+  const categoryTotal=document.getElementById('summary-history-category-total');
+  if(categoryTotal)categoryTotal.textContent=`${fmt(stats.activeTotal||0)} zł`;
 }
 
 function setSummaryCostTarget(type,key){
