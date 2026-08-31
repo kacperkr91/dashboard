@@ -5554,7 +5554,14 @@ function buildSummaryView(){
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
   const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
-  const apartmentKeys=sortByDefaultOrder([...new Set([...Object.keys(incomeMap),...Object.keys(housekeepingMap),'Biuro','Magazynek'])].filter(Boolean));
+  const apartmentKeys=sortByDefaultOrder([...new Set([
+    ...Object.keys(incomeMap),
+    ...Object.keys(housekeepingMap),
+    'Biuro',
+    'Magazynek',
+    'Gliczarów',
+    'Owczary'
+  ])].filter(Boolean));
   const targetMeta=getSummaryAllApartmentTargets(apartmentKeys);
   window._summaryTargetMeta=targetMeta;
   if(!apartmentKeys.length){
