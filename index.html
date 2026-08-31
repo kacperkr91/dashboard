@@ -5626,12 +5626,13 @@ function buildSummaryView(){
 
   const search=_state.summarySearch.trim().toLowerCase();
   const filter=_state.summaryFilter||'all';
+  const defaultOrderMap=new Map(sortByDefaultOrder(rows.map(r=>r.apt)).map((apt,idx)=>[apt,idx]));
   const filteredRows=rows.filter(r=>{
     if(search&&!r.apt.toLowerCase().includes(search))return false;
     if(filter==='positive'&&r.remainingAfterKnown<=0)return false;
     if(filter==='negative'&&r.remainingAfterKnown>=0)return false;
     return true;
-  }).sort((a,b)=>b.remainingAfterKnown-a.remainingAfterKnown||b.incomeNet-a.incomeNet||a.apt.localeCompare(b.apt,'pl'));
+  }).sort((a,b)=>(defaultOrderMap.get(a.apt)??9999)-(defaultOrderMap.get(b.apt)??9999)||a.apt.localeCompare(b.apt,'pl'));
 
   const totals=filteredRows.reduce((acc,r)=>{
     acc.gross+=r.gross;
