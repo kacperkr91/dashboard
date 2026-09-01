@@ -3949,6 +3949,8 @@ let _state={
   summaryMonth:(()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})(),
   summarySearch:'',
   summaryFilter:'all',
+  summarySortKey:'remainingAfterKnown',
+  summarySortDir:'desc',
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -5627,12 +5629,25 @@ function buildSummaryView(){
   const search=_state.summarySearch.trim().toLowerCase();
   const filter=_state.summaryFilter||'all';
   const defaultOrderMap=new Map(sortByDefaultOrder(rows.map(r=>r.apt)).map((apt,idx)=>[apt,idx]));
+  const summarySortKey=_state.summarySortKey||'remainingAfterKnown';
+  const summarySortDir=_state.summarySortDir==='asc'?1:-1;
+  const sortArrow=key=>summarySortKey===key?(summarySortDir===1?' ↑':' ↓'):'';
   const filteredRows=rows.filter(r=>{
     if(search&&!r.apt.toLowerCase().includes(search))return false;
     if(filter==='positive'&&r.remainingAfterKnown<=0)return false;
     if(filter==='negative'&&r.remainingAfterKnown>=0)return false;
     return true;
-  }).sort((a,b)=>(defaultOrderMap.get(a.apt)??9999)-(defaultOrderMap.get(b.apt)??9999)||a.apt.localeCompare(b.apt,'pl'));
+  }).sort((a,b)=>{
+    if(summarySortKey==='apt'){
+      return summarySortDir*a.apt.localeCompare(b.apt,'pl');
+    }
+    const av=Number(a?.[summarySortKey]);
+    const bv=Number(b?.[summarySortKey]);
+    const aNum=Number.isFinite(av)?av:Number.NEGATIVE_INFINITY;
+    const bNum=Number.isFinite(bv)?bv:Number.NEGATIVE_INFINITY;
+    if(aNum!==bNum)return summarySortDir*(aNum-bNum);
+    return (defaultOrderMap.get(a.apt)??9999)-(defaultOrderMap.get(b.apt)??9999)||a.apt.localeCompare(b.apt,'pl');
+  });
 
   const totals=filteredRows.reduce((acc,r)=>{
     acc.gross+=r.gross;
@@ -5719,7 +5734,7 @@ function buildSummaryView(){
       <div class="card-title">Podsumowanie OTV per apartament</div>
       <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, internetem, czynszem, zaliczką eksploatacyjną oraz ręcznie dodanymi kosztami.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th>Apartament</th><th class="num">Brutto</th><th class="num">Koszt kanału</th><th class="num">Housekeeping</th><th class="num">Prąd</th><th class="num">Gaz</th><th class="num">Czynsz</th><th class="num">Zaliczka eksploat.</th><th class="num">Internet</th><th class="num">Artur</th><th class="num">Kacper</th><th class="num">Paweł</th><th class="num">Dodane koszty</th><th class="num">Dochód po kanałach</th><th class="num">Zostaje po HK</th></tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="setSummarySort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('channelCost')">Koszt kanału${sortArrow('channelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('housekeeping')">Housekeeping${sortArrow('housekeeping')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('energy')">Prąd${sortArrow('energy')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gas')">Gaz${sortArrow('gas')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('rent')">Czynsz${sortArrow('rent')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('advance')">Zaliczka eksploat.${sortArrow('advance')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('internet')">Internet${sortArrow('internet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('arturCost')">Artur${sortArrow('arturCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('kacperCost')">Kacper${sortArrow('kacperCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('pawelCost')">Paweł${sortArrow('pawelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('customCost')">Dodane koszty${sortArrow('customCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeNet')">Dochód po kanałach${sortArrow('incomeNet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('remainingAfterKnown')">Zostaje po HK${sortArrow('remainingAfterKnown')}</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -13835,6 +13850,17 @@ function setSummarySearch(val){
 
 function setSummaryFilter(val){
   _state.summaryFilter=val||'all';
+  renderApp();
+}
+
+function setSummarySort(key){
+  if(!key)return;
+  if(_state.summarySortKey===key){
+    _state.summarySortDir=_state.summarySortDir==='asc'?'desc':'asc';
+  }else{
+    _state.summarySortKey=key;
+    _state.summarySortDir=key==='apt'?'asc':'desc';
+  }
   renderApp();
 }
 
