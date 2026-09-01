@@ -5574,6 +5574,7 @@ function buildSummaryView(){
   const rentOverrideMap=customCostsPayload.rentOverrides||{};
   const rentOverrideKinds=customCostsPayload.rentOverrideKinds||{};
   const advanceOverrideMap=customCostsPayload.advanceOverrides||{};
+  const energyOverrideMap=customCostsPayload.energyOverrides||{};
   const contractorCostMaps=customCostsPayload.contractorMaps||{artur:{},kacper:{},pawel:{}};
   const customCostsItems=customCostsPayload.items||[];
 
@@ -5596,6 +5597,9 @@ function buildSummaryView(){
     const resolvedAdvance=Object.prototype.hasOwnProperty.call(advanceOverrideMap,apt)
       ? Number(advanceOverrideMap[apt])||0
       : czynsz.advance;
+    const resolvedEnergy=Object.prototype.hasOwnProperty.call(energyOverrideMap,apt)
+      ? Number(energyOverrideMap[apt])||0
+      : null;
     const internetCost=getStaticInternetCostForApartment(apt);
     const arturCost=Number(contractorCostMaps.artur?.[apt])||0;
     const kacperCost=Number(contractorCostMaps.kacper?.[apt])||0;
@@ -5612,7 +5616,7 @@ function buildSummaryView(){
       pranie:hk.pranie||0,
       aptCena:hk.aptCena||0,
       gosCena:hk.gosCena||0,
-      energy:null,
+      energy:resolvedEnergy,
       gas:null,
       rent:resolvedRent,
       rentSource,
@@ -5622,7 +5626,7 @@ function buildSummaryView(){
       kacperCost:kacperCost||null,
       pawelCost:pawelCost||null,
       customCost:customCost||null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-arturCost-kacperCost-pawelCost-customCost,
+      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-(Number(resolvedEnergy)||0)-arturCost-kacperCost-pawelCost-customCost,
     };
   });
 
@@ -5662,6 +5666,7 @@ function buildSummaryView(){
     acc.channelCost+=r.channelCost;
     acc.incomeNet+=r.incomeNet;
     acc.housekeeping+=r.housekeeping;
+    acc.energy+=Number(r.energy)||0;
     acc.rent+=Number(r.rent)||0;
     acc.advance+=Number(r.advance)||0;
     acc.internet+=r.internet||0;
@@ -5671,7 +5676,7 @@ function buildSummaryView(){
     acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
+  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,energy:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
@@ -5723,7 +5728,7 @@ function buildSummaryView(){
     <td class="num">${fmt(r.gross)} zł</td>
     <td class="num" style="color:var(--red)">${fmt(r.channelCost)} zł</td>
     <td class="num" style="color:var(--orange);font-weight:700">${fmt(r.housekeeping)} zł</td>
-    <td class="num">${bd}</td>
+    <td class="num">${r.energy!==null?`${fmt(r.energy)} zł`:bd}</td>
     <td class="num">${bd}</td>
     <td class="num">${rentCell(r)}</td>
     <td class="num">${r.advance!==null?`${fmt(r.advance)} zł`:bd}</td>
@@ -5748,7 +5753,7 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.gross)} zł</td>
             <td class="num">${fmt(totals.channelCost)} zł</td>
             <td class="num">${fmt(totals.housekeeping)} zł</td>
-            <td class="num">${bd}</td>
+            <td class="num">${fmt(totals.energy)} zł</td>
             <td class="num">${bd}</td>
             <td class="num">${fmt(totals.rent)} zł</td>
             <td class="num">${fmt(totals.advance)} zł</td>
@@ -5768,7 +5773,7 @@ function buildSummaryView(){
 function getStaticInternetCostForApartment(apt){
   const raw=String(apt||'').trim().toLowerCase();
   if(!raw)return 0;
-  if(raw.includes('magazynek'))return 0;
+  if(raw.includes('magazynek')||raw==='gliczarów'||raw==='owczary')return 0;
   if(isL25PremiumApartment(raw))return 74.19;
   if(raw.includes('stawowa'))return 72.94;
   if(raw.includes('katowicka'))return 93.01;
@@ -6039,7 +6044,7 @@ function getSummaryAllApartmentTargets(apartmentKeys=[]){
   const current=sortByDefaultOrder([...new Set((Array.isArray(apartmentKeys)?apartmentKeys:[]).filter(Boolean))]);
   const l25Static=Array.from({length:7},(_,idx)=>`L25/${18+idx}`);
   const l25=sortByDefaultOrder([...new Set([...current.filter(apt=>isL25PremiumApartment(apt)),...l25Static])]);
-  const otv=sortByDefaultOrder(current.filter(apt=>apt!=='Biuro'&&apt!=='Magazynek'&&!isL25PremiumApartment(apt)));
+  const otv=sortByDefaultOrder(current.filter(apt=>!isSummaryNonRentalApartment(apt)&&!isL25PremiumApartment(apt)));
   const others=sortByDefaultOrder([...new Set(current.filter(apt=>!otv.includes(apt)&&!l25.includes(apt)))]);
   return {otv,l25,others,all:[...new Set([...otv,...l25,...others])]};
 }
@@ -6062,6 +6067,11 @@ function isSummaryRentCategory(category){
 function isSummaryCreditCategory(category){
   const normalized=String(category||'').trim().toLowerCase();
   return normalized==='kredyt';
+}
+
+function isSummaryEnergyCategory(category){
+  const normalized=String(category||'').trim().toLowerCase();
+  return normalized==='prąd' || normalized==='prad';
 }
 
 function resolveSummaryCostTargets(item,targetMeta){
@@ -6095,6 +6105,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
   const rentOverrides={};
   const rentOverrideKinds={};
   const advanceOverrides={};
+  const energyOverrides={};
   const contractorMaps={artur:{},kacper:{},pawel:{}};
   let total=0;
   items.forEach(item=>{
@@ -6117,6 +6128,12 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       total+=amount;
       return;
     }
+    if(isSummaryEnergyCategory(item.category)){
+      const energyTarget=targets[0];
+      if(energyTarget)energyOverrides[energyTarget]=amount;
+      total+=amount;
+      return;
+    }
     const specialKey=detectSummaryPersonBucket(item.category,item.contractor,item.expenseName,item.notes);
     if(specialKey){
       const share=amount/targets.length;
@@ -6132,7 +6149,7 @@ function buildSummaryCustomCostMap(monthKey,targetMeta){
       map[apt]=(map[apt]||0)+share;
     });
   });
-  return {map,items,total,rentOverrides,rentOverrideKinds,advanceOverrides,contractorMaps};
+  return {map,items,total,rentOverrides,rentOverrideKinds,advanceOverrides,energyOverrides,contractorMaps};
 }
 
 function getSummaryExistingRentValue(monthKey,apartment){
@@ -6657,6 +6674,11 @@ function isSummaryNonRentalApartment(apt){
   return normalized==='magazynek'||normalized==='biuro'||normalized==='gliczarów'||normalized==='owczary';
 }
 
+function isSummaryRestrictedNonRentalApartment(apt){
+  const normalized=String(apt||'').trim().toLowerCase();
+  return normalized==='gliczarów'||normalized==='owczary';
+}
+
 function getSummaryNonRentalOrder(apt){
   const order=['magazynek','biuro','gliczarów','owczary'];
   const normalized=String(apt||'').trim().toLowerCase();
@@ -7147,6 +7169,18 @@ function saveSummaryCostFromModal(){
   if((isRentCategory||isCreditCategory||isAdvanceCategory)&&targetType!=='apartment'){
     alert(`Kategoria "${isRentCategory?'Czynsz':isCreditCategory?'Kredyt':'Zaliczka eksploatacyjna'}" może być przypisana tylko do jednego apartamentu.`);
     return;
+  }
+  if(targetType==='apartment'&&isSummaryRestrictedNonRentalApartment(targetValue)){
+    const normalizedTarget=String(targetValue||'').trim().toLowerCase();
+    const allowedForTarget=normalizedTarget==='gliczarów'
+      ? (isRentCategory||isCreditCategory||isAdvanceCategory||isSummaryEnergyCategory(category))
+      : (isRentCategory||isCreditCategory);
+    if(!allowedForTarget){
+      alert(normalizedTarget==='gliczarów'
+        ? 'Dla Gliczarowa dozwolone są tylko: Czynsz, Kredyt, Zaliczka eksploatacyjna i Prąd.'
+        : 'Dla Owczarów dozwolone są tylko: Czynsz i Kredyt.');
+      return;
+    }
   }
   if(contractor)ensureSummaryMetaValue('contractor',contractor);
   ensureSummaryMetaValue('category',category);
