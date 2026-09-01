@@ -5771,9 +5771,9 @@ function buildSummaryView(){
 }
 
 function getStaticInternetCostForApartment(apt){
-  const raw=String(apt||'').trim().toLowerCase();
+  const raw=String(apt||'').trim().toLowerCase().replace(/ł/g,'l').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(!raw)return 0;
-  if(raw.includes('magazynek')||raw==='gliczarów'||raw==='owczary')return 0;
+  if(raw.includes('magazynek')||raw==='gliczarow'||raw==='owczary')return 0;
   if(isL25PremiumApartment(raw))return 74.19;
   if(raw.includes('stawowa'))return 72.94;
   if(raw.includes('katowicka'))return 93.01;
@@ -6083,7 +6083,7 @@ function resolveSummaryCostTargets(item,targetMeta){
   if(item.targetType==='group'){
     const key=String(item.targetGroup||'').trim().toLowerCase();
     const fromSaved=Array.isArray(item.targetApartments)?item.targetApartments.map(normalizeSummaryApartmentKey).filter(Boolean):[];
-    const validSaved=fromSaved.filter(target=>allKnownTargets.has(target));
+    const validSaved=fromSaved.filter(target=>allKnownTargets.has(target)&&!isSummaryNonRentalApartment(target));
     if(validSaved.length)return [...new Set(validSaved)];
     if(key==='both')return [...new Set([...(targetMeta?.otv||[]),...(targetMeta?.l25||[])].map(normalizeSummaryApartmentKey).filter(Boolean))];
     return key==='l25'
@@ -8438,9 +8438,12 @@ function buildHousekeepingApartmentMap(hkData){
 
 function normalizeSummaryApartmentKey(apt){
   const raw=String(apt||'').trim();
+  const asciiRaw=raw.toLowerCase().replace(/ł/g,'l').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(!raw)return '';
   if(/^biuro$/i.test(raw))return 'Biuro';
   if(/^magazynek$/i.test(raw))return 'Magazynek';
+  if(asciiRaw==='gliczarow')return 'Gliczarów';
+  if(asciiRaw==='owczary')return 'Owczary';
   if(/^katowicka$/i.test(raw))return 'Katowicka';
   if(/^stawowa$/i.test(raw))return 'Stawowa';
   if(/^starego$/i.test(raw))return 'Starego';
