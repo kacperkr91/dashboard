@@ -3951,6 +3951,7 @@ let _state={
   summaryFilter:'all',
   summarySortKey:'remainingAfterKnown',
   summarySortDir:'desc',
+  summaryHistorySelectedIds:[],
   hkMonth:getMonthKeyFromDate(new Date()),
   hkAptSort:'default',
   otvMonth:'2026-04',
@@ -6627,6 +6628,37 @@ function getSummaryHistoryCategoryFilter(){
   return String(document.getElementById('summary-history-category-filter')?.value||'').trim();
 }
 
+function getSummaryHistorySelectedIds(){
+  return Array.isArray(_state.summaryHistorySelectedIds)?_state.summaryHistorySelectedIds:[];
+}
+
+function setSummaryHistorySelectedIds(ids){
+  _state.summaryHistorySelectedIds=[...new Set((Array.isArray(ids)?ids:[]).map(id=>String(id||'').trim()).filter(Boolean))];
+}
+
+function toggleSummaryHistorySelection(id){
+  const normalized=String(id||'').trim();
+  if(!normalized)return;
+  const current=getSummaryHistorySelectedIds();
+  if(current.includes(normalized))setSummaryHistorySelectedIds(current.filter(item=>item!==normalized));
+  else setSummaryHistorySelectedIds([...current,normalized]);
+  refreshSummaryCostHistoryModal(_state.summaryMonth);
+}
+
+function setSummaryHistorySelectionForVisible(monthKey,selected){
+  const visibleIds=getSummaryHistoryItems(monthKey,getSummaryHistoryCategoryFilter())
+    .filter(item=>item?.active!==false&&!item?.deletedAt)
+    .map(item=>String(item.id||'').trim())
+    .filter(Boolean);
+  if(selected){
+    setSummaryHistorySelectedIds([...getSummaryHistorySelectedIds(),...visibleIds]);
+  }else{
+    const visibleSet=new Set(visibleIds);
+    setSummaryHistorySelectedIds(getSummaryHistorySelectedIds().filter(id=>!visibleSet.has(id)));
+  }
+  refreshSummaryCostHistoryModal(monthKey);
+}
+
 function getSummaryHistoryItems(monthKey,categoryFilter=''){
   const normalizedFilter=String(categoryFilter||'').trim().toLowerCase();
   return (getSummaryCostsStore().items||[])
@@ -6705,27 +6737,31 @@ function closeSummaryCopyCostsModal(){
 }
 
 function copySummaryCostToMonth(){
-  const sourceId=String(document.getElementById('summary-copy-cost-id')?.value||'').trim();
+  const sourceIds=(String(document.getElementById('summary-copy-cost-ids')?.value||'').trim().split(',').map(id=>String(id||'').trim()).filter(Boolean));
   const targetMonth=String(document.getElementById('summary-copy-target-month')?.value||'').trim();
-  if(!sourceId||!targetMonth){
-    alert('Brakuje wpisu albo miesiąca docelowego.');
+  if(!sourceIds.length||!targetMonth){
+    alert('Brakuje wpisów albo miesiąca docelowego.');
     return;
   }
   const store=getSummaryCostsStore();
   const items=Array.isArray(store.items)?store.items.slice():[];
-  const sourceItem=items.find(item=>String(item?.id||'').trim()===sourceId);
-  if(!sourceItem){
-    alert('Nie znaleziono kosztu do skopiowania.');
+  const sourceItems=sourceIds.map(id=>items.find(item=>String(item?.id||'').trim()===id)).filter(Boolean);
+  if(!sourceItems.length){
+    alert('Nie znaleziono kosztów do skopiowania.');
     return;
   }
-  const sourceMonth=String(sourceItem?.monthKey||'').trim();
+  const sourceMonth=String(sourceItems[0]?.monthKey||'').trim();
+  if(sourceItems.some(item=>String(item?.monthKey||'').trim()!==sourceMonth)){
+    alert('Można kopiować naraz tylko wpisy z jednego miesiąca.');
+    return;
+  }
   if(sourceMonth===targetMonth){
     alert('Miesiąc docelowy musi być inny niż źródłowy.');
     return;
   }
   const nextItems=items.slice();
-  if(sourceItem?.active===false||sourceItem?.deletedAt){
-    alert('Nie można kopiować usuniętego wpisu.');
+  if(sourceItems.some(item=>item?.active===false||item?.deletedAt)){
+    alert('Nie można kopiować usuniętych wpisów.');
     return;
   }
   const targetItems=items.filter(item=>String(item?.monthKey||'').trim()===targetMonth);
@@ -6737,48 +6773,57 @@ function copySummaryCostToMonth(){
   const now=new Date().toISOString();
   const sourceLabel=PREVIO_MONTHS.find(m=>m.key===sourceMonth)?.label||sourceMonth;
   const targetLabel=PREVIO_MONTHS.find(m=>m.key===targetMonth)?.label||targetMonth;
-  const ok=confirm(`Skopiować wydatek "${sourceItem.expenseName||'Koszt'}" z ${sourceLabel} do ${targetLabel}?`);
+  const ok=confirm(`Skopiować ${sourceItems.length} ${sourceItems.length===1?'wydatek':'wydatki'} z ${sourceLabel} do ${targetLabel}?`);
   if(!ok)return;
-  const signature=buildSummaryCostCopySignature(sourceItem);
-  const existingTarget=targetBySignature.get(signature)||null;
-  const nextItem={
-    ...sourceItem,
-    id:existingTarget?.id||`cost_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-    monthKey:targetMonth,
-    active:true,
-    updatedAt:now,
-    updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
-    updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
-    deletedAt:'',
-    deletedBy:'',
-    deletedByName:'',
-  };
-  if(!existingTarget){
-    nextItem.createdAt=now;
-    nextItem.createdBy=String(_state.authUser?.login||'').trim().toLowerCase();
-    nextItem.createdByName=String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
-    nextItems.unshift(nextItem);
-  }else{
-    const existingIndex=nextItems.findIndex(item=>item.id===existingTarget.id);
-    if(existingIndex>=0){
-      nextItem.createdAt=existingTarget.createdAt||sourceItem.createdAt||now;
-      nextItem.createdBy=existingTarget.createdBy||sourceItem.createdBy||String(_state.authUser?.login||'').trim().toLowerCase();
-      nextItem.createdByName=existingTarget.createdByName||sourceItem.createdByName||String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
-      nextItems.splice(existingIndex,1,nextItem);
+  let added=0;
+  let updated=0;
+  sourceItems.forEach(sourceItem=>{
+    const signature=buildSummaryCostCopySignature(sourceItem);
+    const existingTarget=targetBySignature.get(signature)||null;
+    const nextItem={
+      ...sourceItem,
+      id:existingTarget?.id||`cost_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+      monthKey:targetMonth,
+      active:true,
+      updatedAt:now,
+      updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+      updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+      deletedAt:'',
+      deletedBy:'',
+      deletedByName:'',
+    };
+    if(!existingTarget){
+      nextItem.createdAt=now;
+      nextItem.createdBy=String(_state.authUser?.login||'').trim().toLowerCase();
+      nextItem.createdByName=String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
+      nextItems.unshift(nextItem);
+      added+=1;
+    }else{
+      const existingIndex=nextItems.findIndex(item=>item.id===existingTarget.id);
+      if(existingIndex>=0){
+        nextItem.createdAt=existingTarget.createdAt||sourceItem.createdAt||now;
+        nextItem.createdBy=existingTarget.createdBy||sourceItem.createdBy||String(_state.authUser?.login||'').trim().toLowerCase();
+        nextItem.createdByName=existingTarget.createdByName||sourceItem.createdByName||String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
+        nextItems.splice(existingIndex,1,nextItem);
+        updated+=1;
+      }
     }
-  }
-  alert(`Skopiowano wydatek do ${targetLabel}.`);
+  });
+  alert(`Skopiowano do ${targetLabel}.\n\nNowe wpisy: ${added}\nNadpisane odpowiedniki: ${updated}`);
   saveSummaryCostsStore({items:nextItems});
   closeSummaryCopyCostsModal();
   refreshSummaryCostHistoryModal(sourceMonth);
   if(_state.section==='summary')renderApp();
 }
 
-function openSummaryCopyCostsModal(costId=''){
+function openSummaryCopyCostsModal(costIds=''){
   const store=getSummaryCostsStore();
-  const sourceItem=(store.items||[]).find(item=>String(item?.id||'').trim()===String(costId||'').trim());
-  const currentMonth=String(sourceItem?.monthKey||_state.summaryMonth||'').trim();
-  const title=String(sourceItem?.expenseName||'Koszt').trim();
+  const ids=(Array.isArray(costIds)?costIds:String(costIds||'').split(',')).map(id=>String(id||'').trim()).filter(Boolean);
+  const sourceItems=ids.map(id=>(store.items||[]).find(item=>String(item?.id||'').trim()===id)).filter(Boolean);
+  const currentMonth=String(sourceItems[0]?.monthKey||_state.summaryMonth||'').trim();
+  const title=sourceItems.length===1
+    ? String(sourceItems[0]?.expenseName||'Koszt').trim()
+    : `${sourceItems.length} zaznaczonych wydatków`;
   closeSummaryCopyCostsModal();
   const modal=document.createElement('div');
   modal.id='summaryCopyCostsModal';
@@ -6791,7 +6836,7 @@ function openSummaryCopyCostsModal(costId=''){
       </div>
       <button type="button" onclick="closeSummaryCopyCostsModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
     </div>
-    <input id="summary-copy-cost-id" type="hidden" value="${escapeHtml(costId)}">
+    <input id="summary-copy-cost-ids" type="hidden" value="${escapeHtml(ids.join(','))}">
     <div style="padding:12px 14px;border:1px solid #dbeafe;border-radius:16px;background:#f8fbff;margin-bottom:14px">
       <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Wybrany wydatek</div>
       <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:4px">${escapeHtml(title)}</div>
@@ -6813,9 +6858,11 @@ function openSummaryCopyCostsModal(costId=''){
 function buildSummaryHistoryHtml(monthKey,categoryFilter=''){
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{label:monthKey};
   const summaryHistoryItems=getSummaryHistoryItems(monthKey,categoryFilter);
+  const selectedIds=new Set(getSummaryHistorySelectedIds());
   return summaryHistoryItems.length
     ? summaryHistoryItems.map(item=>{
       const isDeleted=item.active===false||!!item.deletedAt;
+      const isSelected=selectedIds.has(String(item.id||'').trim());
       const authorColor=userColor(item.createdBy||item.updatedBy||'');
       const who=item.updatedByName||item.createdByName||item.createdBy||'Użytkownik';
       const when=formatDateTimeLabel(item.updatedAt||item.createdAt||'');
@@ -6823,9 +6870,10 @@ function buildSummaryHistoryHtml(monthKey,categoryFilter=''){
       const vatOption=getSummaryVatOption(item.vatRateKey||item.vatRateValue||'23');
       const grossValue=parseMoneyValue(item.amountGross||((parseMoneyValue(item.amountNet||0))*(1+(vatOption.rate/100))));
       const cleanNotes=getSummaryHistoryCleanNotes(item);
-      return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      return `<div style="padding:14px 16px;border:1px solid ${isDeleted?'#fecaca':isSelected?'#93c5fd':'#dbeafe'};border-radius:18px;background:${isDeleted?'#fff7f7':isSelected?'#f0f7ff':'#ffffff'};display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
         <div style="min-width:280px;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${!isDeleted?`<label style="display:inline-flex;align-items:center;cursor:pointer"><input type="checkbox" ${isSelected?'checked':''} onchange="toggleSummaryHistorySelection('${String(item.id).replace(/'/g,"\\'")}')" style="width:16px;height:16px;accent-color:#2563eb"></label>`:''}
             <span style="display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:999px;background:${authorColor}"></span>
             <strong style="font-size:15px;color:#0f172a">${escapeHtml(item.expenseName||'Koszt')}</strong>
             <span style="font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8">${escapeHtml(item.category||'Bez kategorii')}</span>
@@ -6870,6 +6918,7 @@ function openSummaryCostHistoryModal(monthKey=''){
   const categoryOptions=getSummaryHistoryCategoryOptions(currentMonth);
   const selectedCategory='';
   const stats=getSummaryHistoryStats(currentMonth,selectedCategory);
+  const selectedIds=getSummaryHistorySelectedIds();
   closeSummaryCostHistoryModal();
   const modal=document.createElement('div');
   modal.id='summaryCostHistoryModal';
@@ -6884,6 +6933,10 @@ function openSummaryCostHistoryModal(monthKey=''){
         <div style="text-align:right">
           <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
           <div id="summary-history-active-total" style="font-size:24px;font-weight:800;color:#0f172a">${fmt(stats.activeTotal||0)} zł</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Zaznaczone</div>
+          <div id="summary-history-selected-count" style="font-size:24px;font-weight:800;color:#1d4ed8">${selectedIds.length}</div>
         </div>
         <button type="button" onclick="closeSummaryCostHistoryModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Zamknij</button>
       </div>
@@ -6909,6 +6962,11 @@ function openSummaryCostHistoryModal(monthKey=''){
         <div id="summary-history-category-total" style="font-size:22px;font-weight:800;color:#166534">${fmt(stats.activeTotal||0)} zł</div>
       </div>
     </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:-4px 0 18px">
+      <button type="button" onclick="setSummaryHistorySelectionForVisible('${currentMonth}',true)" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Zaznacz widoczne</button>
+      <button type="button" onclick="setSummaryHistorySelectionForVisible('${currentMonth}',false)" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Odznacz widoczne</button>
+      <button type="button" onclick="openSummaryCopyCostsModal(getSummaryHistorySelectedIds().join(','))" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer">Kopiuj zaznaczone</button>
+    </div>
     <div id="summary-history-list" style="display:flex;flex-direction:column;gap:12px">${buildSummaryHistoryHtml(currentMonth,selectedCategory)}</div>
   </div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCostHistoryModal();});
@@ -6929,6 +6987,8 @@ function refreshSummaryCostHistoryModal(monthKey=''){
   if(deletedCount)deletedCount.textContent=String(stats.deletedCount||0);
   const categoryTotal=document.getElementById('summary-history-category-total');
   if(categoryTotal)categoryTotal.textContent=`${fmt(stats.activeTotal||0)} zł`;
+  const selectedCount=document.getElementById('summary-history-selected-count');
+  if(selectedCount)selectedCount.textContent=String(getSummaryHistorySelectedIds().length||0);
 }
 
 function setSummaryCostTarget(type,key){
