@@ -6682,23 +6682,28 @@ function closeSummaryCopyCostsModal(){
   document.getElementById('summaryCopyCostsModal')?.remove();
 }
 
-function copySummaryCostsToMonth(){
-  const sourceMonth=String(document.getElementById('summary-copy-source-month')?.value||'').trim();
+function copySummaryCostToMonth(){
+  const sourceId=String(document.getElementById('summary-copy-cost-id')?.value||'').trim();
   const targetMonth=String(document.getElementById('summary-copy-target-month')?.value||'').trim();
-  if(!sourceMonth||!targetMonth){
-    alert('Wybierz miesiąc źródłowy i docelowy.');
-    return;
-  }
-  if(sourceMonth===targetMonth){
-    alert('Miesiąc docelowy musi być inny niż źródłowy.');
+  if(!sourceId||!targetMonth){
+    alert('Brakuje wpisu albo miesiąca docelowego.');
     return;
   }
   const store=getSummaryCostsStore();
   const items=Array.isArray(store.items)?store.items.slice():[];
+  const sourceItem=items.find(item=>String(item?.id||'').trim()===sourceId);
+  if(!sourceItem){
+    alert('Nie znaleziono kosztu do skopiowania.');
+    return;
+  }
+  const sourceMonth=String(sourceItem?.monthKey||'').trim();
+  if(sourceMonth===targetMonth){
+    alert('Miesiąc docelowy musi być inny niż źródłowy.');
+    return;
+  }
   const nextItems=items.slice();
-  const sourceItems=items.filter(item=>item?.active!==false&&!item?.deletedAt&&String(item?.monthKey||'').trim()===sourceMonth);
-  if(!sourceItems.length){
-    alert('Brak aktywnych kosztów do skopiowania w wybranym miesiącu.');
+  if(sourceItem?.active===false||sourceItem?.deletedAt){
+    alert('Nie można kopiować usuniętego wpisu.');
     return;
   }
   const targetItems=items.filter(item=>String(item?.monthKey||'').trim()===targetMonth);
@@ -6708,79 +6713,75 @@ function copySummaryCostsToMonth(){
       .map(item=>[buildSummaryCostCopySignature(item),item])
   );
   const now=new Date().toISOString();
-  let added=0;
-  let updated=0;
   const sourceLabel=PREVIO_MONTHS.find(m=>m.key===sourceMonth)?.label||sourceMonth;
   const targetLabel=PREVIO_MONTHS.find(m=>m.key===targetMonth)?.label||targetMonth;
-  const ok=confirm(`Skopiować koszty z ${sourceLabel} do ${targetLabel}?\n\nNowe wpisy: będą dodane, jeśli nie istnieją\nIstniejące odpowiedniki: zostaną nadpisane`);
+  const ok=confirm(`Skopiować wydatek "${sourceItem.expenseName||'Koszt'}" z ${sourceLabel} do ${targetLabel}?`);
   if(!ok)return;
-  sourceItems.forEach(sourceItem=>{
-    const signature=buildSummaryCostCopySignature(sourceItem);
-    const existingTarget=targetBySignature.get(signature)||null;
-    const nextItem={
-      ...sourceItem,
-      id:existingTarget?.id||`cost_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-      monthKey:targetMonth,
-      active:true,
-      updatedAt:now,
-      updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
-      updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
-      deletedAt:'',
-      deletedBy:'',
-      deletedByName:'',
-    };
-    if(!existingTarget){
-      nextItem.createdAt=now;
-      nextItem.createdBy=String(_state.authUser?.login||'').trim().toLowerCase();
-      nextItem.createdByName=String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
-      nextItems.unshift(nextItem);
-      added+=1;
-      return;
-    }
+  const signature=buildSummaryCostCopySignature(sourceItem);
+  const existingTarget=targetBySignature.get(signature)||null;
+  const nextItem={
+    ...sourceItem,
+    id:existingTarget?.id||`cost_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    monthKey:targetMonth,
+    active:true,
+    updatedAt:now,
+    updatedBy:String(_state.authUser?.login||'').trim().toLowerCase(),
+    updatedByName:String(_state.authUser?.displayName||_state.authUser?.login||'').trim(),
+    deletedAt:'',
+    deletedBy:'',
+    deletedByName:'',
+  };
+  if(!existingTarget){
+    nextItem.createdAt=now;
+    nextItem.createdBy=String(_state.authUser?.login||'').trim().toLowerCase();
+    nextItem.createdByName=String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
+    nextItems.unshift(nextItem);
+  }else{
     const existingIndex=nextItems.findIndex(item=>item.id===existingTarget.id);
     if(existingIndex>=0){
       nextItem.createdAt=existingTarget.createdAt||sourceItem.createdAt||now;
       nextItem.createdBy=existingTarget.createdBy||sourceItem.createdBy||String(_state.authUser?.login||'').trim().toLowerCase();
       nextItem.createdByName=existingTarget.createdByName||sourceItem.createdByName||String(_state.authUser?.displayName||_state.authUser?.login||'').trim();
       nextItems.splice(existingIndex,1,nextItem);
-      updated+=1;
     }
-  });
-  alert(`Skopiowano koszty.\n\nNowe wpisy: ${added}\nNadpisane odpowiedniki: ${updated}`);
+  }
+  alert(`Skopiowano wydatek do ${targetLabel}.`);
   saveSummaryCostsStore({items:nextItems});
   closeSummaryCopyCostsModal();
-  closeSummaryCostHistoryModal();
+  refreshSummaryCostHistoryModal(sourceMonth);
   if(_state.section==='summary')renderApp();
 }
 
-function openSummaryCopyCostsModal(sourceMonth=''){
-  const currentMonth=String(sourceMonth||_state.summaryMonth||'').trim();
+function openSummaryCopyCostsModal(costId=''){
+  const store=getSummaryCostsStore();
+  const sourceItem=(store.items||[]).find(item=>String(item?.id||'').trim()===String(costId||'').trim());
+  const currentMonth=String(sourceItem?.monthKey||_state.summaryMonth||'').trim();
+  const title=String(sourceItem?.expenseName||'Koszt').trim();
   closeSummaryCopyCostsModal();
-  const monthOptions=PREVIO_MONTHS.map(item=>`<option value="${escapeHtml(item.key)}" ${item.key===currentMonth?'selected':''}>${escapeHtml(item.label)}</option>`).join('');
   const modal=document.createElement('div');
   modal.id='summaryCopyCostsModal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10030;display:flex;align-items:center;justify-content:center;padding:18px';
   modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:560px;width:100%;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
       <div>
-        <div style="font-size:24px;font-weight:800;color:#0f172a">Kopiowanie kosztów</div>
-        <div style="font-size:13px;color:#64748b;margin-top:6px">Skopiujemy aktywne koszty do innego miesiąca. Jeśli podobny wpis już tam istnieje, zostanie nadpisany.</div>
+        <div style="font-size:24px;font-weight:800;color:#0f172a">Kopiowanie wydatku</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Skopiujemy pojedynczy wydatek do innego miesiąca. Jeśli taki sam wpis już tam istnieje, zostanie nadpisany.</div>
       </div>
       <button type="button" onclick="closeSummaryCopyCostsModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-      <div class="field" style="margin:0">
-        <label>Miesiąc źródłowy</label>
-        <select id="summary-copy-source-month" class="artur-input">${monthOptions}</select>
-      </div>
-      <div class="field" style="margin:0">
-        <label>Miesiąc docelowy</label>
-        <select id="summary-copy-target-month" class="artur-input">${PREVIO_MONTHS.map(item=>`<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`).join('')}</select>
-      </div>
+    <input id="summary-copy-cost-id" type="hidden" value="${escapeHtml(costId)}">
+    <div style="padding:12px 14px;border:1px solid #dbeafe;border-radius:16px;background:#f8fbff;margin-bottom:14px">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Wybrany wydatek</div>
+      <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:4px">${escapeHtml(title)}</div>
+      <div style="font-size:13px;color:#475569;margin-top:4px">${escapeHtml(PREVIO_MONTHS.find(m=>m.key===currentMonth)?.label||currentMonth)}</div>
+    </div>
+    <div class="field" style="margin:0">
+      <label>Miesiąc docelowy</label>
+      <select id="summary-copy-target-month" class="artur-input">${PREVIO_MONTHS.filter(item=>item.key!==currentMonth).map(item=>`<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`).join('')}</select>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
       <button type="button" onclick="closeSummaryCopyCostsModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:11px 16px;font:inherit;font-weight:700;cursor:pointer">Anuluj</button>
-      <button type="button" onclick="copySummaryCostsToMonth()" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:12px;padding:11px 16px;font:inherit;font-weight:800;cursor:pointer">Kopiuj koszty</button>
+      <button type="button" onclick="copySummaryCostToMonth()" style="background:#1d4ed8;border:1px solid #1d4ed8;color:#fff;border-radius:12px;padding:11px 16px;font:inherit;font-weight:800;cursor:pointer">Kopiuj wydatek</button>
     </div>
   </div>`;
   modal.addEventListener('click',e=>{if(e.target===modal)closeSummaryCopyCostsModal();});
@@ -6824,7 +6825,8 @@ function buildSummaryHistoryHtml(monthKey,categoryFilter=''){
             <div style="font-size:26px;font-weight:800;color:#0f172a">${fmt(item.amountNet||0)} zł</div>
             <div style="font-size:12px;color:#64748b;margin-top:4px">Brutto: ${fmt(grossValue)} zł</div>
           </div>
-          ${!isDeleted?`<button type="button" onclick="closeSummaryCostHistoryModal();openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
+          ${!isDeleted?`<button type="button" onclick="openSummaryCopyCostsModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Kopiuj</button>
+          <button type="button" onclick="closeSummaryCostHistoryModal();openSummaryCostModal('${String(item.id).replace(/'/g,"\\'")}')" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Edytuj</button>
           <button type="button" onclick="deleteSummaryCostEntry('${String(item.id).replace(/'/g,"\\'")}');closeSummaryCostHistoryModal();openSummaryCostHistoryModal('${monthKey}')" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">Usuń</button>`:''}
         </div>
       </div>`;
@@ -6861,7 +6863,6 @@ function openSummaryCostHistoryModal(monthKey=''){
           <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Aktywne koszty</div>
           <div id="summary-history-active-total" style="font-size:24px;font-weight:800;color:#0f172a">${fmt(stats.activeTotal||0)} zł</div>
         </div>
-        <button type="button" onclick="openSummaryCopyCostsModal('${currentMonth}')" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Kopiuj na miesiąc</button>
         <button type="button" onclick="closeSummaryCostHistoryModal()" style="background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer">Zamknij</button>
       </div>
     </div>
