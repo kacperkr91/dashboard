@@ -5639,11 +5639,6 @@ function buildSummaryView(){
   const incomeMap=buildOtvApartmentFinanceMap(previoRows);
   const housekeepingMap=buildHousekeepingApartmentMap(hkData);
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
-  const cachedMediaData=mediaData?.error?null:(mediaData||getFreshMediaCache()||getMediaCache()?.data||null);
-  const mediaMonthMap=buildMediaApartmentMonthMap(cachedMediaData,apartmentKeys);
-  const energyByApartment=mediaMonthMap[monthKey]||{};
-  const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
-  const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
   const apartmentKeys=sortByDefaultOrder([...new Set([
     ...Object.keys(incomeMap),
     ...Object.keys(housekeepingMap),
@@ -5652,6 +5647,11 @@ function buildSummaryView(){
     'Gliczarów',
     'Owczary'
   ])].filter(Boolean));
+  const cachedMediaData=mediaData?.error?null:(mediaData||getFreshMediaCache()||getMediaCache()?.data||null);
+  const mediaMonthMap=buildMediaApartmentMonthMap(cachedMediaData,apartmentKeys);
+  const energyByApartment=mediaMonthMap[monthKey]||{};
+  const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
+  const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
   const targetMeta=getSummaryAllApartmentTargets(apartmentKeys);
   window._summaryTargetMeta=targetMeta;
   if(!apartmentKeys.length){
