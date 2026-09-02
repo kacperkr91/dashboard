@@ -8694,10 +8694,21 @@ function getSummaryApartmentAliases(value){
   if(/^apt\s+(\d+[a-z]?)$/i.test(normalized)){
     const number=normalized.match(/^apt\s+(\d+[a-z]?)$/i)?.[1]||'';
     aliases.add(normalizeSummaryApartmentLookupKey(`Rynek ${number}`));
+    aliases.add(normalizeSummaryApartmentLookupKey(`Rynek${number}`));
   }
   if(normalized==='Apt A')aliases.add(normalizeSummaryApartmentLookupKey('Zamoyskiego A'));
   if(normalized==='Apt B')aliases.add(normalizeSummaryApartmentLookupKey('Zamoyskiego B'));
-  if(lookup.startsWith('l25/'))aliases.add(lookup.replace(/\s+/g,''));
+  if(lookup.startsWith('l25/')){
+    aliases.add(lookup.replace(/\s+/g,''));
+    const unit=lookup.match(/^l25\/(.+)$/i)?.[1]||'';
+    if(unit){
+      aliases.add(normalizeSummaryApartmentLookupKey(`Limanowskiego ${unit}`));
+      aliases.add(normalizeSummaryApartmentLookupKey(`Limanowskiego/${unit}`));
+      aliases.add(normalizeSummaryApartmentLookupKey(`Limanowskiego 25/${unit}`));
+      aliases.add(normalizeSummaryApartmentLookupKey(`Limanowskiego25/${unit}`));
+      aliases.add(normalizeSummaryApartmentLookupKey(`L25 ${unit}`));
+    }
+  }
   return [...aliases];
 }
 
@@ -8768,6 +8779,12 @@ function normalizeSummaryApartmentKey(apt){
   if(/^drzeszkowej$/i.test(raw))return 'Drzeszkowej';
   if(/^zamoyskiego\s*a$/i.test(raw))return 'Apt A';
   if(/^zamoyskiego\s*b$/i.test(raw))return 'Apt B';
+  const limanowskiegoMatch=asciiRaw.match(/^limanowskiego\s*(?:25\s*\/?\s*)?(\d{1,2})$/i);
+  if(limanowskiegoMatch)return `L25/${limanowskiegoMatch[1]}`;
+  const l25Match=asciiRaw.match(/^l25\s*\/?\s*(\d{1,2})$/i);
+  if(l25Match)return `L25/${l25Match[1]}`;
+  const rynekCompactMatch=asciiRaw.match(/^rynek\s*(\d+[a-z]?)$/i);
+  if(rynekCompactMatch)return `Apt ${rynekCompactMatch[1]}`;
   const rynekMatch=raw.match(/^rynek\s*(\d+[a-z]?)$/i);
   if(rynekMatch)return `Apt ${rynekMatch[1]}`;
   const aptMatch=raw.match(/^apt\s*(.+)$/i);
