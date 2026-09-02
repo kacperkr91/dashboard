@@ -626,7 +626,7 @@ const CONFIG={
   mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
   mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
   mediaSheet:         'Zestawienie Miesięczne',
-  mediaDataRange:     'A3:Z200',
+  mediaDataRange:     'A3:AX200',
   aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
@@ -1182,13 +1182,15 @@ async function loadMediaData(){
     const normalizedName=name.toLowerCase();
     if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
     const values=[];
+    const usageValues=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
-    if(name==='SUMA'||!id){sumaRow={name:'SUMA',values};}
+    for(let c=26;c<=49;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    if(name==='SUMA'||!id){sumaRow={name:'SUMA',values,usageValues};}
     else{
       const dedupeKey=`${normalizedId}__${normalizedName}`;
       if(seenKeys.has(dedupeKey))continue;
       seenKeys.add(dedupeKey);
-      apartments.push({id,name,values});
+      apartments.push({id,name,values,usageValues});
     }
   }
   const result={apartments,sumaRow};
@@ -4684,10 +4686,13 @@ function buildMediaView(data){
   const visibleApartments=filteredBySearch.filter(a=>showInactive||!isMediaApartmentInactive(a));
 
   const monthTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[si+mi],0));
+  const monthUsageTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+((a.usageValues||[])[si+mi]||0),0));
   const totalYear=monthTotals.reduce((s,v)=>s+v,0);
+  const totalUsageYear=monthUsageTotals.reduce((s,v)=>s+v,0);
   const maxM=Math.max(...monthTotals),minM=Math.min(...monthTotals.filter(v=>v>0));
   const maxMi=monthTotals.indexOf(maxM),minMi=monthTotals.findIndex(v=>v===minM);
   const avgM=monthTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthTotals.filter(v=>v>0).length||1);
+  const avgUsage=monthUsageTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthUsageTotals.filter(v=>v>0).length||1);
   const t2025=visibleApartments.reduce((s,a)=>s+a.values.slice(0,12).reduce((x,v)=>x+v,0),0);
   const t2026=visibleApartments.reduce((s,a)=>s+a.values.slice(12,24).reduce((x,v)=>x+v,0),0);
   const diff=t2026-t2025;
@@ -4697,9 +4702,9 @@ function buildMediaView(data){
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">Koszt prądu ${year}</div><div class="value"><span class="sym">zł</span>${fmt(totalYear)}</div><div class="sub">${visibleApartments.length} lokali</div></div>
-    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia miesięczna</div><div class="value"><span class="sym">zł</span>${fmt(avgM)}</div><div class="sub">wszystkie lokale</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Zużycie ${year}</div><div class="value">${fmt(totalUsageYear)} kWh</div><div class="sub">łączny pobór energii</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Najdroższy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(maxM)}</div><div class="sub">${months[maxMi]||'—'}</div></div>
-    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Najtańszy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(minM||0)}</div><div class="sub">${months[minMi]||'—'}</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Średnio / miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(avgM)}</div><div class="sub">${fmt(avgUsage)} kWh</div></div>
   </div>`;
 
   const compare=`<div class="compare-row">
@@ -4732,9 +4737,17 @@ function buildMediaView(data){
   const colHeaders=months.map(m=>`<th>${m}</th>`).join('');
   const tableRows=visibleApartments.map(a=>{
     const vals=a.values.slice(si,si+12);
+    const usageVals=(a.usageValues||[]).slice(si,si+12);
     const rowTotal=vals.reduce((s,v)=>s+v,0);
+    const rowUsageTotal=usageVals.reduce((s,v)=>s+v,0);
     const maxV=Math.max(...vals);
-    const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?fmt(v):'—'}</td>`).join('');
+    const cells=vals.map((v,idx)=>{
+      const usage=Number(usageVals[idx])||0;
+      return `<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">
+        <div>${v>0?fmt(v):'—'}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">${usage>0?`${fmt(usage)} kWh`:'—'}</div>
+      </td>`;
+    }).join('');
     const safeId=a.id.replace(/'/g,"\\'");
     const inactive=isMediaApartmentInactive(a);
     const inactiveFromYear=getMediaApartmentInactiveFromYear(a);
@@ -4752,14 +4765,17 @@ function buildMediaView(data){
     const statusLabel=inactive
       ? `<div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:6px">Nieaktywne od ${inactiveFromYear}</div>`
       : `<div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">Aktywne w ${year}</div>`;
-    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}">${fmt(rowTotal)}</td><td style="text-align:right">${statusLabel}${statusButton}</td></tr>`;
+    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}"><div>${fmt(rowTotal)}</div><div style="font-size:11px;color:${inactive?'#94a3b8':'#64748b'};margin-top:2px">${fmt(rowUsageTotal)} kWh</div></td><td style="text-align:right">${statusLabel}${statusButton}</td></tr>`;
   }).join('');
   const sv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(a.values[si+mi]||0),0));
+  const suv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[si+mi])||0),0));
   const st=sv.reduce((s,v)=>s+v,0);
-  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td><td></td></tr>`;
+  const sut=suv.reduce((s,v)=>s+v,0);
+  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map((v,idx)=>`<td><div>${fmt(v)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${fmt(suv[idx])} kWh</div></td>`).join('')}<td class="total-col"><div>${fmt(st)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${fmt(sut)} kWh</div></td><td></td></tr>`;
 
   const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
     <div class="card-title">Zestawienie miesięczne — koszty prądu</div>
+    <div class="card-subtitle">W każdej komórce u góry koszt, a pod spodem zużycie w kWh.</div>
     <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center">
       <button class="year-btn ${year==='2025'?'active':''}" onclick="setMediaYear('2025')">2025</button>
       <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
@@ -13057,13 +13073,15 @@ async function loadMediaData(){
     const normalizedName=name.toLowerCase();
     if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
     const values=[];
+    const usageValues=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
-    if(name==='SUMA'||!id){sumaRow={name:'SUMA',values};}
+    for(let c=26;c<=49;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    if(name==='SUMA'||!id){sumaRow={name:'SUMA',values,usageValues};}
     else{
       const dedupeKey=`${normalizedId}__${normalizedName}`;
       if(seenKeys.has(dedupeKey))continue;
       seenKeys.add(dedupeKey);
-      apartments.push({id,name,values});
+      apartments.push({id,name,values,usageValues});
     }
   }
   const result={apartments,sumaRow};
