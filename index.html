@@ -626,7 +626,8 @@ const CONFIG={
   mediaApiKey:        localStorage.getItem('gs_media_api_key')||'',
   mediaSpreadsheetId: localStorage.getItem('gs_media_spreadsheet_id')||'',
   mediaSheet:         'Zestawienie Miesięczne',
-  mediaDataRange:     'A3:AX200',
+  mediaCostRange:     'A3:Z200',
+  mediaUsageRange:    'A41:Z200',
   aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
@@ -1157,10 +1158,12 @@ async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr
 async function loadMediaData(){
   const cached=getFreshMediaCache();
   if(cached)return cached;
-  const{mediaApiKey,mediaSpreadsheetId,mediaSheet,mediaDataRange}=CONFIG;
+  const{mediaApiKey,mediaSpreadsheetId,mediaSheet,mediaCostRange,mediaUsageRange}=CONFIG;
   if(!mediaApiKey||!mediaSpreadsheetId)throw new Error('MISSING_MEDIA_CONFIG');
-  const enc=encodeURIComponent(`'${mediaSheet}'!${mediaDataRange}`);
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${mediaSpreadsheetId}/values/${enc}?valueRenderOption=UNFORMATTED_VALUE&key=${mediaApiKey}`;
+  const params=new URLSearchParams({key:mediaApiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+  params.append('ranges',`'${mediaSheet}'!${mediaCostRange}`);
+  params.append('ranges',`'${mediaSheet}'!${mediaUsageRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${mediaSpreadsheetId}/values:batchGet?${params.toString()}`;
   let data;
   try{
     data=await apiFetch(url);
@@ -1169,22 +1172,37 @@ async function loadMediaData(){
     if(fallback?.data)return fallback.data;
     throw e;
   }
-  const rows=data.values||[];
-  if(!rows.length)throw new Error('NO_MEDIA_DATA');
+  const costRows=data.valueRanges?.[0]?.values||[];
+  const usageRows=data.valueRanges?.[1]?.values||[];
+  if(!costRows.length)throw new Error('NO_MEDIA_DATA');
   const apartments=[];let sumaRow=null;
   const seenKeys=new Set();
-  for(let r=1;r<rows.length;r++){
-    const row=rows[r];
+  const usageMap=new Map();
+  for(let r=0;r<usageRows.length;r++){
+    const row=usageRows[r];
     const id=String(row[0]||'').trim();
     const name=String(row[1]||'').trim();
     if(!name)continue;
     const normalizedId=id.toLowerCase();
     const normalizedName=name.toLowerCase();
-    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
-    const values=[];
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
     const usageValues=[];
+    for(let c=2;c<=25;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    const mapKey=`${normalizedId}__${normalizedName}`;
+    usageMap.set(mapKey,usageValues);
+    if(name==='SUMA'||!id)usageMap.set(`suma__${normalizedName}`,usageValues);
+  }
+  for(let r=1;r<costRows.length;r++){
+    const row=costRows[r];
+    const id=String(row[0]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
+    const values=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
-    for(let c=26;c<=49;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    const usageValues=usageMap.get(`${normalizedId}__${normalizedName}`)||usageMap.get(`suma__${normalizedName}`)||Array(24).fill(0);
     if(name==='SUMA'||!id){sumaRow={name:'SUMA',values,usageValues};}
     else{
       const dedupeKey=`${normalizedId}__${normalizedName}`;
@@ -3999,6 +4017,7 @@ let _state={
   rentalYear:new Date().getFullYear(),
   rentalMonth:getRentalMonthKeyFromDate(),
   mediaYear:'2026',
+  mediaMode:'cost',
   mediaSearch:'',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
@@ -4670,6 +4689,7 @@ const MONTHS_2026=['sty 2026','lut 2026','mar 2026','kwi 2026','maj 2026','cze 2
 
 function buildMediaView(data){
   const year=_state.mediaYear;
+  const mode=_state.mediaMode==='usage'?'usage':'cost';
   const search=String(_state.mediaSearch||'').trim().toLowerCase();
   const months=year==='2025'?MONTHS_2025:MONTHS_2026;
   const si=year==='2025'?0:12;
@@ -4699,34 +4719,48 @@ function buildMediaView(data){
   const aptTotals=visibleApartments.map(a=>({...a,yt:a.values.slice(si,si+12).reduce((s,v)=>s+v,0)}));
   const top5=[...aptTotals].sort((a,b)=>b.yt-a.yt).slice(0,5);
   const maxT5=top5[0]?.yt||1;
+  const usageTop5=[...visibleApartments]
+    .map(a=>({...a,yt:(a.usageValues||[]).slice(si,si+12).reduce((s,v)=>s+v,0)}))
+    .sort((a,b)=>b.yt-a.yt)
+    .slice(0,5);
+  const maxUsageT5=usageTop5[0]?.yt||1;
 
+  const maxUsage=Math.max(...monthUsageTotals);
+  const minUsage=Math.min(...monthUsageTotals.filter(v=>v>0));
+  const maxUsageMi=monthUsageTotals.indexOf(maxUsage);
+  const minUsageMi=monthUsageTotals.findIndex(v=>v===minUsage);
+  const usageDiff=monthUsageTotals.reduce((s,v)=>s+v,0)-MONTHS_2025.map((_,mi)=>visibleApartments.reduce((sum,a)=>sum+(((a.usageValues||[])[mi])||0),0)).reduce((s,v)=>s+v,0);
+  const total2025Cost=t2025;
+  const total2026Cost=t2026;
+  const total2025Usage=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((sum,a)=>sum+(((a.usageValues||[])[mi])||0),0)).reduce((s,v)=>s+v,0);
+  const total2026Usage=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((sum,a)=>sum+(((a.usageValues||[])[12+mi])||0),0)).reduce((s,v)=>s+v,0);
   const kpis=`<div class="kpi-row">
-    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">Koszt prądu ${year}</div><div class="value"><span class="sym">zł</span>${fmt(totalYear)}</div><div class="sub">${visibleApartments.length} lokali</div></div>
-    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Zużycie ${year}</div><div class="value">${fmt(totalUsageYear)} kWh</div><div class="sub">łączny pobór energii</div></div>
-    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Najdroższy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(maxM)}</div><div class="sub">${months[maxMi]||'—'}</div></div>
-    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Średnio / miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(avgM)}</div><div class="sub">${fmt(avgUsage)} kWh</div></div>
+    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">${mode==='usage'?'Zużycie prądu':'Koszt prądu'} ${year}</div><div class="value">${mode==='usage'?`${fmt(totalUsageYear)} kWh`:`<span class="sym">zł</span>${fmt(totalYear)}`}</div><div class="sub">${visibleApartments.length} lokali</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">${mode==='usage'?'Koszt prądu':'Zużycie'} ${year}</div><div class="value">${mode==='usage'?`<span class="sym">zł</span>${fmt(totalYear)}`:`${fmt(totalUsageYear)} kWh`}</div><div class="sub">${mode==='usage'?'łączny koszt energii':'łączny pobór energii'}</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">${mode==='usage'?'Najwyższe zużycie':'Najdroższy miesiąc'}</div><div class="value">${mode==='usage'?`${fmt(maxUsage)} kWh`:`<span class="sym">zł</span>${fmt(maxM)}`}</div><div class="sub">${months[mode==='usage'?maxUsageMi:maxMi]||'—'}</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Średnio / miesiąc</div><div class="value">${mode==='usage'?`${fmt(avgUsage)} kWh`:`<span class="sym">zł</span>${fmt(avgM)}`}</div><div class="sub">${mode==='usage'?`${fmt(avgM)} zł`:`${fmt(avgUsage)} kWh`}</div></div>
   </div>`;
 
   const compare=`<div class="compare-row">
-    <div class="compare-card"><div class="cc-title">Łączny koszt 2025</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value">${fmt(t2025)} zł</div></div>
-    <div class="compare-card"><div class="cc-title">Łączny koszt 2026 (dotychczas)</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value ${diff>0?'up':'down'}">${fmt(t2026)} zł</div><div class="cc-diff" style="color:${diff>0?'var(--red)':'var(--green)'}">${diff>0?'▲':'▼'} ${fmt(Math.abs(diff))} zł vs 2025</div></div>
+    <div class="compare-card"><div class="cc-title">${mode==='usage'?'Łączne zużycie 2025':'Łączny koszt 2025'}</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value">${mode==='usage'?`${fmt(total2025Usage)} kWh`:`${fmt(total2025Cost)} zł`}</div></div>
+    <div class="compare-card"><div class="cc-title">${mode==='usage'?'Łączne zużycie 2026 (dotychczas)':'Łączny koszt 2026 (dotychczas)'}</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value ${(mode==='usage'?usageDiff:diff)>0?'up':'down'}">${mode==='usage'?`${fmt(total2026Usage)} kWh`:`${fmt(total2026Cost)} zł`}</div><div class="cc-diff" style="color:${(mode==='usage'?usageDiff:diff)>0?'var(--red)':'var(--green)'}">${(mode==='usage'?usageDiff:diff)>0?'▲':'▼'} ${mode==='usage'?`${fmt(Math.abs(usageDiff))} kWh`:`${fmt(Math.abs(diff))} zł`} vs 2025</div></div>
   </div>`;
 
   const top5html=`<div class="grid-card media-section" style="animation-delay:0.05s">
-    <div class="card-title">TOP 5 — najdroższe lokale (${year})</div>
-    <div class="top5-grid">${top5.map((a,i)=>`<div class="top5-card"><div class="rank">#${i+1}</div><div class="apt-name">${a.name}</div><div class="apt-total">${fmt(a.yt)} zł</div><div class="apt-avg">śr. ${fmt(a.yt/12)} zł/mies.</div><div class="apt-bar"><div class="apt-bar-fill" style="width:${(a.yt/maxT5*100).toFixed(1)}%"></div></div></div>`).join('')}</div>
+    <div class="card-title">${mode==='usage'?'TOP 5 — najwyższe zużycie':'TOP 5 — najdroższe lokale'} (${year})</div>
+    <div class="top5-grid">${(mode==='usage'?usageTop5:top5).map((a,i)=>`<div class="top5-card"><div class="rank">#${i+1}</div><div class="apt-name">${a.name}</div><div class="apt-total">${mode==='usage'?`${fmt(a.yt)} kWh`:`${fmt(a.yt)} zł`}</div><div class="apt-avg">śr. ${mode==='usage'?`${fmt(a.yt/12)} kWh/mies.`:`${fmt(a.yt/12)} zł/mies.`}</div><div class="apt-bar"><div class="apt-bar-fill" style="width:${(a.yt/(mode==='usage'?maxUsageT5:maxT5)*100).toFixed(1)}%"></div></div></div>`).join('')}</div>
   </div>`;
 
   const charts=`
     <div class="chart-card media-section" style="animation-delay:0.1s">
-      <div class="card-title">Sumy miesięczne — wszystkie lokale (${year})</div>
-      <div class="card-subtitle">Łączny koszt prądu wszystkich lokali w danym miesiącu</div>
+      <div class="card-title">${mode==='usage'?'Sumy miesięczne zużycia':'Sumy miesięczne kosztów'} — wszystkie lokale (${year})</div>
+      <div class="card-subtitle">${mode==='usage'?'Łączne zużycie energii wszystkich lokali w danym miesiącu':'Łączny koszt prądu wszystkich lokali w danym miesiącu'}</div>
       <div class="chart-wrap"><canvas id="mediaBarChart"></canvas></div>
     </div>
     <div class="chart-card media-section" style="animation-delay:0.15s" id="lineChartCard">
       <div class="line-chart-label">
         <div>
-          <div class="card-title" id="lineChartTitle">Trend miesięczny — 2025 vs 2026 — wszystkie lokale</div>
+          <div class="card-title" id="lineChartTitle">${mode==='usage'?'Trend zużycia miesięcznego':'Trend kosztów miesięcznych'} — 2025 vs 2026 — wszystkie lokale</div>
           <div class="card-subtitle">Kliknij wiersz w tabeli aby zobaczyć trend konkretnego lokalu</div>
         </div>
         <div id="aptChipWrap"></div>
@@ -4736,18 +4770,10 @@ function buildMediaView(data){
 
   const colHeaders=months.map(m=>`<th>${m}</th>`).join('');
   const tableRows=visibleApartments.map(a=>{
-    const vals=a.values.slice(si,si+12);
-    const usageVals=(a.usageValues||[]).slice(si,si+12);
+    const vals=(mode==='usage'?(a.usageValues||[]):a.values).slice(si,si+12);
     const rowTotal=vals.reduce((s,v)=>s+v,0);
-    const rowUsageTotal=usageVals.reduce((s,v)=>s+v,0);
     const maxV=Math.max(...vals);
-    const cells=vals.map((v,idx)=>{
-      const usage=Number(usageVals[idx])||0;
-      return `<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">
-        <div>${v>0?fmt(v):'—'}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px">${usage>0?`${fmt(usage)} kWh`:'—'}</div>
-      </td>`;
-    }).join('');
+    const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?(mode==='usage'?`${fmt(v)} kWh`:fmt(v)):'—'}</td>`).join('');
     const safeId=a.id.replace(/'/g,"\\'");
     const inactive=isMediaApartmentInactive(a);
     const inactiveFromYear=getMediaApartmentInactiveFromYear(a);
@@ -4765,20 +4791,20 @@ function buildMediaView(data){
     const statusLabel=inactive
       ? `<div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:6px">Nieaktywne od ${inactiveFromYear}</div>`
       : `<div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">Aktywne w ${year}</div>`;
-    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}"><div>${fmt(rowTotal)}</div><div style="font-size:11px;color:${inactive?'#94a3b8':'#64748b'};margin-top:2px">${fmt(rowUsageTotal)} kWh</div></td><td style="text-align:right">${statusLabel}${statusButton}</td></tr>`;
+    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}">${mode==='usage'?`${fmt(rowTotal)} kWh`:fmt(rowTotal)}</td><td style="text-align:right">${statusLabel}${statusButton}</td></tr>`;
   }).join('');
-  const sv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(a.values[si+mi]||0),0));
-  const suv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[si+mi])||0),0));
-  const st=sv.reduce((s,v)=>s+v,0);
-  const sut=suv.reduce((s,v)=>s+v,0);
-  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map((v,idx)=>`<td><div>${fmt(v)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${fmt(suv[idx])} kWh</div></td>`).join('')}<td class="total-col"><div>${fmt(st)}</div><div style="font-size:11px;color:#64748b;margin-top:2px">${fmt(sut)} kWh</div></td><td></td></tr>`;
+  const activeSeries=mode==='usage'?monthUsageTotals:monthTotals;
+  const activeTotal=activeSeries.reduce((s,v)=>s+v,0);
+  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${activeSeries.map(v=>`<td>${mode==='usage'?`${fmt(v)} kWh`:fmt(v)}</td>`).join('')}<td class="total-col">${mode==='usage'?`${fmt(activeTotal)} kWh`:fmt(activeTotal)}</td><td></td></tr>`;
 
   const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
-    <div class="card-title">Zestawienie miesięczne — koszty prądu</div>
-    <div class="card-subtitle">W każdej komórce u góry koszt, a pod spodem zużycie w kWh.</div>
+    <div class="card-title">Zestawienie miesięczne — prąd</div>
+    <div class="card-subtitle">Przełączasz widok między kosztami a zużyciem z tego samego arkusza.</div>
     <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center">
       <button class="year-btn ${year==='2025'?'active':''}" onclick="setMediaYear('2025')">2025</button>
       <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
+      <button class="year-btn ${mode==='cost'?'active':''}" onclick="setMediaMode('cost')">Koszty</button>
+      <button class="year-btn ${mode==='usage'?'active':''}" onclick="setMediaMode('usage')">Zużycie</button>
       <button class="year-btn ${showInactive?'':'active'}" onclick="setMediaShowInactive(${showInactive?'false':'true'})" style="${showInactive?'':'background:#475569;border-color:#475569;color:#fff'}">${showInactive?'Ukryj nieaktywne':'Pokaż nieaktywne'}</button>
       <input id="mediaSearchInput" type="search" value="${escapeHtml(_state.mediaSearch||'')}" oninput="setMediaSearch(this.value)" placeholder="Filtruj po ID lub apartamencie…" style="min-width:260px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
       <span style="margin-left:auto;font-size:12px;color:#64748b;font-weight:600">${inactiveCount} nieaktywn${inactiveCount===1?'y':'e'} w ${year}</span>
@@ -4791,10 +4817,12 @@ function buildMediaView(data){
 
   const mt2025=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[mi],0));
   const mt2026=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[12+mi],0));
+  const mu2025=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[mi])||0),0));
+  const mu2026=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[12+mi])||0),0));
 
   // store apartments on window for interactive chart updates
   window._mediaApartments = visibleApartments;
-  return{html:kpis+compare+top5html+charts+table,monthTotals,months,mt2025,mt2026};
+  return{html:kpis+compare+top5html+charts+table,monthTotals,monthUsageTotals,months,mt2025,mt2026,mu2025,mu2026,mode};
 }
 
 
@@ -10273,16 +10301,17 @@ function updateLineChart(apt){
   const lc=_charts.line;
   if(!lc)return;
   const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  const mode=_state.mediaMode==='usage'?'usage':'cost';
   if(!apt){
     // back to all
     const apts=window._mediaApartments||[];
-    lc.data.datasets[0].data=sm.map((_,i)=>apts.reduce((s,a)=>s+a.values[i],0));
-    lc.data.datasets[1].data=sm.map((_,i)=>apts.reduce((s,a)=>s+a.values[12+i],0));
+    lc.data.datasets[0].data=sm.map((_,i)=>apts.reduce((s,a)=>s+(mode==='usage'?((a.usageValues||[])[i]||0):(a.values[i]||0)),0));
+    lc.data.datasets[1].data=sm.map((_,i)=>apts.reduce((s,a)=>s+(mode==='usage'?((a.usageValues||[])[12+i]||0):(a.values[12+i]||0)),0));
     lc.data.datasets[0].label='2025 — wszystkie';
     lc.data.datasets[1].label='2026 — wszystkie';
   } else {
-    lc.data.datasets[0].data=apt.values.slice(0,12);
-    lc.data.datasets[1].data=apt.values.slice(12,24);
+    lc.data.datasets[0].data=(mode==='usage'?(apt.usageValues||[]):apt.values).slice(0,12);
+    lc.data.datasets[1].data=(mode==='usage'?(apt.usageValues||[]):apt.values).slice(12,24);
     lc.data.datasets[0].label='2025 — '+apt.name;
     lc.data.datasets[1].label='2026 — '+apt.name;
   }
@@ -10291,10 +10320,11 @@ function updateLineChart(apt){
 
 function initMediaCharts(view){
   const bc=document.getElementById('mediaBarChart');
-  if(bc)_charts.bar=new Chart(bc.getContext('2d'),{type:'bar',data:{labels:view.months,datasets:[{data:view.monthTotals,backgroundColor:'rgba(234,88,12,0.7)',borderColor:'rgba(234,88,12,1)',borderWidth:1,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>' zł '+fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}});
+  const mode=view.mode==='usage'?'usage':'cost';
+  if(bc)_charts.bar=new Chart(bc.getContext('2d'),{type:'bar',data:{labels:view.months,datasets:[{data:mode==='usage'?view.monthUsageTotals:view.monthTotals,backgroundColor:'rgba(234,88,12,0.7)',borderColor:'rgba(234,88,12,1)',borderWidth:1,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>mode==='usage'?` ${fmt(c.parsed.y)} kWh`:' zł '+fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>mode==='usage'?`${fmtN(v)} kWh`:'zł '+fmtN(v)}}}}});
   const lc=document.getElementById('mediaLineChart');
   const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
-  if(lc)_charts.line=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:view.mt2025,borderColor:'rgba(37,99,235,0.8)',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:view.mt2026,borderColor:'rgba(234,88,12,0.9)',backgroundColor:'rgba(234,88,12,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>'zł '+fmtN(v)}}}}});
+  if(lc)_charts.line=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:mode==='usage'?view.mu2025:view.mt2025,borderColor:'rgba(37,99,235,0.8)',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:mode==='usage'?view.mu2026:view.mt2026,borderColor:'rgba(234,88,12,0.9)',backgroundColor:'rgba(234,88,12,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>mode==='usage'?` ${c.dataset.label}: ${fmt(c.parsed.y)} kWh`:` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>mode==='usage'?`${fmtN(v)} kWh`:'zł '+fmtN(v)}}}}});
 }
 
 
@@ -13048,10 +13078,12 @@ async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr
 async function loadMediaData(){
   const cached=getFreshMediaCache();
   if(cached)return cached;
-  const{mediaApiKey,mediaSpreadsheetId,mediaSheet,mediaDataRange}=CONFIG;
+  const{mediaApiKey,mediaSpreadsheetId,mediaSheet,mediaCostRange,mediaUsageRange}=CONFIG;
   if(!mediaApiKey||!mediaSpreadsheetId)throw new Error('MISSING_MEDIA_CONFIG');
-  const enc=encodeURIComponent(`'${mediaSheet}'!${mediaDataRange}`);
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${mediaSpreadsheetId}/values/${enc}?valueRenderOption=UNFORMATTED_VALUE&key=${mediaApiKey}`;
+  const params=new URLSearchParams({key:mediaApiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+  params.append('ranges',`'${mediaSheet}'!${mediaCostRange}`);
+  params.append('ranges',`'${mediaSheet}'!${mediaUsageRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${mediaSpreadsheetId}/values:batchGet?${params.toString()}`;
   let data;
   try{
     data=await apiFetch(url);
@@ -13060,22 +13092,37 @@ async function loadMediaData(){
     if(fallback?.data)return fallback.data;
     throw e;
   }
-  const rows=data.values||[];
-  if(!rows.length)throw new Error('NO_MEDIA_DATA');
+  const costRows=data.valueRanges?.[0]?.values||[];
+  const usageRows=data.valueRanges?.[1]?.values||[];
+  if(!costRows.length)throw new Error('NO_MEDIA_DATA');
   const apartments=[];let sumaRow=null;
   const seenKeys=new Set();
-  for(let r=1;r<rows.length;r++){
-    const row=rows[r];
+  const usageMap=new Map();
+  for(let r=0;r<usageRows.length;r++){
+    const row=usageRows[r];
     const id=String(row[0]||'').trim();
     const name=String(row[1]||'').trim();
     if(!name)continue;
     const normalizedId=id.toLowerCase();
     const normalizedName=name.toLowerCase();
-    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
-    const values=[];
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
     const usageValues=[];
+    for(let c=2;c<=25;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    const mapKey=`${normalizedId}__${normalizedName}`;
+    usageMap.set(mapKey,usageValues);
+    if(name==='SUMA'||!id)usageMap.set(`suma__${normalizedName}`,usageValues);
+  }
+  for(let r=1;r<costRows.length;r++){
+    const row=costRows[r];
+    const id=String(row[0]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
+    const values=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
-    for(let c=26;c<=49;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    const usageValues=usageMap.get(`${normalizedId}__${normalizedName}`)||usageMap.get(`suma__${normalizedName}`)||Array(24).fill(0);
     if(name==='SUMA'||!id){sumaRow={name:'SUMA',values,usageValues};}
     else{
       const dedupeKey=`${normalizedId}__${normalizedName}`;
@@ -14329,6 +14376,10 @@ function setRentalMonth(key){
   renderApp();
 }
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
+function setMediaMode(mode){
+  _state.mediaMode=mode==='usage'?'usage':'cost';
+  renderApp();
+}
 
 function setMediaSearch(val){
   _state.mediaSearch=String(val||'');
