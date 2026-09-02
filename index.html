@@ -4629,13 +4629,16 @@ function buildMediaView(data){
   const months=year==='2025'?MONTHS_2025:MONTHS_2026;
   const si=year==='2025'?0:12;
   const{apartments,sumaRow}=data;
-  const visibleApartments=search
+  const showInactive=getMediaShowInactive();
+  const filteredBySearch=search
     ? apartments.filter(a=>{
       const id=String(a?.id||'').toLowerCase();
       const name=String(a?.name||'').toLowerCase();
       return id.includes(search)||name.includes(search);
     })
     : apartments;
+  const inactiveCount=apartments.filter(isMediaApartmentInactive).length;
+  const visibleApartments=filteredBySearch.filter(a=>showInactive||!isMediaApartmentInactive(a));
 
   const monthTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[si+mi],0));
   const totalYear=monthTotals.reduce((s,v)=>s+v,0);
@@ -4690,21 +4693,35 @@ function buildMediaView(data){
     const maxV=Math.max(...vals);
     const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?fmt(v):'—'}</td>`).join('');
     const safeId=a.id.replace(/'/g,"\\'");
-    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="cursor:pointer"><td>${a.id}</td><td>${a.name}</td>${cells}<td class="total-col">${fmt(rowTotal)}</td></tr>`;
+    const inactive=isMediaApartmentInactive(a);
+    const safeToggleKey=getMediaApartmentPersistKey(a).replace(/'/g,"\\'");
+    const rowStyle=inactive
+      ? 'cursor:pointer;background:#f8fafc;opacity:0.68;color:#94a3b8;'
+      : 'cursor:pointer';
+    const nameStyle=inactive
+      ? 'text-decoration:line-through;color:#94a3b8;font-weight:600'
+      : 'font-weight:600;color:inherit';
+    const statusButton=`
+      <button onclick="event.stopPropagation();toggleMediaApartmentInactive('${safeToggleKey}')" style="border:1px solid ${inactive?'#cbd5e1':'#fbbf24'};background:${inactive?'#fff':'#fffbeb'};color:${inactive?'#64748b':'#b45309'};border-radius:999px;padding:5px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">
+        ${inactive?'Przywróć':'Oznacz nieaktywne'}
+      </button>`;
+    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}">${fmt(rowTotal)}</td><td style="text-align:right">${statusButton}</td></tr>`;
   }).join('');
   const sv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(a.values[si+mi]||0),0));
   const st=sv.reduce((s,v)=>s+v,0);
-  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td></tr>`;
+  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td><td></td></tr>`;
 
   const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
     <div class="card-title">Zestawienie miesięczne — koszty prądu</div>
     <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center">
       <button class="year-btn ${year==='2025'?'active':''}" onclick="setMediaYear('2025')">2025</button>
       <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
+      <button class="year-btn ${showInactive?'':'active'}" onclick="setMediaShowInactive(${showInactive?'false':'true'})" style="${showInactive?'':'background:#475569;border-color:#475569;color:#fff'}">${showInactive?'Ukryj nieaktywne':'Pokaż nieaktywne'}</button>
       <input id="mediaSearchInput" type="search" value="${escapeHtml(_state.mediaSearch||'')}" oninput="setMediaSearch(this.value)" placeholder="Filtruj po ID lub apartamencie…" style="min-width:260px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
+      <span style="margin-left:auto;font-size:12px;color:#64748b;font-weight:600">${inactiveCount} nieaktywn${inactiveCount===1?'y':'e'}</span>
     </div>
     <div class="media-table-wrap"><table>
-      <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th></tr></thead>
+      <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th><th style="text-align:right">Status</th></tr></thead>
       <tbody>${tableRows}${sumaHtml}</tbody>
     </table></div>
   </div>`;
@@ -5944,6 +5961,8 @@ function normalizeSummaryCostMetaStore(store){
     contractors:uniq(data.contractors),
     categories:uniq(data.categories),
     ignoredKsefNumbers:uniq(data.ignoredKsefNumbers),
+    mediaInactiveKeys:uniq(data.mediaInactiveKeys),
+    mediaShowInactive:data.mediaShowInactive!==false,
   };
 }
 
@@ -5952,9 +5971,43 @@ function getSummaryCostMetaStore(){
   try{
     _summaryCostMetaCache=normalizeSummaryCostMetaStore(JSON.parse(localStorage.getItem('summary_cost_meta')||'{}'));
   }catch(e){
-    _summaryCostMetaCache={contractors:[],categories:[],ignoredKsefNumbers:[]};
+    _summaryCostMetaCache={contractors:[],categories:[],ignoredKsefNumbers:[],mediaInactiveKeys:[],mediaShowInactive:true};
   }
   return _summaryCostMetaCache;
+}
+
+function getMediaApartmentPersistKey(apartment){
+  const id=String(apartment?.id||'').trim();
+  const name=String(apartment?.name||'').trim();
+  return id||name;
+}
+
+function isMediaApartmentInactive(apartment){
+  const key=getMediaApartmentPersistKey(apartment);
+  if(!key)return false;
+  return (getSummaryCostMetaStore().mediaInactiveKeys||[]).includes(key);
+}
+
+function getMediaShowInactive(){
+  return getSummaryCostMetaStore().mediaShowInactive!==false;
+}
+
+function setMediaShowInactive(show){
+  const meta=getSummaryCostMetaStore();
+  saveSummaryCostMetaStore({...meta,mediaShowInactive:show!==false});
+  if(_state.section==='media')renderApp();
+}
+
+function toggleMediaApartmentInactive(key){
+  const normalized=String(key||'').trim();
+  if(!normalized)return;
+  const meta=getSummaryCostMetaStore();
+  const current=Array.isArray(meta.mediaInactiveKeys)?meta.mediaInactiveKeys:[];
+  const next=current.includes(normalized)
+    ? current.filter(item=>item!==normalized)
+    : [...current,normalized];
+  saveSummaryCostMetaStore({...meta,mediaInactiveKeys:next});
+  if(_state.section==='media')renderApp();
 }
 
 function saveSummaryCostMetaStore(store){
@@ -10127,9 +10180,7 @@ async function syncPull(){
       }
     }
     if(summaryCostMetaData&&typeof summaryCostMetaData.meta==='object'&&summaryCostMetaData.meta!==null){
-      _summaryCostMetaCache=summaryCostMetaData.meta;
-      if(!Array.isArray(_summaryCostMetaCache.contractors))_summaryCostMetaCache.contractors=[];
-      if(!Array.isArray(_summaryCostMetaCache.categories))_summaryCostMetaCache.categories=[];
+      _summaryCostMetaCache=normalizeSummaryCostMetaStore(summaryCostMetaData.meta);
       localStorage.setItem('summary_cost_meta',JSON.stringify(_summaryCostMetaCache));
     }
     if(dyzuryData&&typeof dyzuryData.dyzury==='object'&&dyzuryData.dyzury!==null){
