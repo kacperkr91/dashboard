@@ -4694,6 +4694,7 @@ function buildMediaView(data){
     const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?fmt(v):'—'}</td>`).join('');
     const safeId=a.id.replace(/'/g,"\\'");
     const inactive=isMediaApartmentInactive(a);
+    const inactiveFromYear=getMediaApartmentInactiveFromYear(a);
     const safeToggleKey=getMediaApartmentPersistKey(a).replace(/'/g,"\\'");
     const rowStyle=inactive
       ? 'cursor:pointer;background:#f8fafc;opacity:0.68;color:#94a3b8;'
@@ -4705,7 +4706,10 @@ function buildMediaView(data){
       <button onclick="event.stopPropagation();toggleMediaApartmentInactive('${safeToggleKey}')" style="border:1px solid ${inactive?'#cbd5e1':'#fbbf24'};background:${inactive?'#fff':'#fffbeb'};color:${inactive?'#64748b':'#b45309'};border-radius:999px;padding:5px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">
         ${inactive?'Przywróć':'Oznacz nieaktywne'}
       </button>`;
-    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}">${fmt(rowTotal)}</td><td style="text-align:right">${statusButton}</td></tr>`;
+    const statusLabel=inactive
+      ? `<div style="font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:6px">Nieaktywne od ${inactiveFromYear}</div>`
+      : `<div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:6px">Aktywne w ${year}</div>`;
+    return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="${rowStyle}"><td style="${inactive?'text-decoration:line-through;font-weight:700;color:#94a3b8':'font-weight:700'}">${a.id}</td><td><div style="${nameStyle}">${a.name}</div></td>${cells}<td class="total-col" style="${inactive?'color:#94a3b8':''}">${fmt(rowTotal)}</td><td style="text-align:right">${statusLabel}${statusButton}</td></tr>`;
   }).join('');
   const sv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(a.values[si+mi]||0),0));
   const st=sv.reduce((s,v)=>s+v,0);
@@ -4718,7 +4722,7 @@ function buildMediaView(data){
       <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
       <button class="year-btn ${showInactive?'':'active'}" onclick="setMediaShowInactive(${showInactive?'false':'true'})" style="${showInactive?'':'background:#475569;border-color:#475569;color:#fff'}">${showInactive?'Ukryj nieaktywne':'Pokaż nieaktywne'}</button>
       <input id="mediaSearchInput" type="search" value="${escapeHtml(_state.mediaSearch||'')}" oninput="setMediaSearch(this.value)" placeholder="Filtruj po ID lub apartamencie…" style="min-width:260px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
-      <span style="margin-left:auto;font-size:12px;color:#64748b;font-weight:600">${inactiveCount} nieaktywn${inactiveCount===1?'y':'e'}</span>
+      <span style="margin-left:auto;font-size:12px;color:#64748b;font-weight:600">${inactiveCount} nieaktywn${inactiveCount===1?'y':'e'} w ${year}</span>
     </div>
     <div class="media-table-wrap"><table>
       <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th><th style="text-align:right">Status</th></tr></thead>
@@ -5896,6 +5900,22 @@ function clearSummaryCostsDirty(){
   localStorage.removeItem('summary_costs_dirty_at');
 }
 
+function getSummaryCostMetaDirtyAt(){
+  const raw=localStorage.getItem('summary_cost_meta_dirty_at');
+  const value=Number(raw||0);
+  return Number.isFinite(value)&&value>0?value:0;
+}
+
+function markSummaryCostMetaDirty(){
+  const now=Date.now();
+  localStorage.setItem('summary_cost_meta_dirty_at',String(now));
+  return now;
+}
+
+function clearSummaryCostMetaDirty(){
+  localStorage.removeItem('summary_cost_meta_dirty_at');
+}
+
 function getSummaryItemVersion(item){
   if(!item||typeof item!=='object')return 0;
   const stamps=[
@@ -5957,11 +5977,26 @@ function saveSummaryCostsStore(store){
 function normalizeSummaryCostMetaStore(store){
   const data=store&&typeof store==='object'?store:{};
   const uniq=list=>[...new Set((Array.isArray(list)?list:[]).map(value=>String(value||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pl'));
+  const inactiveFromYear={};
+  const rawMap=data.mediaInactiveFromYear&&typeof data.mediaInactiveFromYear==='object'?data.mediaInactiveFromYear:{};
+  Object.keys(rawMap).forEach(key=>{
+    const normalizedKey=String(key||'').trim();
+    const year=Number(rawMap[key]);
+    if(!normalizedKey||!Number.isFinite(year)||year<2000||year>2100)return;
+    inactiveFromYear[normalizedKey]=year;
+  });
+  if(!Object.keys(inactiveFromYear).length && Array.isArray(data.mediaInactiveKeys)){
+    const fallbackYear=new Date().getFullYear();
+    data.mediaInactiveKeys.forEach(key=>{
+      const normalizedKey=String(key||'').trim();
+      if(normalizedKey)inactiveFromYear[normalizedKey]=fallbackYear;
+    });
+  }
   return {
     contractors:uniq(data.contractors),
     categories:uniq(data.categories),
     ignoredKsefNumbers:uniq(data.ignoredKsefNumbers),
-    mediaInactiveKeys:uniq(data.mediaInactiveKeys),
+    mediaInactiveFromYear:inactiveFromYear,
     mediaShowInactive:data.mediaShowInactive!==false,
   };
 }
@@ -5971,7 +6006,7 @@ function getSummaryCostMetaStore(){
   try{
     _summaryCostMetaCache=normalizeSummaryCostMetaStore(JSON.parse(localStorage.getItem('summary_cost_meta')||'{}'));
   }catch(e){
-    _summaryCostMetaCache={contractors:[],categories:[],ignoredKsefNumbers:[],mediaInactiveKeys:[],mediaShowInactive:true};
+    _summaryCostMetaCache={contractors:[],categories:[],ignoredKsefNumbers:[],mediaInactiveFromYear:{},mediaShowInactive:true};
   }
   return _summaryCostMetaCache;
 }
@@ -5985,7 +6020,16 @@ function getMediaApartmentPersistKey(apartment){
 function isMediaApartmentInactive(apartment){
   const key=getMediaApartmentPersistKey(apartment);
   if(!key)return false;
-  return (getSummaryCostMetaStore().mediaInactiveKeys||[]).includes(key);
+  const fromYear=Number(getSummaryCostMetaStore().mediaInactiveFromYear?.[key]||0);
+  const selectedYear=Number(_state.mediaYear||new Date().getFullYear());
+  return Number.isFinite(fromYear)&&fromYear>0&&selectedYear>=fromYear;
+}
+
+function getMediaApartmentInactiveFromYear(apartment){
+  const key=getMediaApartmentPersistKey(apartment);
+  if(!key)return 0;
+  const fromYear=Number(getSummaryCostMetaStore().mediaInactiveFromYear?.[key]||0);
+  return Number.isFinite(fromYear)&&fromYear>0?fromYear:0;
 }
 
 function getMediaShowInactive(){
@@ -6002,18 +6046,26 @@ function toggleMediaApartmentInactive(key){
   const normalized=String(key||'').trim();
   if(!normalized)return;
   const meta=getSummaryCostMetaStore();
-  const current=Array.isArray(meta.mediaInactiveKeys)?meta.mediaInactiveKeys:[];
-  const next=current.includes(normalized)
-    ? current.filter(item=>item!==normalized)
-    : [...current,normalized];
-  saveSummaryCostMetaStore({...meta,mediaInactiveKeys:next});
+  const currentMap=meta.mediaInactiveFromYear&&typeof meta.mediaInactiveFromYear==='object'?meta.mediaInactiveFromYear:{};
+  const nextMap={...currentMap};
+  if(nextMap[normalized]){
+    delete nextMap[normalized];
+  }else{
+    nextMap[normalized]=Number(_state.mediaYear||new Date().getFullYear());
+  }
+  saveSummaryCostMetaStore({...meta,mediaInactiveFromYear:nextMap});
   if(_state.section==='media')renderApp();
 }
 
 function saveSummaryCostMetaStore(store){
   _summaryCostMetaCache=normalizeSummaryCostMetaStore(store);
   localStorage.setItem('summary_cost_meta',JSON.stringify(_summaryCostMetaCache));
+  markSummaryCostMetaDirty();
   syncPushSummaryCostMeta(_summaryCostMetaCache);
+}
+
+function areSummaryCostMetaStoresEquivalent(localStore,remoteStore){
+  return JSON.stringify(normalizeSummaryCostMetaStore(localStore))===JSON.stringify(normalizeSummaryCostMetaStore(remoteStore));
 }
 
 function ensureSummaryMetaValue(type,value){
@@ -10180,8 +10232,18 @@ async function syncPull(){
       }
     }
     if(summaryCostMetaData&&typeof summaryCostMetaData.meta==='object'&&summaryCostMetaData.meta!==null){
-      _summaryCostMetaCache=normalizeSummaryCostMetaStore(summaryCostMetaData.meta);
+      const remoteSummaryMeta=normalizeSummaryCostMetaStore(summaryCostMetaData.meta);
+      const localSummaryMeta=normalizeSummaryCostMetaStore(JSON.parse(localStorage.getItem('summary_cost_meta')||'{}'));
+      const hasPendingSummaryMeta=getSummaryCostMetaDirtyAt()>0;
+      _summaryCostMetaCache=hasPendingSummaryMeta?localSummaryMeta:remoteSummaryMeta;
       localStorage.setItem('summary_cost_meta',JSON.stringify(_summaryCostMetaCache));
+      if(hasPendingSummaryMeta){
+        if(areSummaryCostMetaStoresEquivalent(localSummaryMeta,remoteSummaryMeta)){
+          clearSummaryCostMetaDirty();
+        }else{
+          syncPushSummaryCostMeta(_summaryCostMetaCache);
+        }
+      }
     }
     if(dyzuryData&&typeof dyzuryData.dyzury==='object'&&dyzuryData.dyzury!==null){
       const remoteDyzury=normalizeDyzuryPayload(dyzuryData.dyzury);
@@ -10331,6 +10393,7 @@ async function syncPushSummaryCostMeta(meta){
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
+      keepalive:true,
       headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveSummaryCostMeta',token:_state.authToken,meta}),
     });
