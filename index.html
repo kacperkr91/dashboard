@@ -3986,6 +3986,7 @@ let _state={
   rentalYear:new Date().getFullYear(),
   rentalMonth:getRentalMonthKeyFromDate(),
   mediaYear:'2026',
+  mediaSearch:'',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
     media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
@@ -4624,24 +4625,32 @@ const MONTHS_2026=['sty 2026','lut 2026','mar 2026','kwi 2026','maj 2026','cze 2
 
 function buildMediaView(data){
   const year=_state.mediaYear;
+  const search=String(_state.mediaSearch||'').trim().toLowerCase();
   const months=year==='2025'?MONTHS_2025:MONTHS_2026;
   const si=year==='2025'?0:12;
   const{apartments,sumaRow}=data;
+  const visibleApartments=search
+    ? apartments.filter(a=>{
+      const id=String(a?.id||'').toLowerCase();
+      const name=String(a?.name||'').toLowerCase();
+      return id.includes(search)||name.includes(search);
+    })
+    : apartments;
 
-  const monthTotals=months.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[si+mi],0));
+  const monthTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[si+mi],0));
   const totalYear=monthTotals.reduce((s,v)=>s+v,0);
   const maxM=Math.max(...monthTotals),minM=Math.min(...monthTotals.filter(v=>v>0));
   const maxMi=monthTotals.indexOf(maxM),minMi=monthTotals.findIndex(v=>v===minM);
   const avgM=monthTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthTotals.filter(v=>v>0).length||1);
-  const t2025=apartments.reduce((s,a)=>s+a.values.slice(0,12).reduce((x,v)=>x+v,0),0);
-  const t2026=apartments.reduce((s,a)=>s+a.values.slice(12,24).reduce((x,v)=>x+v,0),0);
+  const t2025=visibleApartments.reduce((s,a)=>s+a.values.slice(0,12).reduce((x,v)=>x+v,0),0);
+  const t2026=visibleApartments.reduce((s,a)=>s+a.values.slice(12,24).reduce((x,v)=>x+v,0),0);
   const diff=t2026-t2025;
-  const aptTotals=apartments.map(a=>({...a,yt:a.values.slice(si,si+12).reduce((s,v)=>s+v,0)}));
+  const aptTotals=visibleApartments.map(a=>({...a,yt:a.values.slice(si,si+12).reduce((s,v)=>s+v,0)}));
   const top5=[...aptTotals].sort((a,b)=>b.yt-a.yt).slice(0,5);
   const maxT5=top5[0]?.yt||1;
 
   const kpis=`<div class="kpi-row">
-    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">Koszt prądu ${year}</div><div class="value"><span class="sym">zł</span>${fmt(totalYear)}</div><div class="sub">${apartments.length} lokali</div></div>
+    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">Koszt prądu ${year}</div><div class="value"><span class="sym">zł</span>${fmt(totalYear)}</div><div class="sub">${visibleApartments.length} lokali</div></div>
     <div class="kpi-card" style="animation-delay:0.07s"><div class="label">Średnia miesięczna</div><div class="value"><span class="sym">zł</span>${fmt(avgM)}</div><div class="sub">wszystkie lokale</div></div>
     <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">Najdroższy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(maxM)}</div><div class="sub">${months[maxMi]||'—'}</div></div>
     <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Najtańszy miesiąc</div><div class="value"><span class="sym">zł</span>${fmt(minM||0)}</div><div class="sub">${months[minMi]||'—'}</div></div>
@@ -4675,7 +4684,7 @@ function buildMediaView(data){
     </div>`;
 
   const colHeaders=months.map(m=>`<th>${m}</th>`).join('');
-  const tableRows=apartments.map(a=>{
+  const tableRows=visibleApartments.map(a=>{
     const vals=a.values.slice(si,si+12);
     const rowTotal=vals.reduce((s,v)=>s+v,0);
     const maxV=Math.max(...vals);
@@ -4683,15 +4692,16 @@ function buildMediaView(data){
     const safeId=a.id.replace(/'/g,"\\'");
     return`<tr data-aptid="${a.id}" onclick="selectApartment('${safeId}')" style="cursor:pointer"><td>${a.id}</td><td>${a.name}</td>${cells}<td class="total-col">${fmt(rowTotal)}</td></tr>`;
   }).join('');
-  const sv=sumaRow?months.map((_,mi)=>sumaRow.values[si+mi]):months.map(()=>0);
+  const sv=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(a.values[si+mi]||0),0));
   const st=sv.reduce((s,v)=>s+v,0);
-  const sumaHtml=sumaRow?`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td></tr>`:'';
+  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${sv.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="total-col">${fmt(st)}</td></tr>`;
 
   const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
     <div class="card-title">Zestawienie miesięczne — koszty prądu</div>
-    <div style="display:flex;gap:8px;margin:12px 0">
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center">
       <button class="year-btn ${year==='2025'?'active':''}" onclick="setMediaYear('2025')">2025</button>
       <button class="year-btn ${year==='2026'?'active':''}" onclick="setMediaYear('2026')">2026</button>
+      <input id="mediaSearchInput" type="search" value="${escapeHtml(_state.mediaSearch||'')}" oninput="setMediaSearch(this.value)" placeholder="Filtruj po ID lub apartamencie…" style="min-width:260px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
     </div>
     <div class="media-table-wrap"><table>
       <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th></tr></thead>
@@ -4699,11 +4709,11 @@ function buildMediaView(data){
     </table></div>
   </div>`;
 
-  const mt2025=MONTHS_2025.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[mi],0));
-  const mt2026=MONTHS_2026.map((_,mi)=>apartments.reduce((s,a)=>s+a.values[12+mi],0));
+  const mt2025=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[mi],0));
+  const mt2026=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((s,a)=>s+a.values[12+mi],0));
 
   // store apartments on window for interactive chart updates
-  window._mediaApartments = apartments;
+  window._mediaApartments = visibleApartments;
   return{html:kpis+compare+top5html+charts+table,monthTotals,months,mt2025,mt2026};
 }
 
@@ -14005,6 +14015,19 @@ function setRentalMonth(key){
   renderApp();
 }
 function setMediaYear(y){_state.mediaYear=y;renderApp();}
+
+function setMediaSearch(val){
+  _state.mediaSearch=String(val||'');
+  renderApp();
+  requestAnimationFrame(()=>{
+    const input=document.getElementById('mediaSearchInput');
+    if(input){
+      input.focus();
+      const pos=_state.mediaSearch.length;
+      try{input.setSelectionRange(pos,pos);}catch(e){}
+    }
+  });
+}
 function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
 function setBookingPeriod(key){_state.bookingPeriodKey=key;renderApp();}
 function setArturPaymentsMonth(key){_state.arturPaymentsMonth=key;renderApp();}
