@@ -5600,7 +5600,7 @@ function buildSummaryView(){
   const incomeMap=buildOtvApartmentFinanceMap(previoRows);
   const housekeepingMap=buildHousekeepingApartmentMap(hkData);
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
-  const mediaMonthMap=buildMediaApartmentMonthMap(mediaData);
+  const mediaMonthMap=buildMediaApartmentMonthMap(mediaData,apartmentKeys);
   const energyByApartment=mediaMonthMap[monthKey]||{};
   const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
@@ -8627,7 +8627,72 @@ function buildHousekeepingApartmentMap(hkData){
   return map;
 }
 
-function buildMediaApartmentMonthMap(mediaData){
+function normalizeSummaryApartmentLookupKey(value){
+  return String(value||'')
+    .trim()
+    .toLowerCase()
+    .replace(/ł/g,'l')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ')
+    .replace(/\s*\/\s*/g,'/')
+    .replace(/[._-]+/g,' ')
+    .trim();
+}
+
+function getSummaryApartmentAliases(value){
+  const raw=String(value||'').trim();
+  if(!raw)return [];
+  const normalized=normalizeSummaryApartmentKey(raw);
+  const aliases=new Set([
+    raw,
+    normalized,
+    raw.replace(/\s+/g,' '),
+    normalized.replace(/\s+/g,' ')
+  ].map(normalizeSummaryApartmentLookupKey).filter(Boolean));
+  const lookup=normalizeSummaryApartmentLookupKey(normalized);
+  if(/^apt\s+(\d+[a-z]?)$/i.test(normalized)){
+    const number=normalized.match(/^apt\s+(\d+[a-z]?)$/i)?.[1]||'';
+    aliases.add(normalizeSummaryApartmentLookupKey(`Rynek ${number}`));
+  }
+  if(normalized==='Apt A')aliases.add(normalizeSummaryApartmentLookupKey('Zamoyskiego A'));
+  if(normalized==='Apt B')aliases.add(normalizeSummaryApartmentLookupKey('Zamoyskiego B'));
+  if(lookup.startsWith('l25/'))aliases.add(lookup.replace(/\s+/g,''));
+  return [...aliases];
+}
+
+function resolveMediaApartmentKey(item, apartmentKeys=[]){
+  const summaryKeys=Array.isArray(apartmentKeys)?apartmentKeys.filter(Boolean):[];
+  const aliasMap=new Map();
+  summaryKeys.forEach(apt=>{
+    getSummaryApartmentAliases(apt).forEach(alias=>{
+      if(alias&&!aliasMap.has(alias))aliasMap.set(alias,apt);
+    });
+  });
+  const candidates=[
+    String(item?.name||'').trim(),
+    String(item?.id||'').trim(),
+    normalizeSummaryApartmentKey(item?.name||''),
+    normalizeSummaryApartmentKey(item?.id||'')
+  ].filter(Boolean);
+  for(const candidate of candidates){
+    const aliases=getSummaryApartmentAliases(candidate);
+    for(const alias of aliases){
+      if(aliasMap.has(alias))return aliasMap.get(alias);
+    }
+  }
+  for(const candidate of candidates){
+    const lookup=normalizeSummaryApartmentLookupKey(candidate);
+    const fuzzy=summaryKeys.find(apt=>{
+      const aptAliases=getSummaryApartmentAliases(apt);
+      return aptAliases.some(alias=>alias.includes(lookup)||lookup.includes(alias));
+    });
+    if(fuzzy)return fuzzy;
+  }
+  return normalizeSummaryApartmentKey(item?.name||item?.id||'');
+}
+
+function buildMediaApartmentMonthMap(mediaData, apartmentKeys=[]){
   const apartments=Array.isArray(mediaData?.apartments)?mediaData.apartments:[];
   const monthKeys=[];
   for(let year=2025;year<=2026;year++){
@@ -8637,7 +8702,7 @@ function buildMediaApartmentMonthMap(mediaData){
   }
   const monthMap={};
   apartments.forEach(item=>{
-    const aptKey=normalizeSummaryApartmentKey(item?.name||item?.id||'');
+    const aptKey=resolveMediaApartmentKey(item,apartmentKeys);
     if(!aptKey)return;
     const values=Array.isArray(item?.values)?item.values:[];
     monthKeys.forEach((monthKey,idx)=>{
