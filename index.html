@@ -1163,15 +1163,24 @@ async function loadMediaData(){
   const rows=data.values||[];
   if(!rows.length)throw new Error('NO_MEDIA_DATA');
   const apartments=[];let sumaRow=null;
+  const seenKeys=new Set();
   for(let r=1;r<rows.length;r++){
     const row=rows[r];
     const id=String(row[0]||'').trim();
     const name=String(row[1]||'').trim();
     if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
     const values=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
     if(name==='SUMA'||!id){sumaRow={name:'SUMA',values};}
-    else{apartments.push({id,name,values});}
+    else{
+      const dedupeKey=`${normalizedId}__${normalizedName}`;
+      if(seenKeys.has(dedupeKey))continue;
+      seenKeys.add(dedupeKey);
+      apartments.push({id,name,values});
+    }
   }
   return{apartments,sumaRow};
 }
@@ -12735,15 +12744,24 @@ async function loadMediaData(){
   const rows=data.values||[];
   if(!rows.length)throw new Error('NO_MEDIA_DATA');
   const apartments=[];let sumaRow=null;
+  const seenKeys=new Set();
   for(let r=1;r<rows.length;r++){
     const row=rows[r];
     const id=String(row[0]||'').trim();
     const name=String(row[1]||'').trim();
     if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal')continue;
     const values=[];
     for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
     if(name==='SUMA'||!id){sumaRow={name:'SUMA',values};}
-    else{apartments.push({id,name,values});}
+    else{
+      const dedupeKey=`${normalizedId}__${normalizedName}`;
+      if(seenKeys.has(dedupeKey))continue;
+      seenKeys.add(dedupeKey);
+      apartments.push({id,name,values});
+    }
   }
   return{apartments,sumaRow};
 }
