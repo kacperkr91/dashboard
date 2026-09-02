@@ -4071,6 +4071,9 @@ function hasPrimaryDashboardConfig(){
 function hasLaundryDashboardConfig(){
   return !!((CONFIG.laundryApiKey||CONFIG.apiKey)&&CONFIG.laundrySpreadsheetId);
 }
+function hasMediaDashboardConfig(){
+  return !!((CONFIG.mediaApiKey||CONFIG.apiKey)&&CONFIG.mediaSpreadsheetId);
+}
 function hasCzynszeDashboardConfig(){
   return !!((CONFIG.czynszeApiKey||CONFIG.apiKey)&&CONFIG.czynszeSpreadsheetId);
 }
@@ -5581,20 +5584,24 @@ function buildSummaryView(){
   const previoRows=_state.data.previo?.[monthKey];
   const hkData=_state.data.housekeeping?.[monthKey];
   const czynszeData=_state.data.czynsze?.[monthKey];
+  const mediaData=_state.data.media;
   const ksefData=_state.data.ksef;
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===monthKey)||{key:monthKey,label:monthKey,short:monthKey};
   const monthNav=`<div class="hk-month-nav">
     ${PREVIO_MONTHS.slice().reverse().map(m=>`<button class="hk-month-btn ${m.key===monthKey?'active':''}" onclick="setSummaryMonth('${m.key}')">${m.short}</button>`).join('')}
   </div>`;
 
-  if(!previoRows||!hkData||_state.data.czynsze?.[monthKey]===null||(hasKsefDashboardConfig()&&ksefData===null))return monthNav+renderLoading('Ładowanie podsumowania OTV…');
+  if(!previoRows||!hkData||_state.data.czynsze?.[monthKey]===null||(hasKsefDashboardConfig()&&ksefData===null)||(hasMediaDashboardConfig()&&mediaData===null))return monthNav+renderLoading('Ładowanie podsumowania OTV…');
   if(previoRows.error)return monthNav+renderError(previoRows.error);
   if(hkData.error)return monthNav+renderError(hkData.error);
   if(ksefData?.error)return monthNav+renderError(ksefData.error);
+  if(mediaData?.error)return monthNav+renderError(mediaData.error);
 
   const incomeMap=buildOtvApartmentFinanceMap(previoRows);
   const housekeepingMap=buildHousekeepingApartmentMap(hkData);
   const czynszeMap=buildCzynszeApartmentMap(czynszeData);
+  const mediaMonthMap=buildMediaApartmentMonthMap(mediaData);
+  const energyByApartment=mediaMonthMap[monthKey]||{};
   const ksefBiuroByMonth=buildKsefBiuroMonthMap(ksefData);
   const ksefBiuroCurrent=ksefBiuroByMonth[monthKey]||null;
   const apartmentKeys=sortByDefaultOrder([...new Set([
@@ -5640,7 +5647,7 @@ function buildSummaryView(){
       : czynsz.advance;
     const resolvedEnergy=Object.prototype.hasOwnProperty.call(energyOverrideMap,apt)
       ? Number(energyOverrideMap[apt])||0
-      : null;
+      : (Object.prototype.hasOwnProperty.call(energyByApartment,apt)?Number(energyByApartment[apt])||0:null);
     const internetCost=getStaticInternetCostForApartment(apt);
     const arturCost=Number(contractorCostMaps.artur?.[apt])||0;
     const kacperCost=Number(contractorCostMaps.kacper?.[apt])||0;
@@ -8618,6 +8625,28 @@ function buildHousekeepingApartmentMap(hkData){
     map[aptKey].gosCena+=Number(r.gosCena)||0;
   });
   return map;
+}
+
+function buildMediaApartmentMonthMap(mediaData){
+  const apartments=Array.isArray(mediaData?.apartments)?mediaData.apartments:[];
+  const monthKeys=[];
+  for(let year=2025;year<=2026;year++){
+    for(let month=1;month<=12;month++){
+      monthKeys.push(`${year}-${String(month).padStart(2,'0')}`);
+    }
+  }
+  const monthMap={};
+  apartments.forEach(item=>{
+    const aptKey=normalizeSummaryApartmentKey(item?.name||item?.id||'');
+    if(!aptKey)return;
+    const values=Array.isArray(item?.values)?item.values:[];
+    monthKeys.forEach((monthKey,idx)=>{
+      const value=Number(values[idx])||0;
+      if(!Object.prototype.hasOwnProperty.call(monthMap,monthKey))monthMap[monthKey]={};
+      monthMap[monthKey][aptKey]=(monthMap[monthKey][aptKey]||0)+value;
+    });
+  });
+  return monthMap;
 }
 
 function normalizeSummaryApartmentKey(apt){
@@ -13217,7 +13246,7 @@ async function init(){
   if(needsLaundryConfig&&!hasLaundryDashboardConfig()){mount(renderConfig());return;}
   if(needsCzynszeConfig&&!hasCzynszeDashboardConfig()){mount(renderConfig());return;}
   const needRental=hasModuleAccess('rental')&&initialSection==='rental';
-  const needMedia=hasModuleAccess('media')&&initialSection==='media';
+  const needMedia=(hasModuleAccess('media')&&initialSection==='media')||(initialSection==='summary'&&hasMediaDashboardConfig());
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
   const needHousekeeping=((hasModuleAccess('housekeeping')&&initialSection==='housekeeping')||(hasModuleAccess('summary')&&initialSection==='summary'));
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
@@ -13556,13 +13585,15 @@ function ensureSectionDataLoaded(section){
     const hasHk=!!_state.data.housekeeping?.[key];
     const hasCzynsze=!hasCzynszeDashboardConfig()||_state.data.czynsze?.[key]!==undefined;
     const hasKsef=!hasKsefDashboardConfig()||_state.data.ksef!==null;
-    if(hasPrevio&&hasHk&&hasCzynsze&&hasKsef){
+    const hasMedia=!hasMediaDashboardConfig()||_state.data.media!==null;
+    if(hasPrevio&&hasHk&&hasCzynsze&&hasKsef&&hasMedia){
       renderApp();
       return true;
     }
     if(!hasPrevio)_state.data.previo[key]=null;
     if(!hasHk)_state.data.housekeeping[key]=null;
     if(hasCzynszeDashboardConfig()&&_state.data.czynsze?.[key]===undefined)_state.data.czynsze[key]=null;
+    if(hasMediaDashboardConfig()&&_state.data.media===null)_state.data.media=null;
     renderApp();
     Promise.allSettled([
       hasPrevio?Promise.resolve(_state.data.previo[key]):loadPrevioMonth(key),
@@ -13571,11 +13602,13 @@ function ensureSectionDataLoaded(section){
         ? Promise.resolve(_state.data.czynsze?.[key])
         : detectCzynszeMonths().then(()=>loadCzynszeMonth(key)),
       hasKsef?Promise.resolve(_state.data.ksef):loadKsefData(),
-    ]).then(([previoR,hkR,czynszeR,ksefR])=>{
+      hasMedia?Promise.resolve(_state.data.media):loadMediaData(),
+    ]).then(([previoR,hkR,czynszeR,ksefR,mediaR])=>{
       if(!hasPrevio)_state.data.previo[key]=previoR.status==='fulfilled'?previoR.value:{error:previoR.reason?.message||'Błąd'};
       if(!hasHk)_state.data.housekeeping[key]=hkR.status==='fulfilled'?hkR.value:{error:hkR.reason?.message||'Błąd'};
       if(!hasCzynsze)_state.data.czynsze[key]=czynszeR.status==='fulfilled'?czynszeR.value:{error:czynszeR.reason?.message||'Błąd'};
       if(!hasKsef)_state.data.ksef=ksefR.status==='fulfilled'?ksefR.value:{error:ksefR.reason?.message||'Błąd'};
+      if(!hasMedia)_state.data.media=mediaR.status==='fulfilled'?mediaR.value:{error:mediaR.reason?.message||'Błąd'};
       if(_state.section==='summary'&&_state.summaryMonth===key)renderApp();
     });
     return true;
