@@ -628,6 +628,11 @@ const CONFIG={
   mediaSheet:         'Zestawienie Miesięczne',
   mediaCostRange:     'A3:Z200',
   mediaUsageRange:    'A41:Z200',
+  gasApiKey:          localStorage.getItem('gs_gas_api_key')||'',
+  gasSpreadsheetId:   localStorage.getItem('gs_gas_spreadsheet_id')||'',
+  gasSheet:           'Zestawienie Miesięczne',
+  gasCostRange:       'A3:Z200',
+  gasUsageRange:      'A41:Z200',
   aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
@@ -708,7 +713,8 @@ const NAV={
       }
     }
   },
-  media:{label:'Media — Prąd',icon:'⚡'}
+  media:{label:'Media — Prąd',icon:'⚡'},
+  'media-gaz':{label:'Media — Gaz',icon:'🔥'}
 };
 
 const RENTAL_MONTH_PREFIXES=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
@@ -1213,6 +1219,63 @@ async function loadMediaData(){
   }
   const result={apartments,sumaRow};
   saveMediaCache(result);
+  return result;
+}
+
+async function loadGasData(){
+  const cached=getFreshGasCache();
+  if(cached)return cached;
+  const{gasApiKey,gasSpreadsheetId,gasSheet,gasCostRange,gasUsageRange}=CONFIG;
+  const apiKey=gasApiKey||CONFIG.apiKey;
+  if(!apiKey||!gasSpreadsheetId)throw new Error('MISSING_GAS_CONFIG');
+  const params=new URLSearchParams({key:apiKey,valueRenderOption:'UNFORMATTED_VALUE'});
+  params.append('ranges',`'${gasSheet}'!${gasCostRange}`);
+  params.append('ranges',`'${gasSheet}'!${gasUsageRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${gasSpreadsheetId}/values:batchGet?${params.toString()}`;
+  let data;
+  try{
+    data=await apiFetch(url);
+  }catch(e){
+    const fallback=getGasCache();
+    if(fallback?.data)return fallback.data;
+    throw e;
+  }
+  const costRows=data.valueRanges?.[0]?.values||[];
+  const usageRows=data.valueRanges?.[1]?.values||[];
+  if(!costRows.length)throw new Error('NO_GAS_DATA');
+  const apartments=[];const seenKeys=new Set();const usageMap=new Map();
+  for(let r=0;r<usageRows.length;r++){
+    const row=usageRows[r];
+    const id=String(row[0]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
+    const usageValues=[];
+    for(let c=2;c<=25;c++){const v=parseFloat(row[c]);usageValues.push(isNaN(v)?0:v);}
+    usageMap.set(`${normalizedId}__${normalizedName}`,usageValues);
+    if(name==='SUMA'||!id)usageMap.set(`suma__${normalizedName}`,usageValues);
+  }
+  for(let r=1;r<costRows.length;r++){
+    const row=costRows[r];
+    const id=String(row[0]||'').trim();
+    const name=String(row[1]||'').trim();
+    if(!name)continue;
+    const normalizedId=id.toLowerCase();
+    const normalizedName=name.toLowerCase();
+    if(normalizedId==='id'||normalizedName==='apartament'||normalizedName==='lokal'||normalizedName.includes('zestawienie'))continue;
+    const dedupeKey=`${normalizedId}__${normalizedName}`;
+    if(seenKeys.has(dedupeKey))continue;
+    seenKeys.add(dedupeKey);
+    const values=[];
+    for(let c=2;c<=25;c++){const v=parseFloat(row[c]);values.push(isNaN(v)?0:v);}
+    const usageValues=usageMap.get(dedupeKey)||usageMap.get(`suma__${normalizedName}`)||Array(24).fill(0);
+    if(name==='SUMA'||!id)continue;
+    apartments.push({id,name,values,usageValues});
+  }
+  const result={apartments};
+  saveGasCache(result);
   return result;
 }
 
@@ -4019,9 +4082,12 @@ let _state={
   mediaYear:'2026',
   mediaMode:'cost',
   mediaSearch:'',
+  gasYear:'2026',
+  gasMode:'cost',
+  gasSearch:'',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
+    media:null, gas:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
   }
 };
 let _charts={};
@@ -4034,12 +4100,13 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','media-gaz','ksef','apartments','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
   rental:'Przychody',
   media:'Media',
+  'media-gaz':'Media — Gaz',
   ksef:'KSeF',
   apartments:'Apartamenty',
   housekeeping:'Housekeeping',
@@ -4106,12 +4173,17 @@ function hasLaundryDashboardConfig(){
 function hasMediaDashboardConfig(){
   return !!((CONFIG.mediaApiKey||CONFIG.apiKey)&&CONFIG.mediaSpreadsheetId);
 }
+function hasGasDashboardConfig(){
+  return !!((CONFIG.gasApiKey||CONFIG.apiKey)&&CONFIG.gasSpreadsheetId);
+}
 function hasCzynszeDashboardConfig(){
   return !!((CONFIG.czynszeApiKey||CONFIG.apiKey)&&CONFIG.czynszeSpreadsheetId);
 }
 
 const MEDIA_CACHE_KEY='dashboard_media_cache_v1';
 const MEDIA_CACHE_TTL_MS=10*60*1000;
+const GAS_CACHE_KEY='dashboard_gas_cache_v1';
+const GAS_CACHE_TTL_MS=10*60*1000;
 
 function getMediaCache(){
   try{
@@ -4136,6 +4208,31 @@ function getFreshMediaCache(){
 function saveMediaCache(data){
   try{
     localStorage.setItem(MEDIA_CACHE_KEY,JSON.stringify({ts:Date.now(),data}));
+  }catch(e){}
+}
+function getGasCache(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(GAS_CACHE_KEY)||'null');
+    if(!raw||typeof raw!=='object')return null;
+    const ts=Number(raw.ts||0);
+    const data=raw.data&&typeof raw.data==='object'?raw.data:null;
+    if(!ts||!data)return null;
+    return {ts,data};
+  }catch(e){
+    return null;
+  }
+}
+
+function getFreshGasCache(){
+  const cached=getGasCache();
+  if(!cached)return null;
+  if(Date.now()-cached.ts>GAS_CACHE_TTL_MS)return null;
+  return cached.data;
+}
+
+function saveGasCache(data){
+  try{
+    localStorage.setItem(GAS_CACHE_KEY,JSON.stringify({ts:Date.now(),data}));
   }catch(e){}
 }
 function hasKsefDashboardConfig(){
@@ -4329,6 +4426,10 @@ function renderConfig(){
     <p class="section-label">⚡ Arkusz mediów (prąd Tauron)</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-mediakey" type="text" placeholder="AIzaSy…" value="${CONFIG.mediaApiKey}"/></div>
     <div class="field"><label>Spreadsheet ID arkusza mediów</label><input id="inp-mediasheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.mediaSpreadsheetId}"/></div>
+    <hr class="divider"/>
+    <p class="section-label">🔥 Arkusz mediów (gaz)</p>
+    <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-gaskey" type="text" placeholder="AIzaSy…" value="${CONFIG.gasApiKey}"/></div>
+    <div class="field"><label>Spreadsheet ID arkusza gazu</label><input id="inp-gassheetid" type="text" placeholder="1BxiMVs0XRA…" value="${CONFIG.gasSpreadsheetId}"/></div>
     <hr class="divider"/>
     <p class="section-label">🏠 Arkusz danych apartamentów</p>
     <div class="field"><label>Google API Key (może być ten sam)</label><input id="inp-aptskey" type="text" placeholder="AIzaSy…" value="${CONFIG.aptsApiKey}"/></div>
@@ -4822,6 +4923,117 @@ function buildMediaView(data){
 
   // store apartments on window for interactive chart updates
   window._mediaApartments = visibleApartments;
+  return{html:kpis+compare+top5html+charts+table,monthTotals,monthUsageTotals,months,mt2025,mt2026,mu2025,mu2026,mode};
+}
+
+function buildGasView(data){
+  const year=_state.gasYear;
+  const mode=_state.gasMode==='usage'?'usage':'cost';
+  const search=String(_state.gasSearch||'').trim().toLowerCase();
+  const months=year==='2025'?MONTHS_2025:MONTHS_2026;
+  const si=year==='2025'?0:12;
+  const apartments=Array.isArray(data?.apartments)?data.apartments:[];
+  const visibleApartments=search
+    ? apartments.filter(a=>{
+      const id=String(a?.id||'').toLowerCase();
+      const name=String(a?.name||'').toLowerCase();
+      return id.includes(search)||name.includes(search);
+    })
+    : apartments;
+  const monthTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+((a.values||[])[si+mi]||0),0));
+  const monthUsageTotals=months.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[si+mi])||0),0));
+  const totalYear=monthTotals.reduce((s,v)=>s+v,0);
+  const totalUsageYear=monthUsageTotals.reduce((s,v)=>s+v,0);
+  const maxM=Math.max(...monthTotals);
+  const maxMi=monthTotals.indexOf(maxM);
+  const avgM=monthTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthTotals.filter(v=>v>0).length||1);
+  const avgUsage=monthUsageTotals.filter(v=>v>0).reduce((s,v)=>s+v,0)/(monthUsageTotals.filter(v=>v>0).length||1);
+  const t2025=visibleApartments.reduce((s,a)=>s+(a.values||[]).slice(0,12).reduce((x,v)=>x+v,0),0);
+  const t2026=visibleApartments.reduce((s,a)=>s+(a.values||[]).slice(12,24).reduce((x,v)=>x+v,0),0);
+  const diff=t2026-t2025;
+  const top5=[...visibleApartments]
+    .map(a=>({...a,yt:(a.values||[]).slice(si,si+12).reduce((s,v)=>s+v,0)}))
+    .sort((a,b)=>b.yt-a.yt)
+    .slice(0,5);
+  const maxT5=top5[0]?.yt||1;
+  const usageTop5=[...visibleApartments]
+    .map(a=>({...a,yt:(a.usageValues||[]).slice(si,si+12).reduce((s,v)=>s+v,0)}))
+    .sort((a,b)=>b.yt-a.yt)
+    .slice(0,5);
+  const maxUsageT5=usageTop5[0]?.yt||1;
+  const maxUsage=Math.max(...monthUsageTotals);
+  const maxUsageMi=monthUsageTotals.indexOf(maxUsage);
+  const total2025Usage=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((sum,a)=>sum+(((a.usageValues||[])[mi])||0),0)).reduce((s,v)=>s+v,0);
+  const total2026Usage=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((sum,a)=>sum+(((a.usageValues||[])[12+mi])||0),0)).reduce((s,v)=>s+v,0);
+  const usageDiff=total2026Usage-total2025Usage;
+
+  const kpis=`<div class="kpi-row">
+    <div class="kpi-card c-orange" style="animation-delay:0s"><div class="label">${mode==='usage'?'Zużycie gazu':'Koszt gazu'} ${year}</div><div class="value">${mode==='usage'?`${fmt(totalUsageYear)} m³`:`<span class="sym">zł</span>${fmt(totalYear)}`}</div><div class="sub">${visibleApartments.length} lokali</div></div>
+    <div class="kpi-card" style="animation-delay:0.07s"><div class="label">${mode==='usage'?'Koszt gazu':'Zużycie'} ${year}</div><div class="value">${mode==='usage'?`<span class="sym">zł</span>${fmt(totalYear)}`:`${fmt(totalUsageYear)} m³`}</div><div class="sub">${mode==='usage'?'łączny koszt gazu':'łączne zużycie gazu'}</div></div>
+    <div class="kpi-card c-red" style="animation-delay:0.14s"><div class="label">${mode==='usage'?'Najwyższe zużycie':'Najdroższy miesiąc'}</div><div class="value">${mode==='usage'?`${fmt(maxUsage)} m³`:`<span class="sym">zł</span>${fmt(maxM)}`}</div><div class="sub">${months[mode==='usage'?maxUsageMi:maxMi]||'—'}</div></div>
+    <div class="kpi-card c-green" style="animation-delay:0.21s"><div class="label">Średnio / miesiąc</div><div class="value">${mode==='usage'?`${fmt(avgUsage)} m³`:`<span class="sym">zł</span>${fmt(avgM)}`}</div><div class="sub">${mode==='usage'?`${fmt(avgM)} zł`:`${fmt(avgUsage)} m³`}</div></div>
+  </div>`;
+
+  const compare=`<div class="compare-row">
+    <div class="compare-card"><div class="cc-title">${mode==='usage'?'Łączne zużycie 2025':'Łączny koszt 2025'}</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value">${mode==='usage'?`${fmt(total2025Usage)} m³`:`${fmt(t2025)} zł`}</div></div>
+    <div class="compare-card"><div class="cc-title">${mode==='usage'?'Łączne zużycie 2026 (dotychczas)':'Łączny koszt 2026 (dotychczas)'}</div><div class="cc-sub">Suma wszystkich miesięcy i lokali</div><div class="cc-value ${(mode==='usage'?usageDiff:diff)>0?'up':'down'}">${mode==='usage'?`${fmt(total2026Usage)} m³`:`${fmt(t2026)} zł`}</div><div class="cc-diff" style="color:${(mode==='usage'?usageDiff:diff)>0?'var(--red)':'var(--green)'}">${(mode==='usage'?usageDiff:diff)>0?'▲':'▼'} ${mode==='usage'?`${fmt(Math.abs(usageDiff))} m³`:`${fmt(Math.abs(diff))} zł`} vs 2025</div></div>
+  </div>`;
+
+  const top5html=`<div class="grid-card media-section" style="animation-delay:0.05s">
+    <div class="card-title">${mode==='usage'?'TOP 5 — najwyższe zużycie gazu':'TOP 5 — najwyższe koszty gazu'} (${year})</div>
+    <div class="top5-grid">${(mode==='usage'?usageTop5:top5).map((a,i)=>`<div class="top5-card"><div class="rank">#${i+1}</div><div class="apt-name">${a.name}</div><div class="apt-total">${mode==='usage'?`${fmt(a.yt)} m³`:`${fmt(a.yt)} zł`}</div><div class="apt-avg">śr. ${mode==='usage'?`${fmt(a.yt/12)} m³/mies.`:`${fmt(a.yt/12)} zł/mies.`}</div><div class="apt-bar"><div class="apt-bar-fill" style="width:${(a.yt/(mode==='usage'?maxUsageT5:maxT5)*100).toFixed(1)}%"></div></div></div>`).join('')}</div>
+  </div>`;
+
+  const charts=`
+    <div class="chart-card media-section" style="animation-delay:0.1s">
+      <div class="card-title">${mode==='usage'?'Sumy miesięczne zużycia gazu':'Sumy miesięczne kosztów gazu'} — wszystkie lokale (${year})</div>
+      <div class="card-subtitle">${mode==='usage'?'Łączne zużycie gazu wszystkich lokali w danym miesiącu':'Łączny koszt gazu wszystkich lokali w danym miesiącu'}</div>
+      <div class="chart-wrap"><canvas id="gasBarChart"></canvas></div>
+    </div>
+    <div class="chart-card media-section" style="animation-delay:0.15s" id="gasLineChartCard">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title" id="gasLineChartTitle">${mode==='usage'?'Trend zużycia miesięcznego gazu':'Trend kosztów miesięcznych gazu'} — 2025 vs 2026 — wszystkie lokale</div>
+          <div class="card-subtitle">Kliknij wiersz w tabeli aby zobaczyć trend konkretnego lokalu</div>
+        </div>
+        <div id="gasAptChipWrap"></div>
+      </div>
+      <div class="chart-wrap"><canvas id="gasLineChart"></canvas></div>
+    </div>`;
+
+  const colHeaders=months.map(m=>`<th>${m}</th>`).join('');
+  const tableRows=visibleApartments.map(a=>{
+    const vals=(mode==='usage'?(a.usageValues||[]):(a.values||[])).slice(si,si+12);
+    const rowTotal=vals.reduce((s,v)=>s+v,0);
+    const maxV=Math.max(...vals);
+    const cells=vals.map(v=>`<td class="${v===0?'zero':v===maxV&&v>0?'high':''}">${v>0?(mode==='usage'?`${fmt(v)} m³`:fmt(v)):'—'}</td>`).join('');
+    const safeId=String(a.id||'').replace(/'/g,"\\'");
+    return`<tr data-gasid="${a.id}" onclick="selectGasApartment('${safeId}')" style="cursor:pointer"><td style="font-weight:700">${a.id}</td><td><div style="font-weight:600;color:inherit">${a.name}</div></td>${cells}<td class="total-col">${mode==='usage'?`${fmt(rowTotal)} m³`:fmt(rowTotal)}</td></tr>`;
+  }).join('');
+  const activeSeries=mode==='usage'?monthUsageTotals:monthTotals;
+  const activeTotal=activeSeries.reduce((s,v)=>s+v,0);
+  const sumaHtml=`<tr class="suma-row"><td></td><td>SUMA</td>${activeSeries.map(v=>`<td>${mode==='usage'?`${fmt(v)} m³`:fmt(v)}</td>`).join('')}<td class="total-col">${mode==='usage'?`${fmt(activeTotal)} m³`:fmt(activeTotal)}</td></tr>`;
+  const table=`<div class="grid-card media-section" style="animation-delay:0.2s">
+    <div class="card-title">Zestawienie miesięczne — gaz</div>
+    <div class="card-subtitle">Przełączasz widok między kosztami a zużyciem z tego samego arkusza.</div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center">
+      <button class="year-btn ${year==='2025'?'active':''}" onclick="setGasYear('2025')">2025</button>
+      <button class="year-btn ${year==='2026'?'active':''}" onclick="setGasYear('2026')">2026</button>
+      <button class="year-btn ${mode==='cost'?'active':''}" onclick="setGasMode('cost')">Koszty</button>
+      <button class="year-btn ${mode==='usage'?'active':''}" onclick="setGasMode('usage')">Zużycie</button>
+      <input id="gasSearchInput" type="search" value="${escapeHtml(_state.gasSearch||'')}" oninput="setGasSearch(this.value)" placeholder="Filtruj po ID lub apartamencie…" style="min-width:260px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit">
+    </div>
+    <div class="media-table-wrap"><table>
+      <thead><tr><th>ID</th><th>Apartament</th>${colHeaders}<th>SUMA</th></tr></thead>
+      <tbody>${tableRows}${sumaHtml}</tbody>
+    </table></div>
+  </div>`;
+
+  const mt2025=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((s,a)=>s+((a.values||[])[mi]||0),0));
+  const mt2026=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((s,a)=>s+((a.values||[])[12+mi]||0),0));
+  const mu2025=MONTHS_2025.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[mi])||0),0));
+  const mu2026=MONTHS_2026.map((_,mi)=>visibleApartments.reduce((s,a)=>s+(((a.usageValues||[])[12+mi])||0),0));
+  window._gasApartments=visibleApartments;
   return{html:kpis+compare+top5html+charts+table,monthTotals,monthUsageTotals,months,mt2025,mt2026,mu2025,mu2026,mode};
 }
 
@@ -10327,6 +10539,50 @@ function initMediaCharts(view){
   if(lc)_charts.line=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:mode==='usage'?view.mu2025:view.mt2025,borderColor:'rgba(37,99,235,0.8)',backgroundColor:'rgba(37,99,235,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:mode==='usage'?view.mu2026:view.mt2026,borderColor:'rgba(234,88,12,0.9)',backgroundColor:'rgba(234,88,12,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>mode==='usage'?` ${c.dataset.label}: ${fmt(c.parsed.y)} kWh`:` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>mode==='usage'?`${fmtN(v)} kWh`:'zł '+fmtN(v)}}}}});
 }
 
+function selectGasApartment(id){
+  const apts=window._gasApartments||[];
+  const apt=apts.find(x=>x.id===id);
+  document.querySelectorAll('[data-gasid]').forEach(r=>r.classList.remove('active-row'));
+  const row=document.querySelector(`[data-gasid="${CSS.escape(id)}"]`);
+  if(row)row.classList.add('active-row');
+  const chip=document.getElementById('gasAptChipWrap');
+  if(chip)chip.innerHTML=apt?`<span class="apt-chip">${apt.name}<span class="chip-close" onclick="selectGasApartment('${id.replace(/'/g,"\\'")}')">✕</span></span>`:'';
+  updateGasLineChart(apt||null);
+  const title=document.getElementById('gasLineChartTitle');
+  if(title)title.textContent=apt
+    ? `${_state.gasMode==='usage'?'Trend zużycia miesięcznego gazu':'Trend kosztów miesięcznych gazu'} — 2025 vs 2026 — ${apt.name}`
+    : `${_state.gasMode==='usage'?'Trend zużycia miesięcznego gazu':'Trend kosztów miesięcznych gazu'} — 2025 vs 2026 — wszystkie lokale`;
+}
+
+function updateGasLineChart(apt){
+  const lc=_charts.gasLine;
+  if(!lc)return;
+  const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  const mode=_state.gasMode==='usage'?'usage':'cost';
+  if(!apt){
+    const apts=window._gasApartments||[];
+    lc.data.datasets[0].data=sm.map((_,i)=>apts.reduce((s,a)=>s+(mode==='usage'?((a.usageValues||[])[i]||0):((a.values||[])[i]||0)),0));
+    lc.data.datasets[1].data=sm.map((_,i)=>apts.reduce((s,a)=>s+(mode==='usage'?((a.usageValues||[])[12+i]||0):((a.values||[])[12+i]||0)),0));
+    lc.data.datasets[0].label='2025 — wszystkie';
+    lc.data.datasets[1].label='2026 — wszystkie';
+  }else{
+    lc.data.datasets[0].data=(mode==='usage'?(apt.usageValues||[]):(apt.values||[])).slice(0,12);
+    lc.data.datasets[1].data=(mode==='usage'?(apt.usageValues||[]):(apt.values||[])).slice(12,24);
+    lc.data.datasets[0].label='2025 — '+apt.name;
+    lc.data.datasets[1].label='2026 — '+apt.name;
+  }
+  lc.update('active');
+}
+
+function initGasCharts(view){
+  const bc=document.getElementById('gasBarChart');
+  const mode=view.mode==='usage'?'usage':'cost';
+  if(bc)_charts.gasBar=new Chart(bc.getContext('2d'),{type:'bar',data:{labels:view.months,datasets:[{data:mode==='usage'?view.monthUsageTotals:view.monthTotals,backgroundColor:'rgba(14,116,144,0.7)',borderColor:'rgba(14,116,144,1)',borderWidth:1,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>mode==='usage'?` ${fmt(c.parsed.y)} m³`:' zł '+fmt(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>mode==='usage'?`${fmtN(v)} m³`:'zł '+fmtN(v)}}}}});
+  const lc=document.getElementById('gasLineChart');
+  const sm=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  if(lc)_charts.gasLine=new Chart(lc.getContext('2d'),{type:'line',data:{labels:sm,datasets:[{label:'2025',data:mode==='usage'?view.mu2025:view.mt2025,borderColor:'rgba(2,132,199,0.85)',backgroundColor:'rgba(2,132,199,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true},{label:'2026',data:mode==='usage'?view.mu2026:view.mt2026,borderColor:'rgba(14,116,144,0.9)',backgroundColor:'rgba(14,116,144,0.08)',borderWidth:2,pointRadius:4,tension:0.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#475569',font:{family:'Inter',size:12},usePointStyle:true}},tooltip:{backgroundColor:'#0f172a',cornerRadius:8,callbacks:{label:c=>mode==='usage'?` ${c.dataset.label}: ${fmt(c.parsed.y)} m³`:` ${c.dataset.label}: zł ${fmt(c.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11}}},y:{grid:{color:'#f1f5f9'},border:{display:false},ticks:{color:'#94a3b8',font:{family:'Inter',size:11},callback:v=>mode==='usage'?`${fmtN(v)} m³`:'zł '+fmtN(v)}}}}});
+}
+
 
 function initHkChart(){
   const hkData=_state.data.housekeeping||{};
@@ -13454,7 +13710,7 @@ async function init(){
   const initialSection=_state.section||'oblozenie';
   const laundryOnlyUser=isLaundryOnlyUser();
   const needsPrimaryConfig=hasAnyModuleAccess([
-    'oblozenie','rental','media','ksef','apartments','housekeeping','otv','otv-new','summary','previo',
+    'oblozenie','rental','ksef','apartments','housekeeping','otv','otv-new','summary','previo',
     'artur-payments','agata-faktura','czynsze','tasks','booking-payout','dyzury','noty','goscie','parking'
   ]);
   const needsLaundryConfig=hasModuleAccess('laundry-textiles');
@@ -13462,8 +13718,11 @@ async function init(){
   if(needsPrimaryConfig&&!hasPrimaryDashboardConfig()){mount(renderConfig());return;}
   if(needsLaundryConfig&&!hasLaundryDashboardConfig()){mount(renderConfig());return;}
   if(needsCzynszeConfig&&!hasCzynszeDashboardConfig()){mount(renderConfig());return;}
+  if(hasModuleAccess('media')&&!hasMediaDashboardConfig()){mount(renderConfig());return;}
+  if(hasModuleAccess('media-gaz')&&!hasGasDashboardConfig()){mount(renderConfig());return;}
   const needRental=hasModuleAccess('rental')&&initialSection==='rental';
   const needMedia=hasModuleAccess('media')&&initialSection==='media';
+  const needGas=hasModuleAccess('media-gaz')&&initialSection==='media-gaz';
   const needApartments=hasModuleAccess('apartments')&&initialSection==='apartments';
   const needHousekeeping=((hasModuleAccess('housekeeping')&&initialSection==='housekeeping')||(hasModuleAccess('summary')&&initialSection==='summary'));
   const needOtv=hasModuleAccess('otv')&&initialSection==='otv';
@@ -13479,7 +13738,7 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
-  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},czynsze:{},laundry:null,parkingCards:null,parking:null,ksef:null};
+  _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,gas:null,apartments:null,housekeeping:{},otv:{},previo:{},agata:{},czynsze:{},laundry:null,parkingCards:null,parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;_dyzuryCache=null;
   _backgroundPrefetchStarted=false;
   _previoSoftRefreshRequested={};
@@ -13561,12 +13820,14 @@ async function init(){
   await delay(progressDelay);
 
   setProgress(35,'Sprawdzam najnowsze dane…');
-  const [mr,mdr]=await Promise.allSettled([
+  const [mr,mdr,gdr]=await Promise.allSettled([
     needRental?loadRawMonth(CONFIG.marSheet,CONFIG.marDateCol,CONFIG.marAmountCol,CONFIG.marStartRow,CONFIG.marEndRow,31,'03'):Promise.resolve(null),
     needMedia?loadMediaData():Promise.resolve(null),
+    needGas?loadGasData():Promise.resolve(null),
   ]);
   if(needRental)_state.data.mar2026=mr.status==='fulfilled'?mr.value:{error:mr.reason?.message||'Błąd'};
   if(needMedia)_state.data.media=mdr.status==='fulfilled'?mdr.value:{error:mdr.reason?.message||'Błąd'};
+  if(needGas)_state.data.gas=gdr.status==='fulfilled'?gdr.value:{error:gdr.reason?.message||'Błąd'};
 
   await delay(progressDelay);
 
@@ -13632,6 +13893,9 @@ async function prefetchSecondaryModules(){
   const jobs=[];
   if(hasModuleAccess('media')&&section!=='media'&&_state.data.media===null){
     jobs.push(()=>loadMediaData().then(data=>{_state.data.media=data;}).catch(e=>{_state.data.media={error:e.message||'Błąd'};}));
+  }
+  if(hasModuleAccess('media-gaz')&&section!=='media-gaz'&&_state.data.gas===null){
+    jobs.push(()=>loadGasData().then(data=>{_state.data.gas=data;}).catch(e=>{_state.data.gas={error:e.message||'Błąd'};}));
   }
   if(hasModuleAccess('apartments')&&section!=='apartments'&&_state.data.apartments===null){
     jobs.push(()=>loadApartmentsData().then(data=>{_state.data.apartments=data;}).catch(e=>{_state.data.apartments={error:e.message||'Błąd'};}));
@@ -13736,6 +14000,17 @@ function ensureSectionDataLoaded(section){
     }).catch(e=>{
       _state.data.media={error:e.message||'Błąd'};
       if(_state.section==='media')renderApp();
+    });
+    return true;
+  }
+  if(section==='media-gaz'&&_state.data.gas===null){
+    renderApp();
+    loadGasData().then(data=>{
+      _state.data.gas=data;
+      if(_state.section==='media-gaz')renderApp();
+    }).catch(e=>{
+      _state.data.gas={error:e.message||'Błąd'};
+      if(_state.section==='media-gaz')renderApp();
     });
     return true;
   }
@@ -14072,6 +14347,7 @@ function renderApp(){
     ${navButton('oblozenie','Start','🏠','background:#0f766e;border-color:#0f766e;color:#fff')}
     ${navButton('rental','Przychody','🏠')}
     ${navButton('media','Media — Prąd','⚡',section==='media'?'background:var(--orange);border-color:var(--orange);color:#fff':'','media')}
+    ${navButton('media-gaz','Media — Gaz','🔥',section==='media-gaz'?'background:#0e7490;border-color:#0e7490;color:#fff':'')}
     ${navButton('ksef','KSeF','🧾','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
     ${navButton('apartments','Apartamenty','🏠','background:#0d9488;border-color:#0d9488;color:#fff')}
     ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
@@ -14109,7 +14385,7 @@ function renderApp(){
     })()}
   </div>`;
 
-  let navL2='', content='', enriched=null, fc=null, mediaView=null;
+  let navL2='', content='', enriched=null, fc=null, mediaView=null, gasView=null;
 
   if(section==='rental'){
     ensurePrevioForecastLoadedForRentalKey(rentalMonth);
@@ -14142,6 +14418,11 @@ function renderApp(){
     if(!d){content=renderLoading('Ładowanie mediów…');}
     else if(d.error){content=renderError(d.error);}
     else{const v=buildMediaView(d);content=v.html;mediaView=v;}
+  } else if(section==='media-gaz'){
+    const d=data.gas;
+    if(!d){content=renderLoading('Ładowanie gazu…');}
+    else if(d.error){content=renderError(d.error);}
+    else{const v=buildGasView(d);content=v.html;gasView=v;}
   } else if(section==='ksef'){
     content=buildKsefView(data.ksef);
   } else if(section==='apartments'){
@@ -14194,6 +14475,7 @@ function renderApp(){
   if(section==='oblozenie')startOperationalClock();
   if(enriched){initRentalChart(enriched,fc);setTimeout(()=>{renderMonthlyTable();initChannelChart();},50);}
   if(mediaView)initMediaCharts(mediaView);
+  if(gasView)initGasCharts(gasView);
   if(section==='housekeeping')setTimeout(initHkChart,50);
   if(section==='otv')setTimeout(initOtvChart,50);
   if(section==='previo')setTimeout(initPrevioChart,50);
@@ -14210,6 +14492,8 @@ function saveConfig(){
   const s=document.getElementById('inp-sheetid').value.trim();
   const mk=document.getElementById('inp-mediakey').value.trim();
   const ms=document.getElementById('inp-mediasheetid').value.trim();
+  const gk=document.getElementById('inp-gaskey')?.value.trim()||'';
+  const gs=document.getElementById('inp-gassheetid')?.value.trim()||'';
   const ak=document.getElementById('inp-aptskey').value.trim();
   const as_=document.getElementById('inp-aptssheetid').value.trim();
   const kk=document.getElementById('inp-ksefkey')?.value.trim()||'';
@@ -14217,10 +14501,12 @@ function saveConfig(){
   if(!k||!s){alert('Uzupełnij klucz API i ID arkusza najmu.');return;}
   CONFIG.apiKey=k;CONFIG.spreadsheetId=s;
   CONFIG.mediaApiKey=mk;CONFIG.mediaSpreadsheetId=ms;
+  CONFIG.gasApiKey=gk;CONFIG.gasSpreadsheetId=gs;
   CONFIG.aptsApiKey=ak;CONFIG.aptsSpreadsheetId=as_;
   CONFIG.ksefApiKey=kk;CONFIG.ksefSpreadsheetId=ks;
   localStorage.setItem('gs_api_key',k);localStorage.setItem('gs_spreadsheet_id',s);
   localStorage.setItem('gs_media_api_key',mk);localStorage.setItem('gs_media_spreadsheet_id',ms);
+  localStorage.setItem('gs_gas_api_key',gk);localStorage.setItem('gs_gas_spreadsheet_id',gs);
   localStorage.setItem('gs_apts_api_key',ak);localStorage.setItem('gs_apts_spreadsheet_id',as_);
   localStorage.setItem('gs_ksef_api_key',kk);localStorage.setItem('gs_ksef_spreadsheet_id',ks);
   const hk=document.getElementById('inp-hkkey')?.value.trim()||'';
@@ -14380,6 +14666,11 @@ function setMediaMode(mode){
   _state.mediaMode=mode==='usage'?'usage':'cost';
   renderApp();
 }
+function setGasYear(y){_state.gasYear=y;renderApp();}
+function setGasMode(mode){
+  _state.gasMode=mode==='usage'?'usage':'cost';
+  renderApp();
+}
 
 function setMediaSearch(val){
   _state.mediaSearch=String(val||'');
@@ -14389,6 +14680,18 @@ function setMediaSearch(val){
     if(input){
       input.focus();
       const pos=_state.mediaSearch.length;
+      try{input.setSelectionRange(pos,pos);}catch(e){}
+    }
+  });
+}
+function setGasSearch(val){
+  _state.gasSearch=String(val||'');
+  renderApp();
+  requestAnimationFrame(()=>{
+    const input=document.getElementById('gasSearchInput');
+    if(input){
+      input.focus();
+      const pos=_state.gasSearch.length;
       try{input.setSelectionRange(pos,pos);}catch(e){}
     }
   });
