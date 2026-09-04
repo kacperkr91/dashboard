@@ -12912,12 +12912,11 @@ function buildOblozenieLive(){
   const previousMonthLabelUpper=`${MONTHS_PL_UPPER[previousMonthDate.getMonth()]} ${previousMonthDate.getFullYear()}`;
   const lastYearMonthLabelUpper=`${MONTHS_PL_UPPER[today.getMonth()]} ${today.getFullYear()-1}`;
   const lastYearRentalRows=Array.isArray(_state.data[lastYearRentalKey])?_state.data[lastYearRentalKey]:null;
+  const lastYearRentalState=_state.data[lastYearRentalKey];
   const lastYearRentalTotal=lastYearRentalRows
     ? lastYearRentalRows.reduce((sum,day)=>sum+(+day?.value||0),0)
     : null;
-  const lastYearCardValue=lastYearRentalTotal!==null
-    ? lastYearRentalTotal
-    : (Array.isArray(_state.data[lastYearRentalKey])?0:(currentMonthPrevioForecast?.lastYearTotal||0));
+  const lastYearCardValue=lastYearRentalTotal!==null?lastYearRentalTotal:null;
   const weatherByDate=Object.fromEntries((weatherCache?.days||[]).map(day=>[day.date,day]));
   const weatherToday=weatherByDate[todayStr]||weatherCache?.days?.[0]||null;
   const weatherTomorrow=weatherByDate[tmrStr]||weatherCache?.days?.[1]||null;
@@ -13247,9 +13246,9 @@ function buildOblozenieLive(){
               <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#c2410c">Rok temu</div>
               <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${lastYearMonthLabelUpper}</div>
             </div>
-            <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${lastYearCardValue?fmt(lastYearCardValue)+' zł':'—'}</div>
-            <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${lastYearRentalTotal!==null?'Ten sam miesiąc wg arkusza dziennych rezerwacji':'Ten sam miesiąc w poprzednim roku'}</div>
-            ${_state.authUser?.role==='admin'&&lastYearRentalRows?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(249,115,22,.16);font-size:11px;color:var(--text-mid)">Dni z danymi: <strong style="color:var(--text)">${lastYearRentalRows.filter(day=>Number.isFinite(+day?.value)&&(+day.value||0)!==0).length}</strong></div>`:_state.authUser?.role==='admin'&&currentMonthPrevioForecast?.lastYearRowCount!==undefined?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(249,115,22,.16);font-size:11px;color:var(--text-mid)">Rezerwacje: <strong style="color:var(--text)">${currentMonthPrevioForecast.lastYearRowCount}</strong></div>`:''}
+            <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:14px;line-height:1.05">${lastYearCardValue!==null?fmt(lastYearCardValue)+' zł':'—'}</div>
+            <div style="font-size:12px;color:var(--text-mid);margin-top:10px">${lastYearRentalRows?'Ten sam miesiąc wg zakładki miesięcznej dziennych rezerwacji':lastYearRentalState&&lastYearRentalState.error?'Brak odczytu zakładki miesięcznej dziennych rezerwacji':'Ładowanie zakładki miesięcznej dziennych rezerwacji'}</div>
+            ${_state.authUser?.role==='admin'&&lastYearRentalRows?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(249,115,22,.16);font-size:11px;color:var(--text-mid)">Dni z danymi: <strong style="color:var(--text)">${lastYearRentalRows.filter(day=>Number.isFinite(+day?.value)&&(+day.value||0)!==0).length}</strong></div>`:_state.authUser?.role==='admin'&&lastYearRentalState&&lastYearRentalState.error?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(249,115,22,.16);font-size:11px;color:#b91c1c">Nie znaleziono lub nie odczytano zakładki dla ${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()-1}</div>`:''}
             </div>
           </div>
           <div style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#f0fdf4 48%,#dcfce7 100%);border:1px solid #bbf7d0;border-radius:20px;padding:18px 18px 16px;box-shadow:0 16px 36px rgba(34,197,94,.12);display:flex;flex-direction:column;justify-content:space-between;text-align:left">
