@@ -12657,10 +12657,9 @@ function buildOblozenieLive(){
   ensurePrevioWindowLoaded(new Date());
   const today=new Date();today.setHours(0,0,0,0);
   ensurePrevioForecastLoadedForRentalKey(getRentalMonthKeyFromDate(today));
-  const currentRentalKey=getRentalMonthKeyFromDate(today);
   const lastYearRentalKey=getRentalMonthKeyFromDate(new Date(today.getFullYear()-1,today.getMonth(),1));
   ensureRentalMonthEnabled(lastYearRentalKey);
-  ensureRentalMonthDataLoaded(lastYearRentalKey,'oblozenie');
+  ensureRentalNamedMonthDataLoaded(lastYearRentalKey,'oblozenie');
   const localDk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const normalizePrevioDate=value=>{
     if(value&&typeof value==='object'&&value.dataDoKey)return value.dataDoKey;
@@ -12918,7 +12917,7 @@ function buildOblozenieLive(){
     : null;
   const lastYearCardValue=lastYearRentalTotal!==null
     ? lastYearRentalTotal
-    : (currentMonthPrevioForecast?.lastYearTotal||0);
+    : (Array.isArray(_state.data[lastYearRentalKey])?0:(currentMonthPrevioForecast?.lastYearTotal||0));
   const weatherByDate=Object.fromEntries((weatherCache?.days||[]).map(day=>[day.date,day]));
   const weatherToday=weatherByDate[todayStr]||weatherCache?.days?.[0]||null;
   const weatherTomorrow=weatherByDate[tmrStr]||weatherCache?.days?.[1]||null;
@@ -13973,6 +13972,20 @@ function ensureRentalMonthDataLoaded(key, section='oblozenie'){
   if(existing===null)return;
   _state.data[key]=null;
   loadRentalMonthDataByKey(key).then(rows=>{
+    _state.data[key]=rows;
+    if(_state.section===section)renderApp();
+  }).catch(e=>{
+    _state.data[key]={error:e.message||'Błąd'};
+    if(_state.section===section)renderApp();
+  });
+}
+function ensureRentalNamedMonthDataLoaded(key, section='oblozenie'){
+  if(!key)return;
+  const existing=_state.data[key];
+  if(existing!==undefined&&existing!==null)return;
+  if(existing===null)return;
+  _state.data[key]=null;
+  loadRentalNamedMonthData(key).then(rows=>{
     _state.data[key]=rows;
     if(_state.section===section)renderApp();
   }).catch(e=>{
