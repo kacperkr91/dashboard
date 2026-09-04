@@ -12541,9 +12541,12 @@ function buildOblozenieLive(){
   const lastYearMonthKey=`${parseInt(currentYear,10)-1}-${currentMonth}`;
   const previousMonthDate=new Date(today.getFullYear(),today.getMonth()-1,1);
   const previousMonthKey=`${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth()+1).padStart(2,'0')}`;
+  const previousYearPreviousMonthDate=new Date(previousMonthDate.getFullYear()-1,previousMonthDate.getMonth(),1);
+  const previousYearPreviousMonthKey=`${previousYearPreviousMonthDate.getFullYear()}-${String(previousYearPreviousMonthDate.getMonth()+1).padStart(2,'0')}`;
   ensurePrevioMonthFresh(currentMonthKey,'oblozenie');
   ensurePrevioMonthFresh(lastYearMonthKey,'oblozenie');
   ensurePrevioMonthFresh(previousMonthKey,'oblozenie');
+  ensurePrevioMonthFresh(previousYearPreviousMonthKey,'oblozenie');
   const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
     ? _state.data.previo[currentMonthKey].filter(r=>{
         if(r.cancelled)return false;
@@ -12574,19 +12577,73 @@ function buildOblozenieLive(){
     return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
   };
   const isL25Apartment=apt=>String(apt||'').includes('L25/');
-  const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
-  const currentMonthL25Rows=currentMonthRows.filter(row=>isL25Apartment(row.apt));
-  const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
-  const currentMonthOtvCoreRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt));
-  const currentMonthAgataTotal=currentMonthAgataRows.reduce((sum,row)=>sum+(row.cena||0),0);
-  const currentMonthL25Total=currentMonthL25Rows.reduce((sum,row)=>sum+(row.cena||0),0);
-  const currentMonthOtvTotal=currentMonthOtvRows.reduce((sum,row)=>sum+(row.cena||0),0);
-  const currentMonthOtvCoreTotal=currentMonthOtvCoreRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const isComparableOtvApartment=apt=>{
+    const raw=String(apt||'').trim().toLowerCase();
+    if(!raw)return false;
+    if(isAgataApartment(apt))return false;
+    if(isL25Apartment(apt))return false;
+    if(raw==='orzeszkowej')return false;
+    if(raw==='apt 7c')return false;
+    if(raw==='apt 2')return false;
+    return true;
+  };
+  const getMonthRowsForForecast=key=>{
+    const monthRows=Array.isArray(_state.data.previo?.[key])?_state.data.previo[key]:[];
+    return monthRows.filter(r=>{
+      if(r.cancelled)return false;
+      const checkout=normalizePrevioDate(r.dataDo||'');
+      return checkout.slice(0,7)===key;
+    });
+  };
+  const shiftMonthKey=(key,delta)=>{
+    const [y,m]=String(key||'').split('-').map(Number);
+    if(!y||!m)return '';
+    const d=new Date(y,m-1+delta,1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+  const sumRowsRevenue=(rows,filterFn=null)=>(rows||[]).reduce((sum,row)=>{
+    if(filterFn&&!filterFn(row))return sum;
+    return sum+(+row.cena||0);
+  },0);
   const startChannelColors={'Booking.com':'#003580','Airbnb':'#FF5A5F','Profitroom':'#16a34a','Własna':'#7c3aed'};
   const getChannelKey=row=>(row.kanal||'Własna').toLowerCase().includes('booking')?'Booking.com'
     :(row.kanal||'').toLowerCase().includes('airbnb')?'Airbnb'
     :(row.kanal||'').toLowerCase().includes('profitroom')?'Profitroom'
     :'Własna';
+  const buildChannelTotalsMap=rows=>(rows||[]).reduce((acc,row)=>{
+    const key=getChannelKey(row);
+    acc[key]=(acc[key]||0)+(+row.cena||0);
+    return acc;
+  },{});
+  const scaleChannelTotals=(totals,scale)=>Object.fromEntries(
+    Object.entries(totals||{}).map(([name,total])=>[name,(+total||0)*scale])
+  );
+  const mergeChannelTotals=(...maps)=>maps.reduce((acc,map)=>{
+    Object.entries(map||{}).forEach(([name,total])=>{
+      acc[name]=(acc[name]||0)+(+total||0);
+    });
+    return acc;
+  },{});
+  const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
+  const currentMonthL25Rows=currentMonthRows.filter(row=>isL25Apartment(row.apt));
+  const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
+  const currentMonthOtvCoreRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt));
+  const previousFullMonthRows=getMonthRowsForForecast(previousMonthKey);
+  const previousFullMonthL25Rows=previousFullMonthRows.filter(row=>isL25Apartment(row.apt));
+  const l25BaseMonthTotal=sumRowsRevenue(previousFullMonthL25Rows);
+  const comparablePrevYearTargetKey=shiftMonthKey(currentMonthKey,-12);
+  const comparablePrevYearBaseKey=shiftMonthKey(previousMonthKey,-12);
+  const comparablePrevYearTargetRows=getMonthRowsForForecast(comparablePrevYearTargetKey);
+  const comparablePrevYearBaseRows=getMonthRowsForForecast(comparablePrevYearBaseKey);
+  const comparablePrevYearTargetTotal=sumRowsRevenue(comparablePrevYearTargetRows,row=>isComparableOtvApartment(row.apt));
+  const comparablePrevYearBaseTotal=sumRowsRevenue(comparablePrevYearBaseRows,row=>isComparableOtvApartment(row.apt));
+  const l25SeasonalityFactor=comparablePrevYearBaseTotal>0
+    ? comparablePrevYearTargetTotal/comparablePrevYearBaseTotal
+    : 1;
+  const currentMonthAgataTotal=currentMonthAgataRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthL25Total=currentMonthL25Rows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthOtvTotal=currentMonthOtvRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthOtvCoreTotal=currentMonthOtvCoreRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const buildChannelItems=(rows,totalBase)=>{
     const totals=rows.reduce((acc,row)=>{
       const key=getChannelKey(row);
@@ -12654,16 +12711,40 @@ function buildOblozenieLive(){
   const forecastRatio=currentMonthTotal>0&&currentMonthPrevioForecast?.forecastTotal
     ? currentMonthPrevioForecast.forecastTotal/currentMonthTotal
     : 1;
-  const forecastChannelItems=totalChannelItems.map(item=>({
-    ...item,
-    total:item.total*forecastRatio,
-    pct:currentMonthPrevioForecast?.forecastTotal>0?((item.total*forecastRatio)/currentMonthPrevioForecast.forecastTotal)*100:0,
-  }));
-  const forecastSegmentItems=buildSegmentItems({
-    otv:currentMonthOtvCoreTotal*forecastRatio,
-    l25:currentMonthL25Total*forecastRatio,
-    agata:currentMonthAgataTotal*forecastRatio,
-  },currentMonthPrevioForecast?.forecastTotal||0);
+  const genericApartmentForecasts=currentMonthPrevioForecast?.apartmentForecasts||{};
+  const genericForecastBySegment={
+    otv:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isComparableOtvApartment(apt)?(+total||0):0),0)||currentMonthOtvCoreTotal*forecastRatio,
+    l25:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isL25Apartment(apt)?(+total||0):0),0)||currentMonthL25Total*forecastRatio,
+    agata:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isAgataApartment(apt)?(+total||0):0),0)||currentMonthAgataTotal*forecastRatio,
+  };
+  const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:genericForecastBySegment.l25;
+  const adjustedL25ForecastTotal=Math.max(currentMonthL25Total,l25SeasonalTarget||0);
+  const adjustedForecastBySegment={
+    otv:genericForecastBySegment.otv,
+    l25:adjustedL25ForecastTotal,
+    agata:genericForecastBySegment.agata,
+  };
+  const adjustedForecastTotal=(adjustedForecastBySegment.otv||0)+(adjustedForecastBySegment.l25||0)+(adjustedForecastBySegment.agata||0);
+  const segmentChannelCurrentMaps={
+    otv:buildChannelTotalsMap(currentMonthOtvCoreRows),
+    l25:buildChannelTotalsMap(currentMonthL25Rows),
+    agata:buildChannelTotalsMap(currentMonthAgataRows),
+  };
+  const segmentScales={
+    otv:currentMonthOtvCoreTotal>0?(adjustedForecastBySegment.otv/currentMonthOtvCoreTotal):1,
+    l25:currentMonthL25Total>0?(adjustedForecastBySegment.l25/currentMonthL25Total):1,
+    agata:currentMonthAgataTotal>0?(adjustedForecastBySegment.agata/currentMonthAgataTotal):1,
+  };
+  const adjustedForecastChannelTotals=mergeChannelTotals(
+    scaleChannelTotals(segmentChannelCurrentMaps.otv,segmentScales.otv),
+    scaleChannelTotals(segmentChannelCurrentMaps.l25,segmentScales.l25),
+    scaleChannelTotals(segmentChannelCurrentMaps.agata,segmentScales.agata),
+  );
+  const forecastChannelItems=Object.entries(adjustedForecastChannelTotals)
+    .map(([name,total])=>({name,total,pct:adjustedForecastTotal>0?(total/adjustedForecastTotal)*100:0,color:startChannelColors[name]||'#64748b'}))
+    .sort((a,b)=>b.total-a.total);
+  const forecastSegmentItems=buildSegmentItems(adjustedForecastBySegment,adjustedForecastTotal);
+  const adjustedForecastTotalValue=adjustedForecastTotal||currentMonthPrevioForecast?.forecastTotal||0;
 
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
@@ -12984,8 +13065,8 @@ function buildOblozenieLive(){
           title:'Prognoza miesiąca',
           headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
-          value:currentMonthPrevioForecast?fmt(currentMonthPrevioForecast.forecastTotal)+' zł':'—',
-          subtitle:'Szacowany wynik na koniec miesiąca',
+          value:currentMonthPrevioForecast?fmt(adjustedForecastTotalValue)+' zł':'—',
+          subtitle:'Szacowany wynik na koniec miesiąca · L25 wg ostatniego pełnego miesiąca i sezonowości OTV',
           leftTitle:'Kanały',
           leftItems:forecastChannelItems,
           rightTitle:'Obiekty',
