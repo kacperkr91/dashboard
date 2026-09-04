@@ -4661,26 +4661,6 @@ function buildMonthView(days,opts={}){
         acc[apt]=(acc[apt]||0)+(+row.cena||0);
         return acc;
       },{});
-      const distributeTotalByWeights=(total,weights,fallbackValues={})=>{
-        const result={};
-        const entries=Object.entries(weights||{}).filter(([apt])=>apt);
-        if(!entries.length)return result;
-        let weightTotal=entries.reduce((sum,[,value])=>sum+Math.max(+value||0,0),0);
-        if(weightTotal<=0){
-          weightTotal=entries.reduce((sum,[apt])=>sum+Math.max(+(fallbackValues[apt]||0),0),0);
-          if(weightTotal<=0)weightTotal=entries.length;
-        }
-        entries.forEach(([apt,value])=>{
-          const rawWeight=Math.max(+value||0,0);
-          const fallbackWeight=Math.max(+(fallbackValues[apt]||0),0);
-          const weight=weightTotal===entries.length&&rawWeight<=0&&fallbackWeight<=0
-            ? 1
-            : (rawWeight>0?rawWeight:(fallbackWeight>0?fallbackWeight:0));
-          result[apt]=weightTotal>0?(total*weight/weightTotal):0;
-        });
-        return result;
-      };
-
       const currentMonthRows=Array.isArray(_state.data.previo?.[previoMonthKey])
         ? _state.data.previo[previoMonthKey].filter(r=>{
             if(r.cancelled)return false;
@@ -4714,14 +4694,29 @@ function buildMonthView(days,opts={}){
       const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:0;
 
       const currentL25ByApartment=sumByApartment(currentMonthL25Rows);
+      const previousL25ByApartment=sumByApartment(previousFullMonthL25Rows);
       const genericL25ByApartment=Object.fromEntries(
         Object.entries(monthlyForecasts).filter(([apt])=>isL25Apartment(apt))
       );
-      const adjustedL25Total=Math.max(
-        Object.values(currentL25ByApartment).reduce((s,v)=>s+v,0),
-        l25SeasonalTarget||Object.values(genericL25ByApartment).reduce((s,v)=>s+(+v||0),0)
-      );
-      const adjustedL25ByApartment=distributeTotalByWeights(adjustedL25Total,currentL25ByApartment,genericL25ByApartment);
+      const l25ApartmentKeys=[...new Set([
+        ...Object.keys(previousL25ByApartment),
+        ...Object.keys(currentL25ByApartment),
+        ...Object.keys(genericL25ByApartment)
+      ])];
+      const adjustedL25ByApartment={};
+      l25ApartmentKeys.forEach(apt=>{
+        const currentValue=+currentL25ByApartment[apt]||0;
+        const previousValue=+previousL25ByApartment[apt]||0;
+        const genericValue=+genericL25ByApartment[apt]||0;
+        const seasonalValue=previousValue>0
+          ? previousValue*l25SeasonalityFactor
+          : 0;
+        const baseValue=seasonalValue>0
+          ? seasonalValue
+          : (genericValue>0?genericValue:currentValue);
+        adjustedL25ByApartment[apt]=Math.max(currentValue,baseValue,0);
+      });
+      const adjustedL25Total=Object.values(adjustedL25ByApartment).reduce((s,v)=>s+(+v||0),0);
 
       const currentAgataWithoutZamkowaByApartment=sumByApartment(currentMonthAgataWithoutZamkowaRows);
       const currentAgataZamkowaByApartment=sumByApartment(currentMonthAgataZamkowaRows);
