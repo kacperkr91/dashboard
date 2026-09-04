@@ -12577,6 +12577,8 @@ function buildOblozenieLive(){
     return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
   };
   const isL25Apartment=apt=>String(apt||'').includes('L25/');
+  const isZamkowaApartment=apt=>String(apt||'').trim().toLowerCase().includes('zamkowa');
+  const isOtvForecastApartment=apt=>!isAgataApartment(apt)&&!isL25Apartment(apt);
   const isComparableOtvApartment=apt=>{
     const raw=String(apt||'').trim().toLowerCase();
     if(!raw)return false;
@@ -12628,6 +12630,8 @@ function buildOblozenieLive(){
   const currentMonthL25Rows=currentMonthRows.filter(row=>isL25Apartment(row.apt));
   const currentMonthOtvRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt));
   const currentMonthOtvCoreRows=currentMonthRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt));
+  const currentMonthAgataZamkowaRows=currentMonthAgataRows.filter(row=>isZamkowaApartment(row.apt));
+  const currentMonthAgataWithoutZamkowaRows=currentMonthAgataRows.filter(row=>!isZamkowaApartment(row.apt));
   const previousFullMonthRows=getMonthRowsForForecast(previousMonthKey);
   const previousFullMonthL25Rows=previousFullMonthRows.filter(row=>isL25Apartment(row.apt));
   const l25BaseMonthTotal=sumRowsRevenue(previousFullMonthL25Rows);
@@ -12644,6 +12648,8 @@ function buildOblozenieLive(){
   const currentMonthL25Total=currentMonthL25Rows.reduce((sum,row)=>sum+(row.cena||0),0);
   const currentMonthOtvTotal=currentMonthOtvRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const currentMonthOtvCoreTotal=currentMonthOtvCoreRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthAgataZamkowaTotal=currentMonthAgataZamkowaRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const currentMonthAgataWithoutZamkowaTotal=currentMonthAgataWithoutZamkowaRows.reduce((sum,row)=>sum+(row.cena||0),0);
   const buildChannelItems=(rows,totalBase)=>{
     const totals=rows.reduce((acc,row)=>{
       const key=getChannelKey(row);
@@ -12713,32 +12719,39 @@ function buildOblozenieLive(){
     : 1;
   const genericApartmentForecasts=currentMonthPrevioForecast?.apartmentForecasts||{};
   const genericForecastBySegment={
-    otv:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isComparableOtvApartment(apt)?(+total||0):0),0)||currentMonthOtvCoreTotal*forecastRatio,
+    otv:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isOtvForecastApartment(apt)?(+total||0):0),0)||currentMonthOtvCoreTotal*forecastRatio,
     l25:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isL25Apartment(apt)?(+total||0):0),0)||currentMonthL25Total*forecastRatio,
     agata:Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+(isAgataApartment(apt)?(+total||0):0),0)||currentMonthAgataTotal*forecastRatio,
   };
+  const genericAgataWithoutZamkowaForecast=Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+((isAgataApartment(apt)&&!isZamkowaApartment(apt))?(+total||0):0),0)
+    || currentMonthAgataWithoutZamkowaTotal*forecastRatio;
   const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:genericForecastBySegment.l25;
   const adjustedL25ForecastTotal=Math.max(currentMonthL25Total,l25SeasonalTarget||0);
+  const adjustedAgataForecastTotal=Math.max(currentMonthAgataWithoutZamkowaTotal,genericAgataWithoutZamkowaForecast||0)+currentMonthAgataZamkowaTotal;
   const adjustedForecastBySegment={
     otv:genericForecastBySegment.otv,
     l25:adjustedL25ForecastTotal,
-    agata:genericForecastBySegment.agata,
+    agata:adjustedAgataForecastTotal,
   };
   const adjustedForecastTotal=(adjustedForecastBySegment.otv||0)+(adjustedForecastBySegment.l25||0)+(adjustedForecastBySegment.agata||0);
   const segmentChannelCurrentMaps={
     otv:buildChannelTotalsMap(currentMonthOtvCoreRows),
     l25:buildChannelTotalsMap(currentMonthL25Rows),
     agata:buildChannelTotalsMap(currentMonthAgataRows),
+    agataWithoutZamkowa:buildChannelTotalsMap(currentMonthAgataWithoutZamkowaRows),
+    agataZamkowa:buildChannelTotalsMap(currentMonthAgataZamkowaRows),
   };
   const segmentScales={
     otv:currentMonthOtvCoreTotal>0?(adjustedForecastBySegment.otv/currentMonthOtvCoreTotal):1,
     l25:currentMonthL25Total>0?(adjustedForecastBySegment.l25/currentMonthL25Total):1,
     agata:currentMonthAgataTotal>0?(adjustedForecastBySegment.agata/currentMonthAgataTotal):1,
+    agataWithoutZamkowa:currentMonthAgataWithoutZamkowaTotal>0?(Math.max(currentMonthAgataWithoutZamkowaTotal,genericAgataWithoutZamkowaForecast||0)/currentMonthAgataWithoutZamkowaTotal):1,
   };
   const adjustedForecastChannelTotals=mergeChannelTotals(
     scaleChannelTotals(segmentChannelCurrentMaps.otv,segmentScales.otv),
     scaleChannelTotals(segmentChannelCurrentMaps.l25,segmentScales.l25),
-    scaleChannelTotals(segmentChannelCurrentMaps.agata,segmentScales.agata),
+    scaleChannelTotals(segmentChannelCurrentMaps.agataWithoutZamkowa,segmentScales.agataWithoutZamkowa),
+    scaleChannelTotals(segmentChannelCurrentMaps.agataZamkowa,1),
   );
   const forecastChannelItems=Object.entries(adjustedForecastChannelTotals)
     .map(([name,total])=>({name,total,pct:adjustedForecastTotal>0?(total/adjustedForecastTotal)*100:0,color:startChannelColors[name]||'#64748b'}))
@@ -13066,7 +13079,7 @@ function buildOblozenieLive(){
           headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
           value:currentMonthPrevioForecast?fmt(adjustedForecastTotalValue)+' zł':'—',
-          subtitle:'Szacowany wynik na koniec miesiąca · L25 wg ostatniego pełnego miesiąca i sezonowości OTV',
+          subtitle:'Szacowany wynik na koniec miesiąca · OTV z 7c i 2, L25 wg ostatniego pełnego miesiąca, Zamkowa bez dalszego wzrostu',
           leftTitle:'Kanały',
           leftItems:forecastChannelItems,
           rightTitle:'Obiekty',
