@@ -4608,6 +4608,143 @@ function buildMonthView(days,opts={}){
   const minIdx=enriched.findIndex(d=>d.value===minVal&&d.value!==null&&withVal.length>1);
   const fc=showForecast?calcForecast(days):null;
   const pf=previoMonthKey?calcPrevioForecast(previoMonthKey):null;
+  let monthlyForecasts=pf&&pf.apartmentForecasts?{...pf.apartmentForecasts}:{};
+  let monthlyForecastGrand=pf&&pf.apartmentForecasts?Object.values(pf.apartmentForecasts).reduce((s,v)=>s+(+v||0),0):0;
+  let usesAdjustedPrevioForecast=false;
+
+  if(pf&&previoMonthKey){
+    const today=new Date();
+    const liveMonthKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    if(previoMonthKey===liveMonthKey){
+      const normalizePrevioDate=value=>{
+        if(value&&typeof value==='object'&&value.dataDoKey)return value.dataDoKey;
+        const parsed=parseDateDMY(String(value||'').trim());
+        return parsed?dateKey(parsed):String(value||'').slice(0,10);
+      };
+      const isAgataApartment=apt=>{
+        if(isForcedOtvApartment(apt))return false;
+        return ZEWNETRZNE_APT.some(name=>String(apt||'').includes(name));
+      };
+      const isL25Apartment=apt=>String(apt||'').includes('L25/');
+      const isZamkowaApartment=apt=>String(apt||'').trim().toLowerCase().includes('zamkowa');
+      const isComparableOtvApartment=apt=>{
+        const raw=String(apt||'').trim().toLowerCase();
+        if(!raw)return false;
+        if(isAgataApartment(apt))return false;
+        if(isL25Apartment(apt))return false;
+        if(raw==='orzeszkowej')return false;
+        if(raw==='apt 7c')return false;
+        if(raw==='apt 2')return false;
+        return true;
+      };
+      const getMonthRowsForForecast=key=>{
+        const monthRows=Array.isArray(_state.data.previo?.[key])?_state.data.previo[key]:[];
+        return monthRows.filter(r=>{
+          if(r.cancelled)return false;
+          const checkout=normalizePrevioDate(r.dataDo||'');
+          return checkout.slice(0,7)===key;
+        });
+      };
+      const shiftMonthKey=(key,delta)=>{
+        const [y,m]=String(key||'').split('-').map(Number);
+        if(!y||!m)return '';
+        const d=new Date(y,m-1+delta,1);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      };
+      const sumRowsRevenue=(rows,filterFn=null)=>(rows||[]).reduce((sum,row)=>{
+        if(filterFn&&!filterFn(row.apt))return sum;
+        return sum+(+row.cena||0);
+      },0);
+      const sumByApartment=rows=>(rows||[]).reduce((acc,row)=>{
+        const apt=String(row.apt||'').trim();
+        if(!apt)return acc;
+        acc[apt]=(acc[apt]||0)+(+row.cena||0);
+        return acc;
+      },{});
+      const distributeTotalByWeights=(total,weights,fallbackValues={})=>{
+        const result={};
+        const entries=Object.entries(weights||{}).filter(([apt])=>apt);
+        if(!entries.length)return result;
+        let weightTotal=entries.reduce((sum,[,value])=>sum+Math.max(+value||0,0),0);
+        if(weightTotal<=0){
+          weightTotal=entries.reduce((sum,[apt])=>sum+Math.max(+(fallbackValues[apt]||0),0),0);
+          if(weightTotal<=0)weightTotal=entries.length;
+        }
+        entries.forEach(([apt,value])=>{
+          const rawWeight=Math.max(+value||0,0);
+          const fallbackWeight=Math.max(+(fallbackValues[apt]||0),0);
+          const weight=weightTotal===entries.length&&rawWeight<=0&&fallbackWeight<=0
+            ? 1
+            : (rawWeight>0?rawWeight:(fallbackWeight>0?fallbackWeight:0));
+          result[apt]=weightTotal>0?(total*weight/weightTotal):0;
+        });
+        return result;
+      };
+
+      const currentMonthRows=Array.isArray(_state.data.previo?.[previoMonthKey])
+        ? _state.data.previo[previoMonthKey].filter(r=>{
+            if(r.cancelled)return false;
+            const checkout=normalizePrevioDate(r.dataDo||'');
+            return checkout.slice(0,7)===previoMonthKey;
+          })
+        : [];
+      const previousMonthKey=shiftMonthKey(previoMonthKey,-1);
+      const previousYearPreviousMonthKey=shiftMonthKey(previousMonthKey,-12);
+      const comparablePrevYearTargetKey=shiftMonthKey(previoMonthKey,-12);
+      const comparablePrevYearBaseKey=shiftMonthKey(previousMonthKey,-12);
+      ensurePrevioMonthFresh(previousMonthKey,'przychody');
+      ensurePrevioMonthFresh(previousYearPreviousMonthKey,'przychody');
+      ensurePrevioMonthFresh(comparablePrevYearTargetKey,'przychody');
+      ensurePrevioMonthFresh(comparablePrevYearBaseKey,'przychody');
+
+      const currentMonthAgataRows=currentMonthRows.filter(row=>isAgataApartment(row.apt));
+      const currentMonthAgataZamkowaRows=currentMonthAgataRows.filter(row=>isZamkowaApartment(row.apt));
+      const currentMonthAgataWithoutZamkowaRows=currentMonthAgataRows.filter(row=>!isZamkowaApartment(row.apt));
+      const currentMonthL25Rows=currentMonthRows.filter(row=>isL25Apartment(row.apt));
+      const previousFullMonthRows=getMonthRowsForForecast(previousMonthKey);
+      const previousFullMonthL25Rows=previousFullMonthRows.filter(row=>isL25Apartment(row.apt));
+      const l25BaseMonthTotal=sumRowsRevenue(previousFullMonthL25Rows);
+      const comparablePrevYearTargetRows=getMonthRowsForForecast(comparablePrevYearTargetKey);
+      const comparablePrevYearBaseRows=getMonthRowsForForecast(comparablePrevYearBaseKey);
+      const comparablePrevYearTargetTotal=sumRowsRevenue(comparablePrevYearTargetRows,isComparableOtvApartment);
+      const comparablePrevYearBaseTotal=sumRowsRevenue(comparablePrevYearBaseRows,isComparableOtvApartment);
+      const l25SeasonalityFactor=comparablePrevYearBaseTotal>0
+        ? comparablePrevYearTargetTotal/comparablePrevYearBaseTotal
+        : 1;
+      const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:0;
+
+      const currentL25ByApartment=sumByApartment(currentMonthL25Rows);
+      const genericL25ByApartment=Object.fromEntries(
+        Object.entries(monthlyForecasts).filter(([apt])=>isL25Apartment(apt))
+      );
+      const adjustedL25Total=Math.max(
+        Object.values(currentL25ByApartment).reduce((s,v)=>s+v,0),
+        l25SeasonalTarget||Object.values(genericL25ByApartment).reduce((s,v)=>s+(+v||0),0)
+      );
+      const adjustedL25ByApartment=distributeTotalByWeights(adjustedL25Total,currentL25ByApartment,genericL25ByApartment);
+
+      const currentAgataWithoutZamkowaByApartment=sumByApartment(currentMonthAgataWithoutZamkowaRows);
+      const currentAgataZamkowaByApartment=sumByApartment(currentMonthAgataZamkowaRows);
+
+      Object.entries(adjustedL25ByApartment).forEach(([apt,total])=>{
+        monthlyForecasts[apt]=total;
+      });
+      Object.entries(currentAgataZamkowaByApartment).forEach(([apt,total])=>{
+        monthlyForecasts[apt]=total;
+      });
+      Object.keys(monthlyForecasts).forEach(apt=>{
+        if(isZamkowaApartment(apt)&&!(apt in currentAgataZamkowaByApartment))delete monthlyForecasts[apt];
+      });
+      Object.entries(currentAgataWithoutZamkowaByApartment).forEach(([apt,total])=>{
+        if(!Number.isFinite(monthlyForecasts[apt])||monthlyForecasts[apt]<total){
+          monthlyForecasts[apt]=total;
+        }
+      });
+
+      monthlyForecastGrand=Object.values(monthlyForecasts).reduce((s,v)=>s+(+v||0),0);
+      usesAdjustedPrevioForecast=true;
+    }
+  }
 
   // OTV total from OTV reservations data
   const otvRows=otvMonthKey&&_state.data.otv[otvMonthKey];
@@ -4648,11 +4785,14 @@ function buildMonthView(days,opts={}){
     <div class="forecast-top">
       <div class="fc-main">
         <div class="fc-label">🏨 Prognoza Previo — booking window model (avg last-7-days: ${pf.avgLast7Pct}% miesięcznego)</div>
-        <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(pf.forecastTotal)}</div>
+        <div class="fc-value" style="color:#059669"><span class="sym" style="color:#34d399">zł</span>${fmt(monthlyForecastGrand||pf.forecastTotal)}</div>
         <div class="fc-sub">
-          Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
+          ${usesAdjustedPrevioForecast
+            ? `Prognoza skorygowana o logikę OTV, L25 i Agaty dla bieżącego miesiąca`
+            : `Zarobione: <strong>zł ${fmt(pf.earned)}</strong> ·
           Potwierdzone: <strong>zł ${fmt(pf.confirmed)}</strong>
-          ${pf.estNewBookings>0?` · Last-minute est.: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}
+          ${pf.estNewBookings>0?` · Last-minute est.: <strong>zł ${fmt(pf.estNewBookings)}</strong>`:''}`
+          }
         </div>
         ${pf.lastYearTotal?`<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Rok temu ${pf.lastYearKey}: <strong>zł ${fmt(pf.lastYearTotal)}</strong> · śr. dziennie: <strong>zł ${fmt(pf.earnedPerDay)}</strong>/dzień</div>`:''}
       </div>
@@ -4688,7 +4828,7 @@ function buildMonthView(days,opts={}){
 
   // ── Per-apt daily breakdown table ──
   // Collect all unique apt names across all days
-  const forecastApts=pf&&pf.apartmentForecasts?Object.keys(pf.apartmentForecasts):[];
+  const forecastApts=Object.keys(monthlyForecasts||{});
   const allApts=sortByDefaultOrder([...new Set([
     ...enriched.flatMap(d=>Object.keys(d.aptBreakdown||{})),
     ...forecastApts
@@ -4736,7 +4876,7 @@ function buildMonthView(days,opts={}){
 
   // monthly summary (stays below grid)
   const selectedMonthKey=_state.previoMonth||'';
-  const showMonthlyForecast=!!(pf&&selectedMonthKey===(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)&&pf.apartmentForecasts);
+  const showMonthlyForecast=!!(pf&&selectedMonthKey===(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)&&Object.keys(monthlyForecasts||{}).length);
   const monthlySummary=`<div class="grid-card" style="animation:fadeUp 0.4s 0.25s ease both">
     <div class="card-title">Podsumowanie miesięczne per apartament</div>
     <div class="card-subtitle">${showMonthlyForecast?'Łączny przychód oraz prognoza dla bieżącego miesiąca · kliknij nagłówek kolumny aby sortować':'Łączny przychód · kliknij nagłówek kolumny aby sortować'}</div>
@@ -4758,8 +4898,8 @@ function buildMonthView(days,opts={}){
   window._monthlyAptTotals = monthlyAptTotals;
   window._allApts = allApts;
   window._grandTotal = grandTotal;
-  window._monthlyAptForecasts = showMonthlyForecast?(pf.apartmentForecasts||{}):{};
-  window._monthlyForecastGrand = showMonthlyForecast?Object.values(pf.apartmentForecasts||{}).reduce((s,v)=>s+(+v||0),0):0;
+  window._monthlyAptForecasts = showMonthlyForecast?(monthlyForecasts||{}):{};
+  window._monthlyForecastGrand = showMonthlyForecast?(monthlyForecastGrand||0):0;
   window._showMonthlyForecast = showMonthlyForecast;
   window._monthlySortOrder = 'default'; // default: custom order
 
@@ -13079,7 +13219,7 @@ function buildOblozenieLive(){
           headingColor:'#0f4c81',
           monthLabel:currentMonthLabelUpper,
           value:currentMonthPrevioForecast?fmt(adjustedForecastTotalValue)+' zł':'—',
-          subtitle:'',
+          subtitle:'Szacowany wynik na koniec miesiąca',
           leftTitle:'Kanały',
           leftItems:forecastChannelItems,
           rightTitle:'Obiekty',
