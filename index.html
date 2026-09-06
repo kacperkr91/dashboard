@@ -1114,14 +1114,66 @@ async function loadRentalMonthDataByKey(key){
   }
 }
 
+// Zamienia indeks kolumny (0=A,1=B,...) na literę kolumny arkusza (obsługuje też AA, AB, ...).
+function columnLetterFromIndex(idx){
+  let n=idx+1,s='';
+  while(n>0){
+    const rem=(n-1)%26;
+    s=String.fromCharCode(65+rem)+s;
+    n=Math.floor((n-1)/26);
+  }
+  return s;
+}
+
+// Jak normalizeSheetTitle, ale dodatkowo zamienia ł/Ł na l/L przed zdjęciem znaków diakrytycznych —
+// NFD nie rozkłada "ł" (to osobna litera, nie e+akcent), więc bez tego "kwota całkowita" gubiłoby "ł".
+function normalizeHeaderLabel(text){
+  return String(text||'')
+    .replace(/[łŁ]/g,'l')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g,'');
+}
+
+// Szuka w nagłówku zakładki (wiersze 1-2, kolumny A-Z) kolumny "Kwota całkowita" i zwraca jej literę.
+// Układ arkusza potrafi się zmieniać (np. od 12/2025 kolumna z M przesunęła się na K) — zamiast
+// sztywno wpisywać literę, znajdujemy ją po nazwie nagłówka za każdym razem, gdy wczytujemy dane.
+// Gdy nagłówka nie uda się znaleźć (np. brak dostępu, inny wiersz nagłówkowy), wracamy do
+// domyślnej kolumny podanej przez wywołującego, żeby nic się nie wysypało.
+const _kwotaCalkowitaColCache={};
+async function resolveKwotaCalkowitaColumn(sheet,fallbackCol){
+  if(_kwotaCalkowitaColCache[sheet])return _kwotaCalkowitaColCache[sheet];
+  const{apiKey,spreadsheetId}=CONFIG;
+  try{
+    const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
+    params.append('ranges',`'${sheet}'!A1:Z2`);
+    const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+    const rows=data.valueRanges?.[0]?.values||[];
+    const numCols=Math.max(0,...rows.map(r=>r.length));
+    let found=null;
+    for(let col=0;col<numCols;col++){
+      const combined=rows.map(r=>r[col]||'').join(' ');
+      if(normalizeHeaderLabel(combined).includes('kwotacalkowita')){found=columnLetterFromIndex(col);break;}
+    }
+    const resolved=found||fallbackCol;
+    _kwotaCalkowitaColCache[sheet]=resolved;
+    return resolved;
+  }catch(e){
+    return fallbackCol;
+  }
+}
+
 async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
   const{apiKey,spreadsheetId}=CONFIG;
-  // Fetch C=date, H=channel, J=apt, M=amount
+  const resolvedAmtCol=await resolveKwotaCalkowitaColumn(sheet,amtCol);
+  // Fetch C=date, H=channel, J=apt, resolvedAmtCol=kwota całkowita (kolumna znaleziona po nagłówku;
+  // domyślnie M/K to tylko fallback, patrz resolveKwotaCalkowitaColumn powyżej)
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
   params.append('ranges',`'${sheet}'!C${startRow}:C${endRow}`);   // date
   params.append('ranges',`'${sheet}'!H${startRow}:H${endRow}`);   // channel
   params.append('ranges',`'${sheet}'!J${startRow}:J${endRow}`);   // apt name
-  params.append('ranges',`'${sheet}'!M${startRow}:M${endRow}`);   // amount
+  params.append('ranges',`'${sheet}'!${resolvedAmtCol}${startRow}:${resolvedAmtCol}${endRow}`);   // amount (kwota całkowita)
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
   const dateVals =data.valueRanges[0]?.values||[];
   const chanVals =data.valueRanges[1]?.values||[];
@@ -13551,12 +13603,14 @@ async function loadAprilData(){
 
 async function loadRawMonth(sheet,dateCol,amtCol,startRow,endRow,totalDays,moStr){
   const{apiKey,spreadsheetId}=CONFIG;
-  // Fetch C=date, H=channel, J=apt, M=amount
+  const resolvedAmtCol=await resolveKwotaCalkowitaColumn(sheet,amtCol);
+  // Fetch C=date, H=channel, J=apt, resolvedAmtCol=kwota całkowita (kolumna znaleziona po nagłówku;
+  // domyślnie M/K to tylko fallback, patrz resolveKwotaCalkowitaColumn powyżej)
   const params=new URLSearchParams({key:apiKey,valueRenderOption:'FORMATTED_VALUE'});
   params.append('ranges',`'${sheet}'!C${startRow}:C${endRow}`);   // date
   params.append('ranges',`'${sheet}'!H${startRow}:H${endRow}`);   // channel
   params.append('ranges',`'${sheet}'!J${startRow}:J${endRow}`);   // apt name
-  params.append('ranges',`'${sheet}'!M${startRow}:M${endRow}`);   // amount
+  params.append('ranges',`'${sheet}'!${resolvedAmtCol}${startRow}:${resolvedAmtCol}${endRow}`);   // amount (kwota całkowita)
   const data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
   const dateVals =data.valueRanges[0]?.values||[];
   const chanVals =data.valueRanges[1]?.values||[];
