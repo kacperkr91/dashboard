@@ -6235,8 +6235,14 @@ function buildSummaryView(){
     return acc;
   },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,energy:0,gas:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
 
+  const summaryVatRate=0.08;
+  const summaryVatAmount=totals.gross*summaryVatRate/(1+summaryVatRate);
+  const summaryIncomeAfterVat=totals.gross-summaryVatAmount;
+
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
+    <div class="kpi-card c-red"><div class="label">VAT (8%)</div><div class="value"><span class="sym">zł</span>${fmt(summaryVatAmount)}</div><div class="sub">odjęte od brutto</div></div>
+    <div class="kpi-card c-green"><div class="label">Dochód po VAT</div><div class="value"><span class="sym">zł</span>${fmt(summaryIncomeAfterVat)}</div><div class="sub">brutto minus VAT 8%</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
