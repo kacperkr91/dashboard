@@ -6190,6 +6190,9 @@ function buildSummaryView(){
     };
   });
 
+  window._summaryBreakdownRows=rows;
+  window._summaryBreakdownMonthKey=monthKey;
+
   const search=_state.summarySearch.trim().toLowerCase();
   const filter=_state.summaryFilter||'all';
   const defaultOrderMap=new Map(sortByDefaultOrder(rows.map(r=>r.apt)).map((apt,idx)=>[apt,idx]));
@@ -7652,18 +7655,61 @@ const SUMMARY_COST_CATEGORY_PALETTE=['#2a78d6','#eb6834','#1baf7a','#eda100','#e
 const SUMMARY_COST_CATEGORY_OTHER_COLOR='#94a3b8';
 
 function getSummaryCostCategoryBreakdown(monthKey){
-  const items=(getSummaryCostsStore().items||[]).filter(item=>
-    String(item?.monthKey||'').trim()===String(monthKey||'').trim() &&
-    item?.active!==false && !item?.deletedAt
-  );
+  const normalizedMonth=String(monthKey||'').trim();
   const map={};
-  items.forEach(item=>{
-    const category=String(item?.category||'').trim()||'Bez kategorii';
-    const amount=parseMoneyValue(item?.amountNet||0);
-    if(!map[category])map[category]={category,count:0,total:0};
-    map[category].count+=1;
-    map[category].total+=amount;
+  const addToCategory=(category,amount,count)=>{
+    if(!(amount>0))return;
+    const key=String(category||'').trim()||'Bez kategorii';
+    if(!map[key])map[key]={category:key,count:0,total:0};
+    map[key].count+=count;
+    map[key].total+=amount;
+  };
+
+  // Automatyczne koszty już wyliczone per apartament w tabeli podsumowania
+  // (uwzględniają zarówno wartości bazowe, jak i ręczne nadpisania z historii kosztów).
+  const rows=(window._summaryBreakdownMonthKey===normalizedMonth?window._summaryBreakdownRows:null)||[];
+  let rentTotal=0,rentCount=0,creditTotal=0,creditCount=0,advanceTotal=0,advanceCount=0;
+  let internetTotal=0,internetCount=0,energyTotal=0,energyCount=0,gasTotal=0,gasCount=0;
+  let hkTotal=0,hkCount=0;
+  rows.forEach(r=>{
+    const rent=Number(r.rent)||0;
+    if(rent>0){
+      if(r.rentSource==='credit'){creditTotal+=rent;creditCount+=1;}
+      else{rentTotal+=rent;rentCount+=1;}
+    }
+    const advance=Number(r.advance)||0;
+    if(advance>0){advanceTotal+=advance;advanceCount+=1;}
+    const internet=Number(r.internet)||0;
+    if(internet>0){internetTotal+=internet;internetCount+=1;}
+    const energy=Number(r.energy)||0;
+    if(energy>0){energyTotal+=energy;energyCount+=1;}
+    const gas=Number(r.gas)||0;
+    if(gas>0){gasTotal+=gas;gasCount+=1;}
+    const hk=Number(r.housekeeping)||0;
+    if(hk>0){hkTotal+=hk;hkCount+=1;}
   });
+  addToCategory('Czynsz',rentTotal,rentCount);
+  addToCategory('Kredyt',creditTotal,creditCount);
+  addToCategory('Zaliczka eksploatacyjna',advanceTotal,advanceCount);
+  addToCategory('Internet',internetTotal,internetCount);
+  addToCategory('Prąd',energyTotal,energyCount);
+  addToCategory('Gaz',gasTotal,gasCount);
+  addToCategory('Housekeeping',hkTotal,hkCount);
+
+  // Pozostałe ręcznie dodane koszty (np. kontrahenci, jednorazowe wydatki) — pomijamy
+  // kategorie obsłużone powyżej (czynsz/kredyt/zaliczka/prąd), żeby nie liczyć ich podwójnie.
+  const items=(getSummaryCostsStore().items||[]).filter(item=>
+    String(item?.monthKey||'').trim()===normalizedMonth &&
+    item?.active!==false && !item?.deletedAt &&
+    !isSummaryRentCategory(item.category) &&
+    !isSummaryCreditCategory(item.category) &&
+    !isSummaryAdvanceCategory(item.category) &&
+    !isSummaryEnergyCategory(item.category)
+  );
+  items.forEach(item=>{
+    addToCategory(item?.category,parseMoneyValue(item?.amountNet||0),1);
+  });
+
   return Object.values(map).sort((a,b)=>b.total-a.total||a.category.localeCompare(b.category,'pl'));
 }
 
@@ -7700,7 +7746,7 @@ function openSummaryCostBreakdownModal(monthKey=''){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px">
       <div>
         <div style="font-size:24px;font-weight:800;color:#0f172a">Podział kosztów</div>
-        <div style="font-size:13px;color:#64748b;margin-top:6px">${escapeHtml(activeMonth.label)} · rozkład dodanych kosztów wg kategorii.</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">${escapeHtml(activeMonth.label)} · rozkład wszystkich kosztów wg kategorii (czynsz, zaliczka, media, housekeeping i dodane koszty).</div>
       </div>
       <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
         <div style="text-align:right">
@@ -7711,7 +7757,7 @@ function openSummaryCostBreakdownModal(monthKey=''){
       </div>
     </div>
     ${!breakdown.length
-      ? `<div class="empty-section"><div class="empty-icon">📊</div><p>Brak dodanych kosztów dla ${escapeHtml(activeMonth.label)}</p></div>`
+      ? `<div class="empty-section"><div class="empty-icon">📊</div><p>Brak danych kosztowych dla ${escapeHtml(activeMonth.label)}</p></div>`
       : `<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:22px">
           <div style="position:relative;width:220px;height:220px;flex-shrink:0">
             <canvas id="summaryCostBreakdownChart" width="220" height="220"></canvas>
@@ -7723,7 +7769,7 @@ function openSummaryCostBreakdownModal(monthKey=''){
           <div id="summary-cost-breakdown-legend" style="display:flex;flex-direction:column;gap:10px;min-width:220px;flex:1"></div>
         </div>
         <div class="hk-table-wrap"><table class="hk-table">
-          <thead><tr><th>Kategoria</th><th class="num">Liczba wpisów</th><th class="num">Suma</th><th class="num">Udział</th></tr></thead>
+          <thead><tr><th>Kategoria</th><th class="num">Pozycji</th><th class="num">Suma</th><th class="num">Udział</th></tr></thead>
           <tbody>
             ${breakdown.map(item=>`<tr>
               <td style="font-weight:700">${escapeHtml(item.category)}</td>
