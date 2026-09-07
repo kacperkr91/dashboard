@@ -7721,9 +7721,13 @@ function getSummaryCostCategoryBreakdown(monthKey){
     addToCategory(item?.category,parseMoneyValue(item?.amountNet||0),1);
   });
 
-  // "Nadzwyczajne" koszty = ręcznie dodane wpisy spoza stałych, cyklicznych kategorii
-  // (czynsz/kredyt/zaliczka/prąd/internet i TV/housekeeping) — czyli jednorazowe/dodatkowe wydatki.
-  const extraordinaryItems=items.filter(item=>!isSummaryInternetOrTvCategory(item?.category));
+  // "Nadzwyczajne" koszty = wpisy z zaznaczonym checkboxem "Wydatek nadzwyczajny" w formularzu kosztu
+  // (niezależnie od kategorii) — patrzymy na wszystkie aktywne wpisy z tego miesiąca, nie tylko te spoza stałych kategorii.
+  const allMonthItems=(getSummaryCostsStore().items||[]).filter(item=>
+    String(item?.monthKey||'').trim()===normalizedMonth &&
+    item?.active!==false && !item?.deletedAt
+  );
+  const extraordinaryItems=allMonthItems.filter(item=>item?.extraordinary===true);
   const extraordinaryCount=extraordinaryItems.length;
   const extraordinaryTotal=extraordinaryItems.reduce((sum,item)=>sum+parseMoneyValue(item?.amountNet||0),0);
 
