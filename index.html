@@ -6161,9 +6161,12 @@ function buildSummaryView(){
     const kacperCost=Number(contractorCostMaps.kacper?.[apt])||0;
     const pawelCost=Number(contractorCostMaps.pawel?.[apt])||0;
     const customCost=Number(customCostMap[apt])||0;
+    const rowVatAmount=(income.gross||0)*0.08/1.08;
     return{
       apt,
       gross:income.gross||0,
+      vatAmount:rowVatAmount,
+      incomeAfterVat:(income.gross||0)-rowVatAmount,
       commission:income.commission||0,
       transactionFee:income.transactionFee||0,
       channelCost:income.cost||0,
@@ -6217,6 +6220,8 @@ function buildSummaryView(){
 
   const totals=filteredRows.reduce((acc,r)=>{
     acc.gross+=r.gross;
+    acc.vatAmount+=r.vatAmount;
+    acc.incomeAfterVat+=r.incomeAfterVat;
     acc.commission+=r.commission;
     acc.transactionFee+=r.transactionFee;
     acc.channelCost+=r.channelCost;
@@ -6233,16 +6238,12 @@ function buildSummaryView(){
     acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,energy:0,gas:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
-
-  const summaryVatRate=0.08;
-  const summaryVatAmount=totals.gross*summaryVatRate/(1+summaryVatRate);
-  const summaryIncomeAfterVat=totals.gross-summaryVatAmount;
+  },{gross:0,vatAmount:0,incomeAfterVat:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,energy:0,gas:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
-    <div class="kpi-card c-red"><div class="label">VAT (8%)</div><div class="value"><span class="sym">zł</span>${fmt(summaryVatAmount)}</div><div class="sub">odjęte od brutto</div></div>
-    <div class="kpi-card c-green"><div class="label">Dochód po VAT</div><div class="value"><span class="sym">zł</span>${fmt(summaryIncomeAfterVat)}</div><div class="sub">brutto minus VAT 8%</div></div>
+    <div class="kpi-card c-red"><div class="label">VAT (8%)</div><div class="value"><span class="sym">zł</span>${fmt(totals.vatAmount)}</div><div class="sub">odjęte od brutto</div></div>
+    <div class="kpi-card c-green"><div class="label">Dochód po VAT</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeAfterVat)}</div><div class="sub">brutto minus VAT 8%</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
@@ -6289,6 +6290,8 @@ function buildSummaryView(){
   const tableRows=filteredRows.map((r,idx)=>`<tr${firstNonRentalIndex===idx?` style="border-top:3px solid #cbd5e1"`:''}>
     <td style="font-weight:700;${isSummaryNonRentalApartment(r.apt)?'color:#475569':''}">${r.apt}</td>
     <td class="num">${fmt(r.gross)} zł</td>
+    <td class="num" style="color:var(--red)">${fmt(r.vatAmount)} zł</td>
+    <td class="num" style="color:var(--green);font-weight:700">${fmt(r.incomeAfterVat)} zł</td>
     <td class="num" style="color:var(--red)">${fmt(r.channelCost)} zł</td>
     <td class="num" style="color:var(--orange);font-weight:700">${fmt(r.housekeeping)} zł</td>
     <td class="num">${r.energy!==null?`${fmt(r.energy)} zł`:bd}</td>
@@ -6309,11 +6312,13 @@ function buildSummaryView(){
       <div class="card-title">Podsumowanie OTV per apartament</div>
       <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, prądem, gazem, internetem, czynszem, zaliczką eksploatacyjną oraz ręcznie dodanymi kosztami.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th style="cursor:pointer" onclick="setSummarySort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('channelCost')">Koszt kanału${sortArrow('channelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('housekeeping')">Housekeeping${sortArrow('housekeeping')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('energy')">Prąd${sortArrow('energy')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gas')">Gaz${sortArrow('gas')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('rent')">Czynsz${sortArrow('rent')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('advance')">Zaliczka eksploat.${sortArrow('advance')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('internet')">Internet${sortArrow('internet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('arturCost')">Artur${sortArrow('arturCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('kacperCost')">Kacper${sortArrow('kacperCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('pawelCost')">Paweł${sortArrow('pawelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('customCost')">Dodane koszty${sortArrow('customCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeNet')">Dochód po kanałach${sortArrow('incomeNet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('remainingAfterKnown')">Zostaje po HK${sortArrow('remainingAfterKnown')}</th></tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="setSummarySort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('vatAmount')">VAT (8%)${sortArrow('vatAmount')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeAfterVat')">Dochód po VAT${sortArrow('incomeAfterVat')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('channelCost')">Koszt kanału${sortArrow('channelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('housekeeping')">Housekeeping${sortArrow('housekeeping')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('energy')">Prąd${sortArrow('energy')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gas')">Gaz${sortArrow('gas')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('rent')">Czynsz${sortArrow('rent')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('advance')">Zaliczka eksploat.${sortArrow('advance')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('internet')">Internet${sortArrow('internet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('arturCost')">Artur${sortArrow('arturCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('kacperCost')">Kacper${sortArrow('kacperCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('pawelCost')">Paweł${sortArrow('pawelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('customCost')">Dodane koszty${sortArrow('customCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeNet')">Dochód po kanałach${sortArrow('incomeNet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('remainingAfterKnown')">Zostaje po HK${sortArrow('remainingAfterKnown')}</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
             <td class="num">${fmt(totals.gross)} zł</td>
+            <td class="num">${fmt(totals.vatAmount)} zł</td>
+            <td class="num">${fmt(totals.incomeAfterVat)} zł</td>
             <td class="num">${fmt(totals.channelCost)} zł</td>
             <td class="num">${fmt(totals.housekeeping)} zł</td>
             <td class="num">${fmt(totals.energy)} zł</td>
