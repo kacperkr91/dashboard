@@ -6171,6 +6171,7 @@ function buildSummaryView(){
       transactionFee:income.transactionFee||0,
       channelCost:income.cost||0,
       incomeNet:income.net||0,
+      incomeAfterVatAndChannels:(income.net||0)-rowVatAmount,
       housekeeping:hk.housekeeping||0,
       pranie:hk.pranie||0,
       aptCena:hk.aptCena||0,
@@ -6185,7 +6186,7 @@ function buildSummaryView(){
       kacperCost:kacperCost||null,
       pawelCost:pawelCost||null,
       customCost:customCost||null,
-      remainingAfterKnown:(income.net||0)-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-(Number(resolvedEnergy)||0)-(Number(resolvedGas)||0)-arturCost-kacperCost-pawelCost-customCost,
+      remainingAfterKnown:(income.net||0)-rowVatAmount-(hk.housekeeping||0)-internetCost-(Number(resolvedRent)||0)-(Number(resolvedAdvance)||0)-(Number(resolvedEnergy)||0)-(Number(resolvedGas)||0)-arturCost-kacperCost-pawelCost-customCost,
     };
   });
 
@@ -6226,6 +6227,7 @@ function buildSummaryView(){
     acc.transactionFee+=r.transactionFee;
     acc.channelCost+=r.channelCost;
     acc.incomeNet+=r.incomeNet;
+    acc.incomeAfterVatAndChannels+=r.incomeAfterVatAndChannels;
     acc.housekeeping+=r.housekeeping;
     acc.energy+=Number(r.energy)||0;
     acc.gas+=Number(r.gas)||0;
@@ -6238,7 +6240,7 @@ function buildSummaryView(){
     acc.customCost+=Number(r.customCost)||0;
     acc.remaining+=r.remainingAfterKnown;
     return acc;
-  },{gross:0,vatAmount:0,incomeAfterVat:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,housekeeping:0,energy:0,gas:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
+  },{gross:0,vatAmount:0,incomeAfterVat:0,commission:0,transactionFee:0,channelCost:0,incomeNet:0,incomeAfterVatAndChannels:0,housekeeping:0,energy:0,gas:0,rent:0,advance:0,internet:0,arturCost:0,kacperCost:0,pawelCost:0,customCost:0,remaining:0});
 
   const kpis=`<div class="kpi-row">
     <div class="kpi-card c-blue"><div class="label">Brutto OTV</div><div class="value"><span class="sym">zł</span>${fmt(totals.gross)}</div><div class="sub">${activeMonth.label}</div></div>
@@ -6246,9 +6248,10 @@ function buildSummaryView(){
     <div class="kpi-card c-green"><div class="label">Dochód po VAT</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeAfterVat)}</div><div class="sub">brutto minus VAT 8%</div></div>
     <div class="kpi-card c-red"><div class="label">Koszty kanałów</div><div class="value"><span class="sym">zł</span>${fmt(totals.channelCost)}</div><div class="sub">prowizje + transakcje</div></div>
     <div class="kpi-card c-purple"><div class="label">Dochód po kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeNet)}</div><div class="sub">po odjęciu kosztów sprzedaży</div></div>
+    <div class="kpi-card c-purple"><div class="label">Dochód po VAT i kanałach</div><div class="value"><span class="sym">zł</span>${fmt(totals.incomeAfterVatAndChannels)}</div><div class="sub">po odjęciu VAT 8% i kosztów kanałów</div></div>
     <div class="kpi-card c-orange"><div class="label">Housekeeping</div><div class="value"><span class="sym">zł</span>${fmt(totals.housekeeping)}</div><div class="sub">sprzątanie + pranie</div></div>
     <div class="kpi-card c-blue"><div class="label">Dodane koszty</div><div class="value"><span class="sym">zł</span>${fmt(totals.customCost)}</div><div class="sub">${customCostsItems.length} wpisów w historii</div></div>
-    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po HK, mediach, internecie, czynszu i zaliczce</div></div>
+    <div class="kpi-card c-green"><div class="label">Zostaje</div><div class="value"><span class="sym">zł</span>${fmt(totals.remaining)}</div><div class="sub">po VAT, kanałach, HK, mediach, internecie, czynszu i zaliczce</div></div>
   </div>`;
 
   const filters=`<div class="grid-card" style="animation:fadeUp 0.4s 0.05s ease both;margin-bottom:18px;padding:16px 18px">
@@ -6304,6 +6307,7 @@ function buildSummaryView(){
     <td class="num">${personCostCell(r.pawelCost)}</td>
     <td class="num">${customCostCell(r)}</td>
     <td class="num" style="font-weight:700;color:var(--blue)">${fmt(r.incomeNet)} zł</td>
+    <td class="num" style="font-weight:700;color:var(--purple)">${fmt(r.incomeAfterVatAndChannels)} zł</td>
     <td class="num" style="font-weight:800;color:${r.remainingAfterKnown>=0?'#059669':'#dc2626'}">${fmt(r.remainingAfterKnown)} zł</td>
   </tr>`).join('');
 
@@ -6312,7 +6316,7 @@ function buildSummaryView(){
       <div class="card-title">Podsumowanie OTV per apartament</div>
       <div class="card-subtitle">Widok skrócony z automatycznie podpiętym housekeepingiem, prądem, gazem, internetem, czynszem, zaliczką eksploatacyjną oraz ręcznie dodanymi kosztami.</div>
       <div class="hk-table-wrap"><table class="hk-table">
-        <thead><tr><th style="cursor:pointer" onclick="setSummarySort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('vatAmount')">VAT (8%)${sortArrow('vatAmount')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeAfterVat')">Dochód po VAT${sortArrow('incomeAfterVat')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('channelCost')">Koszt kanału${sortArrow('channelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('housekeeping')">Housekeeping${sortArrow('housekeeping')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('energy')">Prąd${sortArrow('energy')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gas')">Gaz${sortArrow('gas')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('rent')">Czynsz${sortArrow('rent')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('advance')">Zaliczka eksploat.${sortArrow('advance')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('internet')">Internet${sortArrow('internet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('arturCost')">Artur${sortArrow('arturCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('kacperCost')">Kacper${sortArrow('kacperCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('pawelCost')">Paweł${sortArrow('pawelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('customCost')">Dodane koszty${sortArrow('customCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeNet')">Dochód po kanałach${sortArrow('incomeNet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('remainingAfterKnown')">Zostaje po HK${sortArrow('remainingAfterKnown')}</th></tr></thead>
+        <thead><tr><th style="cursor:pointer" onclick="setSummarySort('apt')">Apartament${sortArrow('apt')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gross')">Brutto${sortArrow('gross')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('vatAmount')">VAT (8%)${sortArrow('vatAmount')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeAfterVat')">Dochód po VAT${sortArrow('incomeAfterVat')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('channelCost')">Koszt kanału${sortArrow('channelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('housekeeping')">Housekeeping${sortArrow('housekeeping')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('energy')">Prąd${sortArrow('energy')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('gas')">Gaz${sortArrow('gas')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('rent')">Czynsz${sortArrow('rent')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('advance')">Zaliczka eksploat.${sortArrow('advance')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('internet')">Internet${sortArrow('internet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('arturCost')">Artur${sortArrow('arturCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('kacperCost')">Kacper${sortArrow('kacperCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('pawelCost')">Paweł${sortArrow('pawelCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('customCost')">Dodane koszty${sortArrow('customCost')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeNet')">Dochód po kanałach${sortArrow('incomeNet')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('incomeAfterVatAndChannels')">Dochód po VAT i kanałach${sortArrow('incomeAfterVatAndChannels')}</th><th class="num" style="cursor:pointer" onclick="setSummarySort('remainingAfterKnown')">Zostaje po HK${sortArrow('remainingAfterKnown')}</th></tr></thead>
         <tbody>${tableRows}
           <tr class="hk-total">
             <td>ŁĄCZNIE</td>
@@ -6331,6 +6335,7 @@ function buildSummaryView(){
             <td class="num">${fmt(totals.pawelCost)} zł</td>
             <td class="num">${fmt(totals.customCost)} zł</td>
             <td class="num">${fmt(totals.incomeNet)} zł</td>
+            <td class="num">${fmt(totals.incomeAfterVatAndChannels)} zł</td>
             <td class="num">${fmt(totals.remaining)} zł</td>
           </tr>
         </tbody>
