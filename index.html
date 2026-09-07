@@ -7654,12 +7654,23 @@ function refreshSummaryCostHistoryModal(monthKey=''){
 const SUMMARY_COST_CATEGORY_PALETTE=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7'];
 const SUMMARY_COST_CATEGORY_OTHER_COLOR='#94a3b8';
 
+function normalizeSummaryCostCategoryLabel(rawCategory){
+  const trimmed=String(rawCategory||'').trim();
+  const lower=trimmed.toLowerCase();
+  if(lower==='internet'||lower==='tv'||lower==='internet i tv'||lower==='internet+tv'||lower==='telewizja')return 'Internet i TV';
+  return trimmed||'Bez kategorii';
+}
+
+function isSummaryInternetOrTvCategory(category){
+  return normalizeSummaryCostCategoryLabel(category)==='Internet i TV';
+}
+
 function getSummaryCostCategoryBreakdown(monthKey){
   const normalizedMonth=String(monthKey||'').trim();
   const map={};
   const addToCategory=(category,amount,count)=>{
     if(!(amount>0))return;
-    const key=String(category||'').trim()||'Bez kategorii';
+    const key=normalizeSummaryCostCategoryLabel(category);
     if(!map[key])map[key]={category:key,count:0,total:0};
     map[key].count+=count;
     map[key].total+=amount;
@@ -7691,13 +7702,13 @@ function getSummaryCostCategoryBreakdown(monthKey){
   addToCategory('Czynsz',rentTotal,rentCount);
   addToCategory('Kredyt',creditTotal,creditCount);
   addToCategory('Zaliczka eksploatacyjna',advanceTotal,advanceCount);
-  addToCategory('Internet',internetTotal,internetCount);
+  addToCategory('Internet i TV',internetTotal,internetCount);
   addToCategory('Prąd',energyTotal,energyCount);
   addToCategory('Gaz',gasTotal,gasCount);
   addToCategory('Housekeeping',hkTotal,hkCount);
 
   // Pozostałe ręcznie dodane koszty (np. kontrahenci, jednorazowe wydatki) — pomijamy
-  // kategorie obsłużone powyżej (czynsz/kredyt/zaliczka/prąd), żeby nie liczyć ich podwójnie.
+  // kategorie obsłużone powyżej (czynsz/kredyt/zaliczka/prąd/internet), żeby nie liczyć ich podwójnie.
   const items=(getSummaryCostsStore().items||[]).filter(item=>
     String(item?.monthKey||'').trim()===normalizedMonth &&
     item?.active!==false && !item?.deletedAt &&
@@ -7710,7 +7721,14 @@ function getSummaryCostCategoryBreakdown(monthKey){
     addToCategory(item?.category,parseMoneyValue(item?.amountNet||0),1);
   });
 
-  return Object.values(map).sort((a,b)=>b.total-a.total||a.category.localeCompare(b.category,'pl'));
+  // "Nadzwyczajne" koszty = ręcznie dodane wpisy spoza stałych, cyklicznych kategorii
+  // (czynsz/kredyt/zaliczka/prąd/internet i TV/housekeeping) — czyli jednorazowe/dodatkowe wydatki.
+  const extraordinaryItems=items.filter(item=>!isSummaryInternetOrTvCategory(item?.category));
+  const extraordinaryCount=extraordinaryItems.length;
+  const extraordinaryTotal=extraordinaryItems.reduce((sum,item)=>sum+parseMoneyValue(item?.amountNet||0),0);
+
+  const list=Object.values(map).sort((a,b)=>b.total-a.total||a.category.localeCompare(b.category,'pl'));
+  return {list,extraordinaryCount,extraordinaryTotal};
 }
 
 function getSummaryCostBreakdownChartSlices(breakdown){
@@ -7736,7 +7754,10 @@ function closeSummaryCostBreakdownModal(){
 function openSummaryCostBreakdownModal(monthKey=''){
   const currentMonth=String(monthKey||_state.summaryMonth||'').trim();
   const activeMonth=PREVIO_MONTHS.find(m=>m.key===currentMonth)||{label:currentMonth};
-  const breakdown=getSummaryCostCategoryBreakdown(currentMonth);
+  const breakdownResult=getSummaryCostCategoryBreakdown(currentMonth);
+  const breakdown=breakdownResult.list;
+  const extraordinaryCount=breakdownResult.extraordinaryCount;
+  const extraordinaryTotal=breakdownResult.extraordinaryTotal;
   const grandTotal=breakdown.reduce((s,i)=>s+i.total,0);
   closeSummaryCostBreakdownModal();
   const modal=document.createElement('div');
@@ -7749,6 +7770,11 @@ function openSummaryCostBreakdownModal(monthKey=''){
         <div style="font-size:13px;color:#64748b;margin-top:6px">${escapeHtml(activeMonth.label)} · rozkład wszystkich kosztów wg kategorii (czynsz, zaliczka, media, housekeeping i dodane koszty).</div>
       </div>
       <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+        <div style="text-align:right;padding:8px 14px;border:1px solid #fef3c7;border-radius:14px;background:#fffbeb">
+          <div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:.05em">Koszty nadzwyczajne</div>
+          <div style="font-size:20px;font-weight:800;color:#b45309">${fmt(extraordinaryTotal)} zł</div>
+          <div style="font-size:11px;color:#92400e">${extraordinaryCount} ${extraordinaryCount===1?'pozycja':'pozycji'}</div>
+        </div>
         <div style="text-align:right">
           <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Suma kosztów</div>
           <div style="font-size:24px;font-weight:800;color:#0f172a">${fmt(grandTotal)} zł</div>
