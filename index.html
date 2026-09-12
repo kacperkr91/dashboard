@@ -4760,6 +4760,10 @@ function buildMonthView(days,opts={}){
         ? comparablePrevYearTargetTotal/comparablePrevYearBaseTotal
         : 1;
       const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:0;
+      // Im dalej w miesiącu, tym mniej ufamy sezonowości pożyczonej z OTV, a bardziej temu co realnie wpada do L25.
+      const l25DayProgress=pf&&pf.daysInMon
+        ? Math.max(0,Math.min(1,pf.daysDone/pf.daysInMon))
+        : 0;
 
       const currentL25ByApartment=sumByApartment(currentMonthL25Rows);
       const previousL25ByApartment=sumByApartment(previousFullMonthL25Rows);
@@ -4779,9 +4783,10 @@ function buildMonthView(days,opts={}){
         const seasonalValue=previousValue>0
           ? previousValue*l25SeasonalityFactor
           : 0;
+        const liveValue=genericValue>0?genericValue:currentValue;
         const baseValue=seasonalValue>0
-          ? seasonalValue
-          : (genericValue>0?genericValue:currentValue);
+          ? seasonalValue*(1-l25DayProgress)+liveValue*l25DayProgress
+          : liveValue;
         adjustedL25ByApartment[apt]=Math.max(currentValue,baseValue,0);
       });
       const adjustedL25Total=Object.values(adjustedL25ByApartment).reduce((s,v)=>s+(+v||0),0);
@@ -13147,7 +13152,15 @@ function buildOblozenieLive(){
   const genericAgataWithoutZamkowaForecast=Object.entries(genericApartmentForecasts).reduce((sum,[apt,total])=>sum+((isAgataApartment(apt)&&!isZamkowaApartment(apt))?(+total||0):0),0)
     || currentMonthAgataWithoutZamkowaTotal*forecastRatio;
   const l25SeasonalTarget=l25BaseMonthTotal>0?l25BaseMonthTotal*l25SeasonalityFactor:genericForecastBySegment.l25;
-  const adjustedL25ForecastTotal=Math.max(currentMonthL25Total,l25SeasonalTarget||0);
+  // Im dalej w miesiącu, tym mniej ufamy sezonowości pożyczonej z OTV, a bardziej temu co realnie wpada do L25.
+  const l25DayProgress=currentMonthPrevioForecast&&currentMonthPrevioForecast.daysInMon
+    ? Math.max(0,Math.min(1,currentMonthPrevioForecast.daysDone/currentMonthPrevioForecast.daysInMon))
+    : 0;
+  const l25LiveEstimate=Math.max(currentMonthL25Total,genericForecastBySegment.l25||0);
+  const l25BlendedTarget=l25SeasonalTarget!=null
+    ? l25SeasonalTarget*(1-l25DayProgress)+l25LiveEstimate*l25DayProgress
+    : l25LiveEstimate;
+  const adjustedL25ForecastTotal=Math.max(currentMonthL25Total,l25BlendedTarget||0);
   const adjustedAgataForecastTotal=Math.max(currentMonthAgataWithoutZamkowaTotal,genericAgataWithoutZamkowaForecast||0)+currentMonthAgataZamkowaTotal;
   const adjustedForecastBySegment={
     otv:genericForecastBySegment.otv,
