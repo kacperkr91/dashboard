@@ -13109,7 +13109,7 @@ function buildOblozenieLive(){
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 176px;align-items:start;gap:12px">
         <div style="font-size:12px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:${opts.headingColor};min-width:0">${opts.title}</div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;min-width:0;min-height:34px;text-align:center;position:relative">
-          <div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>
+          ${opts.monthSelectorHtml?opts.monthSelectorHtml:`<div style="font-size:11px;font-weight:800;color:var(--text-mid);text-transform:uppercase;white-space:nowrap">${monthTitle}</div>`}
         </div>
       </div>
       <div style="font-size:20px;font-weight:900;color:var(--text);margin-top:8px;line-height:1.05">${opts.value}</div>
@@ -13140,6 +13140,21 @@ function buildOblozenieLive(){
     l25:currentMonthL25Total,
     agata:currentMonthAgataTotal,
   },currentMonthTotal);
+  const calyMiesiacSelectedKey=(_state.calyMiesiacViewMonth&&_state.calyMiesiacViewMonth<currentMonthKey)?_state.calyMiesiacViewMonth:null;
+  if(calyMiesiacSelectedKey)ensurePrevioMonthFresh(calyMiesiacSelectedKey,'oblozenie');
+  const calyMiesiacKey=calyMiesiacSelectedKey||currentMonthKey;
+  const calyMiesiacRows=calyMiesiacSelectedKey?getMonthRowsForForecast(calyMiesiacSelectedKey):currentMonthRows;
+  const calyMiesiacTotal=calyMiesiacRows.reduce((sum,row)=>sum+(row.cena||0),0);
+  const calyMiesiacChannelItems=buildChannelItems(calyMiesiacRows,calyMiesiacTotal);
+  const calyMiesiacSegmentItems=buildSegmentItems({
+    otv:calyMiesiacRows.filter(row=>!isAgataApartment(row.apt)&&!isL25Apartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+    l25:calyMiesiacRows.filter(row=>isL25Apartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+    agata:calyMiesiacRows.filter(row=>isAgataApartment(row.apt)).reduce((sum,row)=>sum+(row.cena||0),0),
+  },calyMiesiacTotal);
+  const calyMiesiacMonthMeta=PREVIO_MONTHS.find(m=>m.key===calyMiesiacKey);
+  const calyMiesiacLabelUpper=calyMiesiacMonthMeta?calyMiesiacMonthMeta.label.toUpperCase():calyMiesiacKey;
+  const calyMiesiacMonthOptions=PREVIO_MONTHS.filter(m=>m.key<=currentMonthKey).slice().reverse();
+  const calyMiesiacSelectorHtml=`<select onchange="setCalyMiesiacViewMonth(this.value)" style="font-size:10px;font-weight:800;color:#0f766e;text-transform:uppercase;background:#fff;border:1px solid #99f6e4;border-radius:6px;padding:3px 6px;cursor:pointer;font-family:'Inter',sans-serif;max-width:150px;outline:none">${calyMiesiacMonthOptions.map(m=>`<option value="${m.key}" ${m.key===calyMiesiacKey?'selected':''}>${m.key===currentMonthKey?'BIEŻĄCY · ':''}${m.label.toUpperCase()}</option>`).join('')}</select>`;
   const forecastRatio=currentMonthTotal>0&&currentMonthPrevioForecast?.forecastTotal
     ? currentMonthPrevioForecast.forecastTotal/currentMonthTotal
     : 1;
@@ -13498,13 +13513,14 @@ function buildOblozenieLive(){
         ${renderMetricSummaryCard({
           title:'Cały miesiąc',
           headingColor:'#0f766e',
-          monthLabel:currentMonthLabelUpper,
-          value:currentMonthRows.length?fmt(currentMonthTotal)+' zł':'—',
-          subtitle:'Łączna wartość wszystkich rezerwacji miesiąca',
+          monthLabel:calyMiesiacLabelUpper,
+          monthSelectorHtml:calyMiesiacSelectorHtml,
+          value:calyMiesiacRows.length?fmt(calyMiesiacTotal)+' zł':'—',
+          subtitle:calyMiesiacSelectedKey?'Łączna wartość wszystkich rezerwacji wybranego miesiąca':'Łączna wartość wszystkich rezerwacji miesiąca',
           leftTitle:'Kanały',
-          leftItems:totalChannelItems,
+          leftItems:calyMiesiacChannelItems,
           rightTitle:'Obiekty',
-          rightItems:totalSegmentItems,
+          rightItems:calyMiesiacSegmentItems,
           cardBackground:'linear-gradient(145deg,#ffffff 0%,#ecfdf5 48%,#dcfce7 100%)',
           cardBorder:'#c9f3db',
           cardShadow:'0 16px 36px rgba(16,185,129,.12)',
@@ -15292,6 +15308,13 @@ function setHkAptSort(sort){_state.hkAptSort=sort;renderApp();}
 function setBookingPeriod(key){_state.bookingPeriodKey=key;renderApp();}
 function setArturPaymentsMonth(key){_state.arturPaymentsMonth=key;renderApp();}
 
+function setCalyMiesiacViewMonth(key){
+  const today=new Date();
+  const currentKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  _state.calyMiesiacViewMonth=(key===currentKey)?null:key;
+  if(_state.calyMiesiacViewMonth)ensurePrevioMonthFresh(_state.calyMiesiacViewMonth,'oblozenie');
+  renderApp();
+}
 function setPrevioMonth(key){
   _state.previoMonth=key;
   if(!_state.data.previo[key]){
