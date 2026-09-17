@@ -5296,6 +5296,7 @@ function buildApartmentsView(apts){
       <option value="Lokal użytkowy" ${filterType==='Lokal użytkowy'?'selected':''}>Lokal użytkowy</option>
     </select>
     <button class="btn-icon" onclick="window.print()">🖨 Drukuj / PDF</button>
+    ${canConfig()?`<button class="btn-icon" onclick="openApartmentModal('')">➕ Dodaj apartament</button>`:''}
     <span class="apt-count-badge">${filtered.length} z ${apts.length} lokali</span>
   </div>`;
 
@@ -5378,6 +5379,7 @@ function buildApartmentsView(apts){
       <td style="white-space:nowrap">${umowaCell}</td>
       <td>${wifiCell}</td>
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
+      ${canConfig()?`<td><button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openApartmentModal('${String(a.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button></td>`:''}
     </tr>`;
   }).join('');
 
@@ -5394,6 +5396,7 @@ function buildApartmentsView(apts){
           <th style="text-align:left">Koniec umowy</th>
           <th style="text-align:left">WiFi</th>
           <th style="text-align:left">Uwagi</th>
+          ${canConfig()?'<th style="text-align:left">Akcje</th>':''}
         </tr></thead>
         <tbody class="apts-table">${rows}</tbody>
       </table>
@@ -5401,6 +5404,115 @@ function buildApartmentsView(apts){
   </div>`;
 
   return alertBanner+filters+legend+table;
+}
+
+function apartmentTypeOptions_(current){
+  const opts=['Apartament','Lokal użytkowy'];
+  if(current&&!opts.includes(current))opts.push(current);
+  return opts.map(t=>`<option value="${escapeHtml(t)}" ${t===current?'selected':''}>${escapeHtml(t)}</option>`).join('');
+}
+
+function nextApartmentId_(){
+  const apts=(_state.data.apartments)||[];
+  let max=0;
+  apts.forEach(a=>{const n=parseInt(String(a.id||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
+  return String(max+1).padStart(3,'0');
+}
+
+function openApartmentModal(id){
+  if(!canConfig())return;
+  closeApartmentModal();
+  const apts=(_state.data.apartments)||[];
+  const editing=id?apts.find(a=>String(a.id)===String(id)):null;
+  const isNew=!editing;
+  const a=editing||{id:nextApartmentId_(),name:'',type:'Apartament',adres:'',metraz:'',owner:'',umowa:'nieokreślony',wifiLogin:'',wifiPass:'',uwagi:''};
+
+  const modal=document.createElement('div');
+  modal.id='apartmentModalOverlay';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10005;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:640px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:22px;font-weight:800;color:#0f172a">${isNew?'Dodaj apartament':'Edytuj apartament'}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Zmiany zapiszą się w arkuszu i będą widoczne na wszystkich komputerach.</div>
+      </div>
+      <button type="button" onclick="closeApartmentModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <input id="apt-form-id" type="hidden" value="${escapeHtml(a.id)}">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">
+      <div class="field"><label>ID</label><input value="${escapeHtml(a.id)}" disabled style="opacity:.6"></div>
+      <div class="field"><label>Typ</label><select id="apt-form-type" class="filter-select">${apartmentTypeOptions_(a.type)}</select></div>
+      <div class="field" style="grid-column:1/-1"><label>Nazwa</label><input id="apt-form-name" value="${escapeHtml(a.name)}" placeholder="np. Rynek 1"></div>
+      <div class="field" style="grid-column:1/-1"><label>Adres</label><input id="apt-form-adres" value="${escapeHtml(a.adres)}" placeholder="np. Rynek Podgórski 8/1, Kraków"></div>
+      <div class="field"><label>Metraż (m²)</label><input id="apt-form-metraz" value="${escapeHtml(a.metraz)}" placeholder="np. 45"></div>
+      <div class="field"><label>Właściciel</label><input id="apt-form-owner" value="${escapeHtml(a.owner)}"></div>
+      <div class="field"><label>Koniec umowy</label><input id="apt-form-umowa" value="${escapeHtml(a.umowa)}" placeholder="DD-MM-RRRR, nieokreślony lub wygasły"></div>
+      <div class="field"><label>WiFi — login</label><input id="apt-form-wifilogin" value="${escapeHtml(a.wifiLogin)}"></div>
+      <div class="field"><label>WiFi — hasło</label><input id="apt-form-wifipass" value="${escapeHtml(a.wifiPass)}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Uwagi</label><input id="apt-form-uwagi" value="${escapeHtml(a.uwagi)}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <div>${isNew?'':'<button type="button" class="task-ghost-btn" onclick="deleteApartmentFromModal()">🗑 Usuń apartament</button>'}</div>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="task-ghost-btn" onclick="closeApartmentModal()">Anuluj</button>
+        <button type="button" class="btn-primary" style="width:auto;padding:10px 16px" onclick="saveApartmentFromModal()">Zapisz</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function closeApartmentModal(){
+  document.getElementById('apartmentModalOverlay')?.remove();
+}
+
+function saveApartmentFromModal(){
+  const id=document.getElementById('apt-form-id').value.trim();
+  const name=document.getElementById('apt-form-name').value.trim();
+  const adres=document.getElementById('apt-form-adres').value.trim();
+  if(!name||!adres){alert('Podaj przynajmniej nazwę i adres.');return;}
+  const record={
+    id,
+    name,
+    type:document.getElementById('apt-form-type').value.trim()||'Apartament',
+    adres,
+    metraz:document.getElementById('apt-form-metraz').value.trim(),
+    owner:document.getElementById('apt-form-owner').value.trim(),
+    umowa:document.getElementById('apt-form-umowa').value.trim()||'nieokreślony',
+    wifiLogin:document.getElementById('apt-form-wifilogin').value.trim(),
+    wifiPass:document.getElementById('apt-form-wifipass').value.trim(),
+    uwagi:document.getElementById('apt-form-uwagi').value.trim(),
+  };
+  const apts=((_state.data.apartments)||[]).slice();
+  const idx=apts.findIndex(a=>String(a.id)===String(id));
+  if(idx>=0)apts[idx]=record;else apts.push(record);
+  _state.data.apartments=apts;
+  syncPushApartments_(apts);
+  closeApartmentModal();
+  if(_state.section==='apartments')renderApp();
+}
+
+function deleteApartmentFromModal(){
+  const id=document.getElementById('apt-form-id').value.trim();
+  if(!id)return;
+  if(!confirm('Usunąć ten apartament z bazy?'))return;
+  const apts=((_state.data.apartments)||[]).filter(a=>String(a.id)!==String(id));
+  _state.data.apartments=apts;
+  syncPushApartments_(apts);
+  closeApartmentModal();
+  if(_state.section==='apartments')renderApp();
+}
+
+async function syncPushApartments_(apartments){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'saveApartments',token:_state.authToken,apartments}),
+    });
+  }catch(e){console.warn('saveApartments failed:',e);}
 }
 
 function toggleWifi(id,pass){
