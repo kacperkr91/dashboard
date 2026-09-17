@@ -638,7 +638,7 @@ const CONFIG={
   aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
-  aptsRange:          'A2:M100',
+  aptsRange:          'A2:N100',
   hkApiKey:           localStorage.getItem('gs_hk_api_key')||'',
   hkSpreadsheetId:    localStorage.getItem('gs_hk_spreadsheet_id')||'',
   hkStartRow:         3,
@@ -1350,6 +1350,56 @@ async function loadGasData(){
 }
 
 
+// Splits a combined "Ulica, [Kod pocztowy] Miasto" address string into parts.
+// Used as a fallback for rows that don't yet have explicit street/postalCode/city columns filled in.
+function parseAdresParts_(adres){
+  const s=String(adres||'').trim();
+  if(!s)return{street:'',postalCode:'',city:''};
+  const parts=s.split(',');
+  const street=(parts[0]||'').trim();
+  const rest=parts.slice(1).join(',').trim();
+  const m=rest.match(/^(\d{2}-\d{3})\s+(.+)$/);
+  if(m)return{street,postalCode:m[1],city:m[2].trim()};
+  return{street,postalCode:'',city:rest};
+}
+// Recombines street/postalCode/city into the single display/legacy "adres" string.
+function joinAdresParts_(street,postalCode,city){
+  const st=String(street||'').trim();
+  const pc=String(postalCode||'').trim();
+  const ct=String(city||'').trim();
+  const cityPart=[pc,ct].filter(Boolean).join(' ');
+  return[st,cityPart].filter(Boolean).join(', ');
+}
+function mapApartmentRow_(r){
+  const adres=String(r[3]||'').trim();
+  const explicitStreet=String(r[10]||'').trim();
+  const explicitPostal=String(r[11]||'').trim();
+  const explicitCity=String(r[12]||'').trim();
+  let street=explicitStreet,postalCode=explicitPostal,city=explicitCity;
+  if(!street&&!city){
+    const parsed=parseAdresParts_(adres);
+    street=parsed.street;
+    postalCode=postalCode||parsed.postalCode;
+    city=parsed.city;
+  }
+  return{
+    id:     String(r[0]||'').trim(),
+    name:   String(r[1]||'').trim(),
+    type:   String(r[2]||'Apartament').trim(),
+    adres,
+    street,
+    postalCode,
+    city,
+    metraz: String(r[4]||'').trim(),
+    owner:  String(r[5]||'').trim(),
+    umowa:    String(r[6]||'').trim(),
+    wifiLogin:String(r[7]||'').trim(),
+    wifiPass: String(r[8]||'').trim(),
+    uwagi:    String(r[9]||'').trim(),
+    signer:   String(r[13]||'').trim(),
+  };
+}
+
 async function loadApartmentsData(){
   const{aptsApiKey,aptsSpreadsheetId,aptsSheet,aptsRange}=CONFIG;
   if(!aptsApiKey||!aptsSpreadsheetId)throw new Error('MISSING_APTS_CONFIG');
@@ -1359,18 +1409,7 @@ async function loadApartmentsData(){
   const rows=data.values||[];
   if(!rows.length)throw new Error('NO_APTS_DATA');
   const dataRows=rows.slice(1); // skip header row 1 (row 3 in sheet = index 0 here)
-  return dataRows.map(r=>({
-    id:     String(r[0]||'').trim(),
-    name:   String(r[1]||'').trim(),
-    type:   String(r[2]||'Apartament').trim(),
-    adres:  String(r[3]||'').trim(),
-    metraz: String(r[4]||'').trim(),
-    owner:  String(r[5]||'').trim(),
-    umowa:    String(r[6]||'').trim(),
-    wifiLogin:String(r[7]||'').trim(),
-    wifiPass: String(r[8]||'').trim(),
-    uwagi:    String(r[9]||'').trim(),
-  })).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
+  return dataRows.map(mapApartmentRow_).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
 }
 
 async function loadKsefData(){
@@ -5286,7 +5325,7 @@ function buildApartmentsView(apts){
     if(filterType&&a.type!==filterType)return false;
     if(filterSearch){
       const q=filterSearch.toLowerCase();
-      return a.name.toLowerCase().includes(q)||a.adres.toLowerCase().includes(q)||a.id.toLowerCase().includes(q)||a.owner.toLowerCase().includes(q);
+      return a.name.toLowerCase().includes(q)||(a.street||'').toLowerCase().includes(q)||(a.city||'').toLowerCase().includes(q)||(a.postalCode||'').toLowerCase().includes(q)||a.id.toLowerCase().includes(q)||a.owner.toLowerCase().includes(q);
     }
     return true;
   });
@@ -5388,14 +5427,18 @@ function buildApartmentsView(apts){
     const wifiCell=(a.wifiLogin||a.wifiPass)?`<div style="display:flex;align-items:center;gap:6px"><span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiLogin||'—'}</span><span style="color:var(--text-muted)">/</span><span id="${wifiId}" style="font-size:11px;letter-spacing:2px;color:var(--text-muted)">••••••</span><span id="${wifiId}-val" style="display:none;font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiPass}</span><button class="btn-show" onclick="toggleWifi('${wifiId}','${safePass}')">Pokaż</button></div>`:'—';
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
     const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
+    const signerBadge=a.signer==='Artur'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eff6ff;color:#2563eb;white-space:nowrap">Artur</span>`:a.signer==='OTV'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a;white-space:nowrap">OTV</span>`:`<span style="color:var(--text-muted);font-size:11px">—</span>`;
     return`<tr style="${rowStyle}">
       <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
       <td style="${nameStyle}">${namePrefix}${a.name}</td>
       <td>${typePill}</td>
-      <td style="color:var(--text-muted);font-size:12px;max-width:0"><div style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(a.adres||'')}">${escapeHtml(a.adres||'')||'—'}</div></td>
+      <td style="color:var(--text-muted);font-size:12px;max-width:0"><div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(a.street||'')}">${escapeHtml(a.street||'')||'—'}</div></td>
+      <td style="color:var(--text-muted);font-size:12px;white-space:nowrap">${escapeHtml(a.postalCode||'')||'—'}</td>
+      <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.city||'')||'—'}</td>
       <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
       <td>${a.owner||'—'}</td>
       <td style="white-space:nowrap">${umowaCell}</td>
+      <td>${signerBadge}</td>
       <td>${wifiCell}</td>
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
       ${canConfig()?`<td><button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openApartmentModal('${String(a.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button></td>`:''}
@@ -5403,9 +5446,9 @@ function buildApartmentsView(apts){
   }).join('');
 
   const aptColgroup=canConfig()?`<colgroup>
-          <col style="width:5%"><col style="width:11%"><col style="width:6%"><col style="width:18%"><col style="width:5%"><col style="width:13%"><col style="width:11%"><col style="width:13%"><col style="width:10%"><col style="width:8%">
+          <col style="width:4%"><col style="width:9%"><col style="width:5%"><col style="width:12%"><col style="width:6%"><col style="width:8%"><col style="width:4%"><col style="width:9%"><col style="width:8%"><col style="width:6%"><col style="width:9%"><col style="width:8%"><col style="width:5%">
         </colgroup>`:`<colgroup>
-          <col style="width:5%"><col style="width:12%"><col style="width:6%"><col style="width:20%"><col style="width:5%"><col style="width:14%"><col style="width:12%"><col style="width:14%"><col style="width:12%">
+          <col style="width:4%"><col style="width:10%"><col style="width:5%"><col style="width:13%"><col style="width:7%"><col style="width:9%"><col style="width:4%"><col style="width:10%"><col style="width:9%"><col style="width:7%"><col style="width:10%"><col style="width:9%">
         </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
@@ -5415,10 +5458,13 @@ function buildApartmentsView(apts){
           <th style="text-align:left">ID</th>
           <th style="text-align:left">Nazwa</th>
           <th style="text-align:left">Typ</th>
-          <th style="text-align:left">Adres</th>
+          <th style="text-align:left">Ulica</th>
+          <th style="text-align:left">Kod pocztowy</th>
+          <th style="text-align:left">Miasto</th>
           <th>m²</th>
           <th style="text-align:left">Właściciel</th>
           <th style="text-align:left">Koniec umowy</th>
+          <th style="text-align:left">Podpisujący</th>
           <th style="text-align:left">WiFi</th>
           <th style="text-align:left">Uwagi</th>
           ${canConfig()?'<th style="text-align:left">Akcje</th>':''}
@@ -5450,7 +5496,7 @@ function openApartmentModal(id){
   const apts=(_state.data.apartments)||[];
   const editing=id?apts.find(a=>String(a.id)===String(id)):null;
   const isNew=!editing;
-  const a=editing||{id:nextApartmentId_(),name:'',type:'Apartament',adres:'',metraz:'',owner:'',umowa:'nieokreślony',wifiLogin:'',wifiPass:'',uwagi:''};
+  const a=editing||{id:nextApartmentId_(),name:'',type:'Apartament',adres:'',street:'',postalCode:'',city:'',metraz:'',owner:'',umowa:'nieokreślony',wifiLogin:'',wifiPass:'',uwagi:'',signer:''};
 
   const modal=document.createElement('div');
   modal.id='apartmentModalOverlay';
@@ -5468,10 +5514,17 @@ function openApartmentModal(id){
       <div class="field"><label>ID</label><input value="${escapeHtml(a.id)}" disabled style="opacity:.6"></div>
       <div class="field"><label>Typ</label><select id="apt-form-type" class="filter-select">${apartmentTypeOptions_(a.type)}</select></div>
       <div class="field" style="grid-column:1/-1"><label>Nazwa</label><input id="apt-form-name" value="${escapeHtml(a.name)}" placeholder="np. Rynek 1"></div>
-      <div class="field" style="grid-column:1/-1"><label>Adres</label><input id="apt-form-adres" value="${escapeHtml(a.adres)}" placeholder="np. Rynek Podgórski 8/1, Kraków"></div>
+      <div class="field" style="grid-column:1/-1"><label>Ulica</label><input id="apt-form-street" value="${escapeHtml(a.street)}" placeholder="np. Rynek Podgórski 8/1"></div>
+      <div class="field"><label>Kod pocztowy</label><input id="apt-form-postal" value="${escapeHtml(a.postalCode)}" placeholder="np. 30-534"></div>
+      <div class="field"><label>Miasto</label><input id="apt-form-city" value="${escapeHtml(a.city)}" placeholder="np. Kraków"></div>
       <div class="field"><label>Metraż (m²)</label><input id="apt-form-metraz" value="${escapeHtml(a.metraz)}" placeholder="np. 45"></div>
       <div class="field"><label>Właściciel</label><input id="apt-form-owner" value="${escapeHtml(a.owner)}"></div>
       <div class="field"><label>Koniec umowy</label><input id="apt-form-umowa" value="${escapeHtml(a.umowa)}" placeholder="DD-MM-RRRR, nieokreślony lub wygasły"></div>
+      <div class="field"><label>Kto podpisywał umowę</label><select id="apt-form-signer" class="filter-select">
+        <option value="" ${!a.signer?'selected':''}>— nie wybrano —</option>
+        <option value="Artur" ${a.signer==='Artur'?'selected':''}>Artur</option>
+        <option value="OTV" ${a.signer==='OTV'?'selected':''}>OTV</option>
+      </select></div>
       <div class="field"><label>WiFi — login</label><input id="apt-form-wifilogin" value="${escapeHtml(a.wifiLogin)}"></div>
       <div class="field"><label>WiFi — hasło</label><input id="apt-form-wifipass" value="${escapeHtml(a.wifiPass)}"></div>
       <div class="field" style="grid-column:1/-1"><label>Uwagi</label><input id="apt-form-uwagi" value="${escapeHtml(a.uwagi)}"></div>
@@ -5494,16 +5547,22 @@ function closeApartmentModal(){
 function saveApartmentFromModal(){
   const id=document.getElementById('apt-form-id').value.trim();
   const name=document.getElementById('apt-form-name').value.trim();
-  const adres=document.getElementById('apt-form-adres').value.trim();
-  if(!name||!adres){alert('Podaj przynajmniej nazwę i adres.');return;}
+  const street=document.getElementById('apt-form-street').value.trim();
+  const postalCode=document.getElementById('apt-form-postal').value.trim();
+  const city=document.getElementById('apt-form-city').value.trim();
+  if(!name||!street){alert('Podaj przynajmniej nazwę i ulicę.');return;}
   const record={
     id,
     name,
     type:document.getElementById('apt-form-type').value.trim()||'Apartament',
-    adres,
+    adres:joinAdresParts_(street,postalCode,city),
+    street,
+    postalCode,
+    city,
     metraz:document.getElementById('apt-form-metraz').value.trim(),
     owner:document.getElementById('apt-form-owner').value.trim(),
     umowa:document.getElementById('apt-form-umowa').value.trim()||'nieokreślony',
+    signer:document.getElementById('apt-form-signer').value.trim(),
     wifiLogin:document.getElementById('apt-form-wifilogin').value.trim(),
     wifiPass:document.getElementById('apt-form-wifipass').value.trim(),
     uwagi:document.getElementById('apt-form-uwagi').value.trim(),
@@ -14130,18 +14189,7 @@ async function loadApartmentsData(){
   const rows=data.values||[];
   if(!rows.length)throw new Error('NO_APTS_DATA');
   const dataRows=rows.slice(1); // skip header row 1 (row 3 in sheet = index 0 here)
-  return dataRows.map(r=>({
-    id:     String(r[0]||'').trim(),
-    name:   String(r[1]||'').trim(),
-    type:   String(r[2]||'Apartament').trim(),
-    adres:  String(r[3]||'').trim(),
-    metraz: String(r[4]||'').trim(),
-    owner:  String(r[5]||'').trim(),
-    umowa:    String(r[6]||'').trim(),
-    wifiLogin:String(r[7]||'').trim(),
-    wifiPass: String(r[8]||'').trim(),
-    uwagi:    String(r[9]||'').trim(),
-  })).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
+  return dataRows.map(mapApartmentRow_).filter(a=>a.id&&a.name&&a.id.toLowerCase()!=='id'); // extra safety: skip any header-like row
 }
 
 
