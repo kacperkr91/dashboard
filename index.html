@@ -131,6 +131,8 @@
     .media-section{margin-bottom:24px;animation:fadeUp 0.4s ease both;}
     .media-table-wrap{overflow-x:auto;margin-top:16px;}
     table{width:100%;border-collapse:collapse;font-size:12px;}
+    .apts-fixed-table{table-layout:fixed;}
+    .apts-fixed-table td{word-wrap:break-word;overflow-wrap:break-word;vertical-align:top;padding:10px 12px;}
     thead th{background:var(--bg);padding:10px 12px;text-align:right;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
     thead th:first-child,thead th:nth-child(2){text-align:left;}
     tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
@@ -5249,8 +5251,20 @@ function buildGasView(data){
 /* APARTMENTS VIEW */
 function daysUntil(dateStr){
   if(!dateStr)return null;
-  const d=new Date(dateStr);if(isNaN(d))return null;
-  return Math.ceil((d-new Date())/(1000*60*60*24));
+  const s=String(dateStr).trim();
+  if(!s)return null;
+  let d;
+  // Polish day-first formats: DD-MM-YYYY, DD.MM.YYYY, DD/MM/YYYY
+  const m=s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
+  if(m){
+    d=new Date(parseInt(m[3],10),parseInt(m[2],10)-1,parseInt(m[1],10));
+  } else {
+    d=new Date(s);
+  }
+  if(isNaN(d))return null;
+  d.setHours(0,0,0,0);
+  const today=new Date();today.setHours(0,0,0,0);
+  return Math.round((d-today)/(1000*60*60*24));
 }
 function contractBadge(dateStr){
   const days=daysUntil(dateStr);
@@ -5344,6 +5358,11 @@ function buildApartmentsView(apts){
       rowBg=i%2===0?'#eff6ff':'#dbeafe22';
       rowStyle=`background:${rowBg};`;
       namePrefix='';
+    } else if(!isIndefinite && a.umowa && days!==null && days>=0 && days<=30){
+      // expiring within 30 days — warning tint
+      rowBg='#fffbeb';
+      rowStyle=`background:${rowBg};border-left:3px solid #f59e0b;`;
+      namePrefix='<span title="Umowa wygasa wkrótce" style="margin-right:4px">🟡</span>';
     } else {
       rowBg=i%2===0?'var(--white)':'#fafbfc';
       rowStyle=`background:${rowBg};`;
@@ -5373,7 +5392,7 @@ function buildApartmentsView(apts){
       <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
       <td style="${nameStyle}">${namePrefix}${a.name}</td>
       <td>${typePill}</td>
-      <td style="color:var(--text-muted);font-size:12px;max-width:220px">${a.adres||'—'}</td>
+      <td style="color:var(--text-muted);font-size:12px;max-width:0"><div style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(a.adres||'')}">${escapeHtml(a.adres||'')||'—'}</div></td>
       <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
       <td>${a.owner||'—'}</td>
       <td style="white-space:nowrap">${umowaCell}</td>
@@ -5383,9 +5402,15 @@ function buildApartmentsView(apts){
     </tr>`;
   }).join('');
 
+  const aptColgroup=canConfig()?`<colgroup>
+          <col style="width:5%"><col style="width:11%"><col style="width:6%"><col style="width:18%"><col style="width:5%"><col style="width:13%"><col style="width:11%"><col style="width:13%"><col style="width:10%"><col style="width:8%">
+        </colgroup>`:`<colgroup>
+          <col style="width:5%"><col style="width:12%"><col style="width:6%"><col style="width:20%"><col style="width:5%"><col style="width:14%"><col style="width:12%"><col style="width:14%"><col style="width:12%">
+        </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
-      <table>
+      <table class="apts-fixed-table">
+        ${aptColgroup}
         <thead class="apts-table"><tr>
           <th style="text-align:left">ID</th>
           <th style="text-align:left">Nazwa</th>
@@ -5487,7 +5512,7 @@ function saveApartmentFromModal(){
   const idx=apts.findIndex(a=>String(a.id)===String(id));
   if(idx>=0)apts[idx]=record;else apts.push(record);
   _state.data.apartments=apts;
-  syncPushApartments_(apts);
+  syncUpsertApartment_(record);
   closeApartmentModal();
   if(_state.section==='apartments')renderApp();
 }
@@ -5498,21 +5523,33 @@ function deleteApartmentFromModal(){
   if(!confirm('Usunąć ten apartament z bazy?'))return;
   const apts=((_state.data.apartments)||[]).filter(a=>String(a.id)!==String(id));
   _state.data.apartments=apts;
-  syncPushApartments_(apts);
+  syncDeleteApartment_(id);
   closeApartmentModal();
   if(_state.section==='apartments')renderApp();
 }
 
-async function syncPushApartments_(apartments){
+async function syncUpsertApartment_(apartment){
   if(!CONFIG.syncUrl||!_state.authToken)return;
   try{
     await fetch(CONFIG.syncUrl,{
       method:'POST',
       mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'saveApartments',token:_state.authToken,apartments}),
+      body:JSON.stringify({action:'upsertApartment',token:_state.authToken,apartment}),
     });
-  }catch(e){console.warn('saveApartments failed:',e);}
+  }catch(e){console.warn('upsertApartment failed:',e);}
+}
+
+async function syncDeleteApartment_(id){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'deleteApartmentById',token:_state.authToken,id}),
+    });
+  }catch(e){console.warn('deleteApartmentById failed:',e);}
 }
 
 function toggleWifi(id,pass){
