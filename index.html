@@ -29,7 +29,7 @@
     .brand-name{font-size:16px;font-weight:700;color:var(--text);line-height:1.2;}
     .brand-sub{font-size:12px;color:var(--text-muted);margin-top:2px;}
     .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-    .btn-icon{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:6px;}
+    .btn-icon{background:var(--white);border:1px solid var(--border);color:var(--text-mid);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:6px;white-space:nowrap;}
     .btn-icon:hover{background:var(--bg);}
 
     /* ── NAV LEVEL 1 — main sections ── */
@@ -131,10 +131,11 @@
     .media-section{margin-bottom:24px;animation:fadeUp 0.4s ease both;}
     .media-table-wrap{overflow-x:auto;margin-top:16px;}
     table{width:100%;border-collapse:collapse;font-size:12px;}
-    .apts-fixed-table{table-layout:fixed;}
+    .apts-fixed-table{table-layout:fixed;min-width:1180px;}
     .apts-fixed-table td{word-wrap:break-word;overflow-wrap:break-word;vertical-align:top;padding:10px 12px;}
     thead th{background:var(--bg);padding:10px 12px;text-align:right;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
     thead th:first-child,thead th:nth-child(2){text-align:left;}
+    .apts-fixed-table thead th{white-space:normal;overflow-wrap:break-word;vertical-align:bottom;line-height:1.3;}
     tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
     tbody tr:hover{background:#f8fafc;}
     tbody tr.suma-row{background:var(--orange-light);font-weight:700;border-top:2px solid var(--orange-mid);}
@@ -145,7 +146,7 @@
     .apt-chip .chip-close{cursor:pointer;opacity:0.6;font-size:13px;line-height:1;}
     .apt-chip .chip-close:hover{opacity:1;}
     tbody td{padding:9px 12px;text-align:right;color:var(--text);}
-    .apts-table td{text-align:left;white-space:nowrap;vertical-align:middle;}
+    .apts-table td{text-align:left;white-space:normal;overflow-wrap:break-word;word-break:break-word;vertical-align:middle;}
     .apts-table td:nth-child(5){text-align:center;}
     tbody td:first-child{text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;}
     tbody td:nth-child(2){text-align:left;font-weight:500;}
@@ -228,7 +229,7 @@
     .apt-row-value.mono{font-family:monospace;font-size:12px;background:var(--bg);padding:3px 7px;border-radius:4px;display:inline-block;}
     .wifi-wrap{display:flex;align-items:center;gap:6px;}
     .wifi-hidden{letter-spacing:2px;color:var(--text-muted);}
-    .btn-show{background:none;border:1px solid var(--border);font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif;flex-shrink:0;}
+    .btn-show{background:none;border:1px solid var(--border);font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;cursor:pointer;color:var(--text-muted);font-family:'Inter',sans-serif;flex-shrink:0;white-space:nowrap;}
     .btn-show:hover{background:var(--bg);}
     .contract-ok{color:var(--green);font-weight:600;}
     .contract-warn{color:#d97706;font-weight:700;}
@@ -5424,7 +5425,7 @@ function buildApartmentsView(apts){
       umowaCell=`<span class="contract-ok">🟢 ${a.umowa}</span>`;
     }
 
-    const wifiCell=(a.wifiLogin||a.wifiPass)?`<div style="display:flex;align-items:center;gap:6px"><span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiLogin||'—'}</span><span style="color:var(--text-muted)">/</span><span id="${wifiId}" style="font-size:11px;letter-spacing:2px;color:var(--text-muted)">••••••</span><span id="${wifiId}-val" style="display:none;font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiPass}</span><button class="btn-show" onclick="toggleWifi('${wifiId}','${safePass}')">Pokaż</button></div>`:'—';
+    const wifiCell=(a.wifiLogin||a.wifiPass)?`<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px"><span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px;overflow-wrap:break-word;word-break:break-word">${a.wifiLogin||'—'}</span><span style="color:var(--text-muted)">/</span><span id="${wifiId}" style="font-size:11px;letter-spacing:2px;color:var(--text-muted)">••••••</span><span id="${wifiId}-val" style="display:none;font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiPass}</span><button class="btn-show" onclick="toggleWifi('${wifiId}','${safePass}')">Pokaż</button></div>`:'—';
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
     const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
     const signerBadge=a.signer==='Artur'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eff6ff;color:#2563eb;white-space:nowrap">Artur</span>`:a.signer==='OTV'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a;white-space:nowrap">OTV</span>`:`<span style="color:var(--text-muted);font-size:11px">—</span>`;
@@ -5432,12 +5433,12 @@ function buildApartmentsView(apts){
       <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
       <td style="${nameStyle}">${namePrefix}${a.name}</td>
       <td>${typePill}</td>
-      <td style="color:var(--text-muted);font-size:12px;max-width:0"><div style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(a.street||'')}">${escapeHtml(a.street||'')||'—'}</div></td>
-      <td style="color:var(--text-muted);font-size:12px;white-space:nowrap">${escapeHtml(a.postalCode||'')||'—'}</td>
+      <td style="color:var(--text-muted);font-size:12px"><div style="overflow-wrap:break-word;word-break:break-word" title="${escapeHtml(a.street||'')}">${escapeHtml(a.street||'')||'—'}</div></td>
+      <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.postalCode||'')||'—'}</td>
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.city||'')||'—'}</td>
       <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
       <td>${a.owner||'—'}</td>
-      <td style="white-space:nowrap">${umowaCell}</td>
+      <td>${umowaCell}</td>
       <td>${signerBadge}</td>
       <td>${wifiCell}</td>
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
@@ -5446,9 +5447,9 @@ function buildApartmentsView(apts){
   }).join('');
 
   const aptColgroup=canConfig()?`<colgroup>
-          <col style="width:4%"><col style="width:9%"><col style="width:5%"><col style="width:12%"><col style="width:6%"><col style="width:8%"><col style="width:4%"><col style="width:9%"><col style="width:8%"><col style="width:6%"><col style="width:9%"><col style="width:8%"><col style="width:5%">
+          <col style="width:4%"><col style="width:9%"><col style="width:5%"><col style="width:13%"><col style="width:8%"><col style="width:6%"><col style="width:5%"><col style="width:9%"><col style="width:10%"><col style="width:8%"><col style="width:9%"><col style="width:6%"><col style="width:8%">
         </colgroup>`:`<colgroup>
-          <col style="width:4%"><col style="width:10%"><col style="width:5%"><col style="width:13%"><col style="width:7%"><col style="width:9%"><col style="width:4%"><col style="width:10%"><col style="width:9%"><col style="width:7%"><col style="width:10%"><col style="width:9%">
+          <col style="width:4%"><col style="width:10%"><col style="width:5%"><col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:5%"><col style="width:10%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:8%">
         </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
