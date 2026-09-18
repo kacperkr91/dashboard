@@ -640,6 +640,8 @@ const CONFIG={
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
   aptsRange:          'A2:N100',
+  ownersSheet:        'Właściciele',
+  ownersRange:        'A2:G500',
   hkApiKey:           localStorage.getItem('gs_hk_api_key')||'',
   hkSpreadsheetId:    localStorage.getItem('gs_hk_spreadsheet_id')||'',
   hkStartRow:         3,
@@ -4197,7 +4199,7 @@ let _state={
   gasSearch:'',
   data:{
     mar2026:null, feb2026:null, jan2026:null, dec2025:null, apr2026:null,
-    media:null, gas:null, apartments:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
+    media:null, gas:null, apartments:null, owners:null, housekeeping:{}, otv:{}, previo:{}, agata:{}, czynsze:{}, laundry:null, ksef:null, weather:null, tasks:null
   }
 };
 let _charts={};
@@ -4210,7 +4212,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','media-gaz','ksef','apartments','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','media-gaz','ksef','apartments','owners','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -4219,6 +4221,7 @@ const DASHBOARD_MODULE_LABELS={
   'media-gaz':'Media — Gaz',
   ksef:'KSeF',
   apartments:'Apartamenty',
+  owners:'Właściciele',
   housekeeping:'Housekeeping',
   otv:'Rezerwacje OTV',
   'otv-new':'Rezerwacje OTV New',
@@ -5491,6 +5494,51 @@ function nextApartmentId_(){
   return String(max+1).padStart(3,'0');
 }
 
+function renderOwnerPickerChips_(currentValue){
+  const owners=Array.isArray(_state.data.owners)?_state.data.owners:null;
+  const raw=currentValue!==undefined?currentValue:(document.getElementById('apt-form-owner')?.value||'');
+  const current=String(raw||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(!owners){
+    return `<div id="apt-owner-picker" style="margin-top:6px">
+      <button type="button" onclick="loadOwnerPickerForModal()" style="background:none;border:none;padding:0;color:#1d4ed8;font-size:12px;font-weight:700;cursor:pointer">📇 Wybierz z bazy właścicieli</button>
+    </div>`;
+  }
+  if(!owners.length){
+    return `<div id="apt-owner-picker" style="margin-top:6px;font-size:12px;color:#94a3b8">Baza właścicieli jest pusta — dodaj właścicieli w sekcji „Właściciele”.</div>`;
+  }
+  const chips=owners.map(o=>{
+    const active=current.includes(String(o.name||'').toLowerCase());
+    return `<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid ${active?'#0d9488':'var(--border)'};background:${active?'#f0fdfa':'#fff'};color:${active?'#0d9488':'#334155'};cursor:pointer;margin:2px 4px 2px 0">
+      <input type="checkbox" style="margin:0" ${active?'checked':''} onchange="toggleAptOwnerChip('${escapeHtml(o.name)}')"> ${escapeHtml(o.name)}
+    </label>`;
+  }).join('');
+  return `<div id="apt-owner-picker" style="margin-top:8px;display:flex;flex-wrap:wrap">${chips}</div>`;
+}
+function refreshAptOwnerPickerChips_(){
+  const el=document.getElementById('apt-owner-picker');
+  if(el)el.outerHTML=renderOwnerPickerChips_();
+}
+function loadOwnerPickerForModal(){
+  const el=document.getElementById('apt-owner-picker');
+  if(el)el.innerHTML='<span style="font-size:12px;color:#94a3b8">Ładowanie…</span>';
+  loadOwnersData().then(data=>{
+    _state.data.owners=data;
+    refreshAptOwnerPickerChips_();
+  }).catch(e=>{
+    const el2=document.getElementById('apt-owner-picker');
+    if(el2)el2.innerHTML=`<span style="font-size:12px;color:#dc2626">Błąd ładowania właścicieli: ${escapeHtml(e.message||'')}</span>`;
+  });
+}
+function toggleAptOwnerChip(name){
+  const input=document.getElementById('apt-form-owner');
+  if(!input)return;
+  const parts=input.value.split(',').map(s=>s.trim()).filter(Boolean);
+  const idx=parts.findIndex(p=>p.toLowerCase()===String(name||'').toLowerCase());
+  if(idx>=0)parts.splice(idx,1);else parts.push(name);
+  input.value=parts.join(', ');
+  refreshAptOwnerPickerChips_();
+}
+
 function openApartmentModal(id){
   if(!canConfig())return;
   closeApartmentModal();
@@ -5519,7 +5567,7 @@ function openApartmentModal(id){
       <div class="field"><label>Kod pocztowy</label><input id="apt-form-postal" value="${escapeHtml(a.postalCode)}" placeholder="np. 30-534"></div>
       <div class="field"><label>Miasto</label><input id="apt-form-city" value="${escapeHtml(a.city)}" placeholder="np. Kraków"></div>
       <div class="field"><label>Metraż (m²)</label><input id="apt-form-metraz" value="${escapeHtml(a.metraz)}" placeholder="np. 45"></div>
-      <div class="field"><label>Właściciel</label><input id="apt-form-owner" value="${escapeHtml(a.owner)}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Właściciel <span style="font-weight:400;color:#94a3b8">(może być kilku — oddziel przecinkiem)</span></label><input id="apt-form-owner" value="${escapeHtml(a.owner)}" oninput="refreshAptOwnerPickerChips_()">${renderOwnerPickerChips_(a.owner)}</div>
       <div class="field"><label>Koniec umowy</label><input id="apt-form-umowa" value="${escapeHtml(a.umowa)}" placeholder="DD-MM-RRRR, nieokreślony lub wygasły"></div>
       <div class="field"><label>Kto podpisywał umowę</label><select id="apt-form-signer" class="filter-select">
         <option value="" ${!a.signer?'selected':''}>— nie wybrano —</option>
@@ -5539,6 +5587,7 @@ function openApartmentModal(id){
     </div>
   </div>`;
   document.body.appendChild(modal);
+  if(!Array.isArray(_state.data.owners))loadOwnerPickerForModal();
 }
 
 function closeApartmentModal(){
@@ -5610,6 +5659,219 @@ async function syncDeleteApartment_(id){
       body:JSON.stringify({action:'deleteApartmentById',token:_state.authToken,id}),
     });
   }catch(e){console.warn('deleteApartmentById failed:',e);}
+}
+
+/* ═══════════════ WŁAŚCICIELE (OWNERS DATABASE) ═══════════════ */
+
+function mapOwnerRow_(r){
+  return{
+    id:      String(r[0]||'').trim(),
+    name:    String(r[1]||'').trim(),
+    email:   String(r[2]||'').trim(),
+    phone:   String(r[3]||'').trim(),
+    address: String(r[4]||'').trim(),
+    nip:     String(r[5]||'').trim(),
+    notes:   String(r[6]||'').trim(),
+  };
+}
+
+async function loadOwnersData(){
+  const{aptsApiKey,aptsSpreadsheetId}=CONFIG;
+  const ownersSheet=CONFIG.ownersSheet;
+  const ownersRange=CONFIG.ownersRange;
+  if(!aptsApiKey||!aptsSpreadsheetId)throw new Error('MISSING_APTS_CONFIG');
+  const enc=encodeURIComponent(`'${ownersSheet}'!${ownersRange}`);
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${aptsSpreadsheetId}/values/${enc}?valueRenderOption=FORMATTED_VALUE&key=${aptsApiKey}`;
+  const data=await apiFetch(url);
+  const rows=data.values||[];
+  return rows.map(mapOwnerRow_).filter(o=>o.id&&o.name&&o.id.toLowerCase()!=='id');
+}
+
+function nextOwnerId_(){
+  const owners=Array.isArray(_state.data.owners)?_state.data.owners:[];
+  let max=0;
+  owners.forEach(o=>{const n=parseInt(String(o.id||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
+  return String(max+1).padStart(3,'0');
+}
+
+function ownerLinkedApartments_(ownerName){
+  const apts=Array.isArray(_state.data.apartments)?_state.data.apartments:[];
+  const target=String(ownerName||'').trim().toLowerCase();
+  if(!target)return[];
+  return apts.filter(a=>{
+    const ownerStr=String(a.owner||'').trim().toLowerCase();
+    if(!ownerStr)return false;
+    const parts=ownerStr.split(',').map(s=>s.trim());
+    if(parts.includes(target))return true;
+    // fallback for legacy entries that concatenate multiple owner names without a comma
+    return ownerStr.includes(target);
+  });
+}
+
+function setOwnersFilter(val){
+  _state.ownersFilterSearch=val;
+  if(_state.section==='owners')renderApp();
+}
+
+function buildOwnersView(owners){
+  if(_state.data.apartments===null){
+    loadApartmentsData().then(data=>{
+      _state.data.apartments=data;
+      if(_state.section==='owners')renderApp();
+    }).catch(()=>{});
+  }
+  const search=(_state.ownersFilterSearch||'').trim().toLowerCase();
+  const sorted=[...owners].sort((a,b)=>a.name.localeCompare(b.name,'pl'));
+  const filtered=sorted.filter(o=>{
+    if(!search)return true;
+    return[o.name,o.email,o.phone,o.nip,o.address,o.notes].some(v=>String(v||'').toLowerCase().includes(search));
+  });
+
+  const filters=`<div class="apt-filters">
+    <input class="filter-search" type="text" placeholder="🔍  Szukaj po nazwie, e-mailu, telefonie, NIP…" value="${escapeHtml(_state.ownersFilterSearch||'')}" oninput="setOwnersFilter(this.value)"/>
+    ${canConfig()?`<button class="btn-icon" onclick="openOwnerModal('')">➕ Dodaj właściciela</button>`:''}
+    <span class="apt-count-badge">${filtered.length} z ${owners.length} właścicieli</span>
+  </div>`;
+
+  if(!owners.length){
+    return filters+`<div class="apt-empty"><span style="font-size:40px;opacity:0.3">🗂️</span><p>Brak właścicieli w bazie.${canConfig()?' Dodaj pierwszego przyciskiem powyżej.':''}</p></div>`;
+  }
+  if(!filtered.length){
+    return filters+`<div class="apt-empty"><span style="font-size:40px;opacity:0.3">🗂️</span><p>Brak wyników dla podanych filtrów</p></div>`;
+  }
+
+  const aptsLoaded=Array.isArray(_state.data.apartments);
+  const cards=filtered.map(o=>{
+    const apts=ownerLinkedApartments_(o.name);
+    const aptsHtml=!aptsLoaded
+      ?`<span style="color:#94a3b8;font-size:12px">Ładowanie apartamentów…</span>`
+      :apts.length
+        ?apts.map(a=>`<span class="apt-chip" style="margin:2px 4px 2px 0;display:inline-block">${escapeHtml(a.name)}</span>`).join('')
+        :`<span style="color:#94a3b8;font-size:12px">Brak przypisanych apartamentów</span>`;
+    return`<div class="grid-card" style="margin-bottom:14px;animation:fadeUp 0.3s ease both">
+      <div class="line-chart-label">
+        <div>
+          <div class="card-title">${escapeHtml(o.name)||'—'}</div>
+          <div class="card-subtitle">ID: ${escapeHtml(o.id)}</div>
+        </div>
+        ${canConfig()?`<button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openOwnerModal('${String(o.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 20px;margin-top:10px;font-size:13px">
+        <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Email</div><div>${o.email?`<a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`:'—'}</div></div>
+        <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Telefon</div><div>${o.phone?`<a href="tel:${escapeHtml(o.phone)}">${escapeHtml(o.phone)}</a>`:'—'}</div></div>
+        <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">NIP</div><div>${escapeHtml(o.nip)||'—'}</div></div>
+        <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Adres</div><div>${escapeHtml(o.address)||'—'}</div></div>
+      </div>
+      ${o.notes?`<div style="margin-top:10px;font-size:12px;color:#64748b"><strong>Uwagi:</strong> ${escapeHtml(o.notes)}</div>`:''}
+      <div style="margin-top:12px">
+        <div style="color:#94a3b8;font-size:11px;margin-bottom:4px">Apartamenty (${apts.length})</div>
+        <div>${aptsHtml}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return filters+`<div>${cards}</div>`;
+}
+
+function closeOwnerModal(){
+  document.getElementById('ownerModalOverlay')?.remove();
+}
+
+function openOwnerModal(id){
+  if(!canConfig())return;
+  closeOwnerModal();
+  const owners=Array.isArray(_state.data.owners)?_state.data.owners:[];
+  const editing=id?owners.find(o=>String(o.id)===String(id)):null;
+  const isNew=!editing;
+  const o=editing||{id:nextOwnerId_(),name:'',email:'',phone:'',address:'',nip:'',notes:''};
+
+  const modal=document.createElement('div');
+  modal.id='ownerModalOverlay';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10005;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:560px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:22px;font-weight:800;color:#0f172a">${isNew?'Dodaj właściciela':'Edytuj właściciela'}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Zmiany zapiszą się w arkuszu i będą widoczne na wszystkich komputerach.</div>
+      </div>
+      <button type="button" onclick="closeOwnerModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <input id="owner-form-id" type="hidden" value="${escapeHtml(o.id)}">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">
+      <div class="field"><label>ID</label><input value="${escapeHtml(o.id)}" disabled style="opacity:.6"></div>
+      <div class="field"><label>NIP</label><input id="owner-form-nip" value="${escapeHtml(o.nip)}" placeholder="np. 6793324449"></div>
+      <div class="field" style="grid-column:1/-1"><label>Imię i nazwisko / Nazwa firmy</label><input id="owner-form-name" value="${escapeHtml(o.name)}" placeholder="np. Jan Kowalski lub Firma Sp. z o.o."></div>
+      <div class="field"><label>Email</label><input id="owner-form-email" type="email" value="${escapeHtml(o.email)}" placeholder="np. jan@przyklad.pl"></div>
+      <div class="field"><label>Telefon</label><input id="owner-form-phone" value="${escapeHtml(o.phone)}" placeholder="np. +48 600 000 000"></div>
+      <div class="field" style="grid-column:1/-1"><label>Adres</label><input id="owner-form-address" value="${escapeHtml(o.address)}" placeholder="np. ul. Przykładowa 1, 30-000 Kraków"></div>
+      <div class="field" style="grid-column:1/-1"><label>Uwagi</label><input id="owner-form-notes" value="${escapeHtml(o.notes)}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <div>${isNew?'':'<button type="button" class="task-ghost-btn" onclick="deleteOwnerFromModal()">🗑 Usuń właściciela</button>'}</div>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="task-ghost-btn" onclick="closeOwnerModal()">Anuluj</button>
+        <button type="button" class="btn-primary" style="width:auto;padding:10px 16px" onclick="saveOwnerFromModal()">Zapisz</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function saveOwnerFromModal(){
+  const id=document.getElementById('owner-form-id').value.trim();
+  const name=document.getElementById('owner-form-name').value.trim();
+  if(!name){alert('Podaj przynajmniej imię i nazwisko lub nazwę firmy.');return;}
+  const record={
+    id,
+    name,
+    email:document.getElementById('owner-form-email').value.trim(),
+    phone:document.getElementById('owner-form-phone').value.trim(),
+    address:document.getElementById('owner-form-address').value.trim(),
+    nip:document.getElementById('owner-form-nip').value.trim(),
+    notes:document.getElementById('owner-form-notes').value.trim(),
+  };
+  const owners=(Array.isArray(_state.data.owners)?_state.data.owners:[]).slice();
+  const idx=owners.findIndex(o=>String(o.id)===String(id));
+  if(idx>=0)owners[idx]=record;else owners.push(record);
+  _state.data.owners=owners;
+  syncUpsertOwner_(record);
+  closeOwnerModal();
+  if(_state.section==='owners')renderApp();
+}
+
+function deleteOwnerFromModal(){
+  const id=document.getElementById('owner-form-id').value.trim();
+  if(!id)return;
+  if(!confirm('Usunąć tego właściciela z bazy? (Apartamenty przypisane do niego pozostaną bez zmian — trzeba będzie ręcznie zaktualizować pole „Właściciel”.)'))return;
+  const owners=(Array.isArray(_state.data.owners)?_state.data.owners:[]).filter(o=>String(o.id)!==String(id));
+  _state.data.owners=owners;
+  syncDeleteOwner_(id);
+  closeOwnerModal();
+  if(_state.section==='owners')renderApp();
+}
+
+async function syncUpsertOwner_(owner){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'upsertOwner',token:_state.authToken,owner}),
+    });
+  }catch(e){console.warn('upsertOwner failed:',e);}
+}
+
+async function syncDeleteOwner_(id){
+  if(!CONFIG.syncUrl||!_state.authToken)return;
+  try{
+    await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'deleteOwnerById',token:_state.authToken,id}),
+    });
+  }catch(e){console.warn('deleteOwnerById failed:',e);}
 }
 
 function toggleWifi(id,pass){
@@ -14515,7 +14777,7 @@ async function init(){
   const initialSection=_state.section||'oblozenie';
   const laundryOnlyUser=isLaundryOnlyUser();
   const needsPrimaryConfig=hasAnyModuleAccess([
-    'oblozenie','rental','ksef','apartments','housekeeping','otv','otv-new','summary','previo',
+    'oblozenie','rental','ksef','apartments','owners','housekeeping','otv','otv-new','summary','previo',
     'artur-payments','agata-faktura','czynsze','tasks','booking-payout','dyzury','noty','goscie','parking'
   ]);
   const needsLaundryConfig=hasModuleAccess('laundry-textiles');
@@ -14706,6 +14968,9 @@ async function prefetchSecondaryModules(){
   if(hasModuleAccess('apartments')&&section!=='apartments'&&_state.data.apartments===null){
     jobs.push(()=>loadApartmentsData().then(data=>{_state.data.apartments=data;}).catch(e=>{_state.data.apartments={error:e.message||'Błąd'};}));
   }
+  if(hasModuleAccess('owners')&&section!=='owners'&&_state.data.owners===null){
+    jobs.push(()=>loadOwnersData().then(data=>{_state.data.owners=data;}).catch(e=>{_state.data.owners={error:e.message||'Błąd'};}));
+  }
   if(hasModuleAccess('housekeeping')&&section!=='housekeeping'){
     jobs.push(async ()=>{
       await detectHkMonths();
@@ -14828,6 +15093,17 @@ function ensureSectionDataLoaded(section){
     }).catch(e=>{
       _state.data.apartments={error:e.message||'Błąd'};
       if(_state.section==='apartments')renderApp();
+    });
+    return true;
+  }
+  if(section==='owners'&&_state.data.owners===null){
+    renderApp();
+    loadOwnersData().then(data=>{
+      _state.data.owners=data;
+      if(_state.section==='owners')renderApp();
+    }).catch(e=>{
+      _state.data.owners={error:e.message||'Błąd'};
+      if(_state.section==='owners')renderApp();
     });
     return true;
   }
@@ -15156,6 +15432,7 @@ function renderApp(){
     ${navButton('media-gaz','Media — Gaz','🔥',section==='media-gaz'?'background:#0e7490;border-color:#0e7490;color:#fff':'')}
     ${navButton('ksef','KSeF','🧾','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
     ${navButton('apartments','Apartamenty','🏠','background:#0d9488;border-color:#0d9488;color:#fff')}
+    ${navButton('owners','Właściciele','🗂️','background:#7c2d92;border-color:#7c2d92;color:#fff')}
     ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('otv-new','Rezerwacje OTV New','🧾','background:#6d28d9;border-color:#6d28d9;color:#fff')}
@@ -15236,6 +15513,11 @@ function renderApp(){
     if(!d){content=renderLoading('Ładowanie apartamentów…');}
     else if(d.error){content=renderError(d.error);}
     else{content=`<div id="apt-section-wrap">${buildApartmentsView(d)}</div>`;}
+  } else if(section==='owners'){
+    const d=data.owners;
+    if(!d){content=renderLoading('Ładowanie właścicieli…');}
+    else if(d.error){content=renderError(d.error);}
+    else{content=`<div id="owners-section-wrap">${buildOwnersView(d)}</div>`;}
   } else if(section==='housekeeping'){
     content=buildHousekeepingView();
   } else if(section==='otv'){
