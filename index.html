@@ -5309,6 +5309,10 @@ function daysUntil(dateStr){
   const today=new Date();today.setHours(0,0,0,0);
   return Math.round((d-today)/(1000*60*60*24));
 }
+function isArchivedApt_(a){
+  const umowaLower=(a.umowa||'').toLowerCase();
+  return umowaLower.includes('wygasł')||umowaLower.includes('wygasl');
+}
 function contractBadge(dateStr){
   const days=daysUntil(dateStr);
   if(days===null)return`<span class="apt-row-value">—</span>`;
@@ -5323,8 +5327,11 @@ function buildApartmentsView(apts){
   const filterOwner=_state.aptsFilterOwner||'';
   const filterSearch=_state.aptsFilterSearch||'';
   const filterType=_state.aptsFilterType||'';
+  const showArchived=!!_state.aptsShowArchived;
+  const archivedCount=apts.filter(isArchivedApt_).length;
 
   let filtered=apts.filter(a=>{
+    if(!showArchived&&isArchivedApt_(a))return false;
     if(filterOwner&&a.owner!==filterOwner)return false;
     if(filterType&&a.type!==filterType)return false;
     if(filterSearch){
@@ -5352,6 +5359,7 @@ function buildApartmentsView(apts){
       <option value="Apartament" ${filterType==='Apartament'?'selected':''}>Apartament</option>
       <option value="Lokal użytkowy" ${filterType==='Lokal użytkowy'?'selected':''}>Lokal użytkowy</option>
     </select>
+    <button class="btn-icon" onclick="toggleAptsArchived_()">${showArchived?`🗄 Ukryj zarchiwizowane`:`🗄 Pokaż zarchiwizowane${archivedCount?` (${archivedCount})`:''}`}</button>
     <button class="btn-icon" onclick="window.print()">🖨 Drukuj / PDF</button>
     ${canConfig()?`<button class="btn-icon" onclick="openApartmentModal('')">➕ Dodaj apartament</button>`:''}
     <span class="apt-count-badge">${filtered.length} z ${apts.length} lokali</span>
@@ -5382,7 +5390,7 @@ function buildApartmentsView(apts){
     // date in past → auto-expired
     // date in future ≤30d → warning
     // date in future >30d → active
-    const isExplicitlyExpired = umowaLower.includes('wygasł') || umowaLower.includes('wygasl');
+    const isExplicitlyExpired = isArchivedApt_(a);
     const isIndefinite = !a.umowa || umowaLower.includes('nieokreśl') || umowaLower.includes('nieokresl') || umowaLower.includes('bezterm') || umowaLower.includes('ciągły') || umowaLower.includes('ciagly');
     const isAutoExpired = !isExplicitlyExpired && !isIndefinite && days!==null && days<0;
 
@@ -15788,6 +15796,14 @@ function setAptsFilter(type,val){
   if(type==='search')_state.aptsFilterSearch=val;
   else if(type==='owner')_state.aptsFilterOwner=val;
   else if(type==='type')_state.aptsFilterType=val;
+  const d=_state.data.apartments;
+  if(d&&!d.error){
+    const wrap=document.getElementById('apt-section-wrap');
+    if(wrap)wrap.innerHTML=buildApartmentsView(d);
+  }
+}
+function toggleAptsArchived_(){
+  _state.aptsShowArchived=!_state.aptsShowArchived;
   const d=_state.data.apartments;
   if(d&&!d.error){
     const wrap=document.getElementById('apt-section-wrap');
