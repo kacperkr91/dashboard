@@ -5364,9 +5364,9 @@ function buildApartmentsView(apts){
   const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:11px;color:var(--text-muted)">
     <span>🟢 Aktywna umowa</span>
     <span>🟡 Wygasa wkrótce (&lt;30 dni)</span>
-    <span>🔴 Umowa wygasła (auto)</span>
+    <span>🔴 Umowa wygasła — wymaga decyzji (Archiwizuj / Aktywuj)</span>
     <span>🔵 Okres nieokreślony</span>
-    <span>❌ Nieaktywny (wpisz "wygasły" w kolumnie Koniec umowy)</span>
+    <span>❌ Zarchiwizowany (nieaktywny)</span>
   </div>`;
 
   const rows=filtered.map((a,i)=>{
@@ -5421,7 +5421,14 @@ function buildApartmentsView(apts){
     } else if(!a.umowa){
       umowaCell='—';
     } else if(isAutoExpired){
-      umowaCell=`<span class="contract-danger">🔴 Wygasła</span>`;
+      const safeId=String(a.id).replace(/'/g,"\\'");
+      umowaCell=`<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">
+        <span class="contract-danger">🔴 Wygasła</span>
+        ${canConfig()?`<div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button type="button" class="btn-icon" style="padding:2px 8px;font-size:10px" title="Zarchiwizuj — oznacz jako nieaktywny" onclick="resolveExpiredContract_('${safeId}','archive')">📦 Archiwizuj</button>
+          <button type="button" class="btn-icon" style="padding:2px 8px;font-size:10px" title="Aktywuj — ustaw jako nieokreślony" onclick="resolveExpiredContract_('${safeId}','activate')">✅ Aktywuj</button>
+        </div>`:''}
+      </div>`;
     } else if(days!==null&&days<=30){
       umowaCell=`<span class="contract-warn">🟡 Za ${days} dni</span>`;
     } else {
@@ -5647,6 +5654,27 @@ function autoCreateMissingOwners_(names){
     refreshAptOwnerDatalist_();
     if(isOwnersSubViewActive_())renderApp();
   }
+}
+
+function resolveExpiredContract_(id,action){
+  if(!canConfig())return;
+  const apts=((_state.data.apartments)||[]).slice();
+  const idx=apts.findIndex(a=>String(a.id)===String(id));
+  if(idx<0)return;
+  const a={...apts[idx]};
+  if(action==='archive'){
+    if(!confirm(`Zarchiwizować umowę dla "${a.name}"? Lokal zostanie oznaczony jako nieaktywny (❌).`))return;
+    a.umowa='wygasły';
+  }else if(action==='activate'){
+    if(!confirm(`Aktywować lokal "${a.name}"? Koniec umowy zostanie ustawiony na "Nieokreślony".`))return;
+    a.umowa='nieokreślony';
+  }else{
+    return;
+  }
+  apts[idx]=a;
+  _state.data.apartments=apts;
+  syncUpsertApartment_(a);
+  if(_state.section==='apartments')renderApp();
 }
 
 function deleteApartmentFromModal(){
