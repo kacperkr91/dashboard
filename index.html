@@ -5443,19 +5443,21 @@ function buildApartmentsView(apts){
       umowaCell=`<span class="contract-ok">🟢 ${a.umowa}</span>`;
     }
 
-    const wifiCell=(a.wifiLogin||a.wifiPass)?`<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px"><span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px;overflow-wrap:break-word;word-break:break-word">${a.wifiLogin||'—'}</span><span style="color:var(--text-muted)">/</span><span id="${wifiId}" style="font-size:11px;letter-spacing:2px;color:var(--text-muted)">••••••</span><span id="${wifiId}-val" style="display:none;font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:3px">${a.wifiPass}</span><button class="btn-show" onclick="toggleWifi('${wifiId}','${safePass}')">Pokaż</button></div>`:'—';
+    const wifiCell=(a.wifiLogin||a.wifiPass)?`<button class="btn-show" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}')">📶 WiFi</button>`:'—';
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
     const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
     const signerBadge=a.signer==='Artur'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eff6ff;color:#2563eb;white-space:nowrap">Artur</span>`:a.signer==='OTV'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a;white-space:nowrap">OTV</span>`:`<span style="color:var(--text-muted);font-size:11px">—</span>`;
+    const ownerCell=splitOwnerNames_(a.owner).map(n=>`<span class="owner-link" style="cursor:pointer;color:#2563eb;text-decoration:underline;text-underline-offset:2px" onclick="openOwnerInfoModal('${escapeHtml(n.replace(/\\/g,'\\\\').replace(/'/g,"\\'"))}')">${escapeHtml(n)}</span>`).join(', ')||'—';
     return`<tr style="${rowStyle}">
-      <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
+      <td style="text-align:center;color:var(--text-muted);font-size:12px">${i+1}</td>
       <td style="${nameStyle}">${namePrefix}${a.name}</td>
       <td>${typePill}</td>
+      <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
       <td style="color:var(--text-muted);font-size:12px"><div style="overflow-wrap:break-word;word-break:break-word" title="${escapeHtml(a.street||'')}">${escapeHtml(a.street||'')||'—'}</div></td>
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.postalCode||'')||'—'}</td>
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.city||'')||'—'}</td>
       <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
-      <td>${a.owner||'—'}</td>
+      <td>${ownerCell}</td>
       <td>${umowaCell}</td>
       <td>${signerBadge}</td>
       <td>${wifiCell}</td>
@@ -5465,18 +5467,19 @@ function buildApartmentsView(apts){
   }).join('');
 
   const aptColgroup=canConfig()?`<colgroup>
-          <col style="width:4%"><col style="width:9%"><col style="width:5%"><col style="width:13%"><col style="width:8%"><col style="width:6%"><col style="width:5%"><col style="width:9%"><col style="width:10%"><col style="width:8%"><col style="width:9%"><col style="width:6%"><col style="width:8%">
+          <col style="width:3%"><col style="width:9%"><col style="width:5%"><col style="width:5%"><col style="width:15%"><col style="width:7%"><col style="width:6%"><col style="width:4%"><col style="width:9%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
         </colgroup>`:`<colgroup>
-          <col style="width:4%"><col style="width:10%"><col style="width:5%"><col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:5%"><col style="width:10%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:8%">
+          <col style="width:3%"><col style="width:11%"><col style="width:5%"><col style="width:5%"><col style="width:16%"><col style="width:8%"><col style="width:7%"><col style="width:5%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:6%"><col style="width:6%">
         </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
       <table class="apts-fixed-table">
         ${aptColgroup}
         <thead class="apts-table"><tr>
-          <th style="text-align:left">ID</th>
+          <th style="text-align:center">Lp.</th>
           <th style="text-align:left">Nazwa</th>
           <th style="text-align:left">Typ</th>
+          <th style="text-align:left">ID</th>
           <th style="text-align:left">Ulica</th>
           <th style="text-align:left">Kod pocztowy</th>
           <th style="text-align:left">Miasto</th>
@@ -5958,15 +5961,84 @@ async function syncDeleteOwner_(id){
   }catch(e){console.warn('deleteOwnerById failed:',e);}
 }
 
-function toggleWifi(id,pass){
-  const dot=document.getElementById(id);
-  const val=document.getElementById(id+'-val');
-  const btn=dot?.parentElement?.querySelector('.btn-show');
-  if(!dot||!val)return;
-  const hidden=dot.style.display!=='none';
-  dot.style.display=hidden?'none':'inline';
-  val.style.display=hidden?'inline':'none';
-  if(btn)btn.textContent=hidden?'Ukryj':'Pokaż';
+function closeWifiModal(){
+  document.getElementById('wifiModalOverlay')?.remove();
+}
+function openWifiModal(id){
+  closeWifiModal();
+  const apts=(_state.data.apartments)||[];
+  const a=apts.find(x=>String(x.id)===String(id));
+  if(!a)return;
+  const modal=document.createElement('div');
+  modal.id='wifiModalOverlay';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10006;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.addEventListener('click',e=>{if(e.target===modal)closeWifiModal();});
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:360px;width:100%;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;color:#0f172a">📶 WiFi — ${escapeHtml(a.name)}</div>
+      <button type="button" onclick="closeWifiModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Sieć (login)</div>
+    <div style="font-family:monospace;font-size:14px;background:var(--bg);padding:8px 12px;border-radius:8px;margin-bottom:14px;overflow-wrap:break-word;word-break:break-word">${escapeHtml(a.wifiLogin)||'—'}</div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Hasło</div>
+    <div style="font-family:monospace;font-size:14px;background:var(--bg);padding:8px 12px;border-radius:8px;overflow-wrap:break-word;word-break:break-word">${escapeHtml(a.wifiPass)||'—'}</div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function closeOwnerInfoModal(){
+  document.getElementById('ownerInfoModalOverlay')?.remove();
+}
+function ownerInfoModalBody_(ownerName){
+  const owners=_state.data.owners;
+  if(!Array.isArray(owners)){
+    if(owners&&owners.error)return `<div style="padding:12px 0;color:#94a3b8;font-size:13px">Nie udało się wczytać bazy właścicieli.</div>`;
+    return `<div style="padding:20px 0;text-align:center;color:#94a3b8;font-size:13px">Ładowanie danych właściciela…</div>`;
+  }
+  const target=String(ownerName||'').trim().toLowerCase();
+  const o=owners.find(x=>String(x.name||'').trim().toLowerCase()===target);
+  if(!o){
+    return `<div style="padding:12px 0;color:#94a3b8;font-size:13px">Brak danych w bazie właścicieli dla „${escapeHtml(ownerName)}”.</div>`;
+  }
+  const apts=ownerLinkedApartments_(o.name);
+  const aptsHtml=apts.length?apts.map(a=>`<span class="apt-chip" style="margin:2px 4px 2px 0;display:inline-block">${escapeHtml(a.name)}</span>`).join(''):`<span style="color:#94a3b8;font-size:12px">Brak przypisanych apartamentów</span>`;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 20px;font-size:13px">
+      <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Email</div><div>${o.email?`<a href="mailto:${escapeHtml(o.email)}">${escapeHtml(o.email)}</a>`:'—'}</div></div>
+      <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Telefon</div><div>${o.phone?`<a href="tel:${escapeHtml(o.phone)}">${escapeHtml(o.phone)}</a>`:'—'}</div></div>
+      <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">NIP</div><div>${escapeHtml(o.nip)||'—'}</div></div>
+      <div><div style="color:#94a3b8;font-size:11px;margin-bottom:2px">Adres</div><div>${escapeHtml(o.address)||'—'}</div></div>
+    </div>
+    ${o.notes?`<div style="margin-top:12px;font-size:12px;color:#64748b"><strong>Uwagi:</strong> ${escapeHtml(o.notes)}</div>`:''}
+    <div style="margin-top:14px">
+      <div style="color:#94a3b8;font-size:11px;margin-bottom:4px">Apartamenty (${apts.length})</div>
+      <div>${aptsHtml}</div>
+    </div>
+    ${canConfig()?`<div style="margin-top:16px;text-align:right"><button type="button" class="btn-icon" onclick="closeOwnerInfoModal();openOwnerModal('${String(o.id).replace(/'/g,"\\'")}')">✏️ Edytuj właściciela</button></div>`:''}`;
+}
+function openOwnerInfoModal(ownerName){
+  closeOwnerInfoModal();
+  const modal=document.createElement('div');
+  modal.id='ownerInfoModalOverlay';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10006;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.addEventListener('click',e=>{if(e.target===modal)closeOwnerInfoModal();});
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:480px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px">
+      <div style="font-size:20px;font-weight:800;color:#0f172a">${escapeHtml(ownerName)}</div>
+      <button type="button" onclick="closeOwnerInfoModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <div id="owner-info-modal-body">${ownerInfoModalBody_(ownerName)}</div>
+  </div>`;
+  document.body.appendChild(modal);
+  if(!Array.isArray(_state.data.owners)){
+    ensureOwnersLoaded_();
+    const timer=setInterval(()=>{
+      if(Array.isArray(_state.data.owners)||(_state.data.owners&&_state.data.owners.error)){
+        clearInterval(timer);
+        const body=document.getElementById('owner-info-modal-body');
+        if(body)body.innerHTML=ownerInfoModalBody_(ownerName);
+      }
+    },250);
+  }
 }
 
 function buildKsefView(rows){
