@@ -6306,7 +6306,7 @@ function openContactModal(id){
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">
       <div class="field" style="grid-column:1/-1"><label>Kategoria <span style="font-weight:400;color:#94a3b8">(wybierz z listy lub wpisz własną)</span></label><input id="contact-form-category" list="contact-categories-datalist" value="${escapeHtml(c.category)}" placeholder="np. Parking"><datalist id="contact-categories-datalist">${catOpts}</datalist></div>
       <div class="field" style="grid-column:1/-1"><label>Imię i nazwisko / Nazwa firmy</label><input id="contact-form-name" value="${escapeHtml(c.name)}" placeholder="np. Jan Kowalski — nadzorca parkingu"></div>
-      <div class="field"><label>Telefon</label><input id="contact-form-phone" value="${escapeHtml(c.phone)}" placeholder="np. +48 600 000 000"></div>
+      <div class="field"><label>Telefon</label><input id="contact-form-phone" value="${escapeHtml(c.phone||'+48 ')}" placeholder="np. +48 600 000 000"></div>
       <div class="field"><label>Email</label><input id="contact-form-email" type="email" value="${escapeHtml(c.email)}" placeholder="np. jan@przyklad.pl"></div>
       <div class="field" style="grid-column:1/-1"><label>Adres</label><input id="contact-form-address" value="${escapeHtml(c.address)}" placeholder="np. ul. Przykładowa 1, 30-000 Kraków"></div>
       <div class="field"><label>NIP</label><input id="contact-form-nip" value="${escapeHtml(c.nip)}"></div>
@@ -6321,7 +6321,16 @@ function openContactModal(id){
     </div>
   </div>`;
   document.body.appendChild(modal);
-  setTimeout(()=>document.getElementById(isNew?'contact-form-name':'contact-form-phone')?.focus(),30);
+  setTimeout(()=>{const el=document.getElementById(isNew?'contact-form-name':'contact-form-phone');if(el){el.focus();if(!isNew){const n=el.value.length;try{el.setSelectionRange(n,n);}catch(e){}}}},30);
+}
+
+// Domyślny kierunkowy +48: samo „+48” = brak numeru; 9 cyfr bez kierunkowego → dopisz +48.
+function normalizeContactPhone_(raw){
+  const v=String(raw||'').trim();
+  if(!v||/^\+?48$/.test(v.replace(/\s+/g,'')))return '';
+  const digits=v.replace(/[\s-]/g,'');
+  if(/^\d{9}$/.test(digits))return '+48 '+digits.replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3');
+  return v;
 }
 
 function saveContactFromModal(){
@@ -6341,7 +6350,7 @@ function saveContactFromModal(){
     id,
     name,
     email:document.getElementById('contact-form-email').value.trim(),
-    phone:document.getElementById('contact-form-phone').value.trim(),
+    phone:normalizeContactPhone_(document.getElementById('contact-form-phone').value),
     address:document.getElementById('contact-form-address').value.trim(),
     nip:document.getElementById('contact-form-nip').value.trim(),
     notes:wantOwner?notes:`[${category}]${notes?' '+notes:''}`,
