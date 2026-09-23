@@ -5595,6 +5595,31 @@ function removeAptAneksRow_(idx){
   if(wrap)wrap.innerHTML=renderAneksRows_(values);
 }
 
+function renderUmowaEndField_(umowa){
+  const raw=String(umowa||'').trim();
+  const low=raw.toLowerCase();
+  const iso=aptDateToIso_(raw);
+  let mode=iso?'date':(/wyga/.test(low)?'expired':'indef');
+  if(!iso&&raw&&mode==='indef'&&!/nieokre|bezterm|ci[aą]g/.test(low))mode='date';
+  return `<div style="display:flex;gap:8px">
+      <select id="apt-form-umowa-mode" class="filter-select" style="flex:0 0 auto" onchange="document.getElementById('apt-form-umowa-date').style.display=this.value==='date'?'':'none'">
+        <option value="date" ${mode==='date'?'selected':''}>Data</option>
+        <option value="indef" ${mode==='indef'?'selected':''}>Nieokreślony</option>
+        <option value="expired" ${mode==='expired'?'selected':''}>Wygasły</option>
+      </select>
+      <input id="apt-form-umowa-date" type="date" value="${escapeHtml(iso)}" style="flex:1;min-width:0;${mode==='date'?'':'display:none'}">
+    </div>`;
+}
+function readUmowaEndField_(){
+  const mode=document.getElementById('apt-form-umowa-mode')?.value||'indef';
+  if(mode==='expired')return'wygasły';
+  if(mode==='date'){
+    const v=document.getElementById('apt-form-umowa-date').value;
+    return v?isoToAptDate_(v):'nieokreślony';
+  }
+  return'nieokreślony';
+}
+
 function openApartmentModal(id){
   if(!canConfig())return;
   closeApartmentModal();
@@ -5630,7 +5655,7 @@ function openApartmentModal(id){
         ${ownerNamesDatalist_()}
       </div>
       <div class="field"><label>Data zawarcia umowy</label><input id="apt-form-zawarcie" type="date" value="${escapeHtml(aptDateToIso_(a.dataZawarcia))}"></div>
-      <div class="field"><label>Koniec umowy</label><input id="apt-form-umowa" value="${escapeHtml(a.umowa)}" placeholder="DD-MM-RRRR, nieokreślony lub wygasły"></div>
+      <div class="field"><label>Koniec umowy</label>${renderUmowaEndField_(a.umowa)}</div>
       <div class="field" style="grid-column:1/-1">
         <label>Aneksy do umowy <span style="font-weight:400;color:#94a3b8">(opcjonalnie — data podpisania aneksu)</span></label>
         <div id="apt-aneks-rows">${renderAneksRows_(splitAneksDates_(a.dataAneksu))}</div>
@@ -5679,7 +5704,7 @@ async function saveApartmentFromModal(){
     city,
     metraz:document.getElementById('apt-form-metraz').value.trim(),
     owner:ownerNames.join(', '),
-    umowa:document.getElementById('apt-form-umowa').value.trim()||'nieokreślony',
+    umowa:readUmowaEndField_(),
     signer:document.getElementById('apt-form-signer').value.trim(),
     dataZawarcia:isoToAptDate_(document.getElementById('apt-form-zawarcie').value),
     dataAneksu:getAptAneksValues_().filter(Boolean).map(isoToAptDate_).join(', '),
