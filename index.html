@@ -5457,7 +5457,7 @@ function buildApartmentsView(apts){
     if(aneksy.length)contractTipParts.push('Aneks: '+aneksy.map(fmtAptDate_).join(', '));
     const contractTip=buildContractTip_(a,aneksy,isIndefinite,isExplicitlyExpired);
     const contractSub=contractTipParts.length?`<div style="font-size:10px;color:var(--text-muted);margin-top:3px;line-height:1.35">${a.dataZawarcia?'od '+escapeHtml(fmtAptDate_(a.dataZawarcia)):''}${aneksy.length?`${a.dataZawarcia?'<br>':''}aneks ${escapeHtml(fmtAptDate_(aneksy[aneksy.length-1]))}${aneksy.length>1?` (+${aneksy.length-1})`:''}`:''}</div>`:'';
-    const wifiCell=(a.wifiLogin||a.wifiPass)?`<button class="btn-show" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}')">📶 WiFi</button>`:'—';
+    const wifiCell=(a.wifiLogin||a.wifiPass)?`<button class="btn-show" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}')">📶 WiFi</button>`:(canConfig()?`<button class="btn-show" style="opacity:.75" title="Dodaj dane WiFi" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}',true)">➕ WiFi</button>`:'—');
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
     const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
     const signerBadge=a.signer==='Artur'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eff6ff;color:#2563eb;white-space:nowrap">Artur</span>`:a.signer==='OTV'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a;white-space:nowrap">OTV</span>`:`<span style="color:var(--text-muted);font-size:11px">—</span>`;
@@ -6386,11 +6386,27 @@ function deleteContactFromModal(){
 function closeWifiModal(){
   document.getElementById('wifiModalOverlay')?.remove();
 }
-function openWifiModal(id){
+function openWifiModal(id,editMode){
   closeWifiModal();
   const apts=(_state.data.apartments)||[];
   const a=apts.find(x=>String(x.id)===String(id));
   if(!a)return;
+  const canEdit=canConfig();
+  const edit=!!editMode&&canEdit;
+  const idArg=String(a.id).replace(/'/g,"\\'");
+  const box='font-family:monospace;font-size:14px;background:var(--bg);padding:8px 12px;border-radius:8px;overflow-wrap:break-word;word-break:break-word';
+  const body=edit
+    ?`<div class="field"><label>Sieć (login)</label><input id="wifi-form-login" value="${escapeHtml(a.wifiLogin)}" placeholder="np. NETIASPOT-38D9B4"></div>
+      <div class="field"><label>Hasło</label><input id="wifi-form-pass" value="${escapeHtml(a.wifiPass)}"></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">
+        <button type="button" class="task-ghost-btn" onclick="${(a.wifiLogin||a.wifiPass)?`openWifiModal('${idArg}')`:'closeWifiModal()'}">Anuluj</button>
+        <button type="button" class="btn-primary" style="width:auto;padding:10px 16px" onclick="saveWifiFromModal('${idArg}')">Zapisz</button>
+      </div>`
+    :`<div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Sieć (login)</div>
+      <div style="${box};margin-bottom:14px">${escapeHtml(a.wifiLogin)||'—'}</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Hasło</div>
+      <div style="${box}">${escapeHtml(a.wifiPass)||'—'}</div>
+      ${canEdit?`<div style="display:flex;justify-content:flex-end;margin-top:14px"><button type="button" class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openWifiModal('${idArg}',true)">✏️ Edytuj</button></div>`:''}`;
   const modal=document.createElement('div');
   modal.id='wifiModalOverlay';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10006;display:flex;align-items:center;justify-content:center;padding:18px';
@@ -6400,12 +6416,25 @@ function openWifiModal(id){
       <div style="font-size:18px;font-weight:800;color:#0f172a">📶 WiFi — ${escapeHtml(a.name)}</div>
       <button type="button" onclick="closeWifiModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
     </div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Sieć (login)</div>
-    <div style="font-family:monospace;font-size:14px;background:var(--bg);padding:8px 12px;border-radius:8px;margin-bottom:14px;overflow-wrap:break-word;word-break:break-word">${escapeHtml(a.wifiLogin)||'—'}</div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">Hasło</div>
-    <div style="font-family:monospace;font-size:14px;background:var(--bg);padding:8px 12px;border-radius:8px;overflow-wrap:break-word;word-break:break-word">${escapeHtml(a.wifiPass)||'—'}</div>
+    ${body}
   </div>`;
   document.body.appendChild(modal);
+  if(edit)setTimeout(()=>document.getElementById('wifi-form-login')?.focus(),30);
+}
+
+function saveWifiFromModal(id){
+  if(!canConfig())return;
+  const apts=((_state.data.apartments)||[]).slice();
+  const idx=apts.findIndex(x=>String(x.id)===String(id));
+  if(idx<0)return;
+  const record={...apts[idx],
+    wifiLogin:document.getElementById('wifi-form-login').value.trim(),
+    wifiPass:document.getElementById('wifi-form-pass').value.trim()};
+  apts[idx]=record;
+  _state.data.apartments=apts;
+  syncUpsertApartment_(record);
+  closeWifiModal();
+  if(_state.section==='apartments')renderApp();
 }
 
 function closeOwnerInfoModal(){
