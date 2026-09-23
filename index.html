@@ -131,7 +131,8 @@
     .media-section{margin-bottom:24px;animation:fadeUp 0.4s ease both;}
     .media-table-wrap{overflow-x:auto;margin-top:16px;}
     table{width:100%;border-collapse:collapse;font-size:12px;}
-    .apts-fixed-table{table-layout:fixed;min-width:1180px;}
+    .apts-fixed-table{table-layout:fixed;min-width:1460px;}
+    .apts-fixed-table .nw,.apts-fixed-table thead th.nw{white-space:nowrap!important;overflow-wrap:normal!important;word-break:normal!important;}
     .apts-fixed-table td{word-wrap:break-word;overflow-wrap:break-word;vertical-align:top;padding:10px 12px;}
     thead th{background:var(--bg);padding:10px 12px;text-align:right;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
     thead th:first-child,thead th:nth-child(2){text-align:left;}
@@ -639,7 +640,7 @@ const CONFIG={
   aptsApiKey:         localStorage.getItem('gs_apts_api_key')||'',
   aptsSpreadsheetId:  localStorage.getItem('gs_apts_spreadsheet_id')||'',
   aptsSheet:          'Apartamenty',
-  aptsRange:          'A2:N100',
+  aptsRange:          'A2:P100',
   ownersSheet:        'Właściciele',
   ownersRange:        'A2:G500',
   hkApiKey:           localStorage.getItem('gs_hk_api_key')||'',
@@ -1400,6 +1401,8 @@ function mapApartmentRow_(r){
     wifiPass: String(r[8]||'').trim(),
     uwagi:    String(r[9]||'').trim(),
     signer:   String(r[13]||'').trim(),
+    dataZawarcia: String(r[14]||'').trim(),
+    dataAneksu:   String(r[15]||'').trim(),
   };
 }
 
@@ -5443,53 +5446,57 @@ function buildApartmentsView(apts){
       umowaCell=`<span class="contract-ok">🟢 ${a.umowa}</span>`;
     }
 
+    const aneksy=splitAneksDates_(a.dataAneksu);
+    const contractTipParts=[];
+    if(a.dataZawarcia)contractTipParts.push('Zawarcie: '+fmtAptDate_(a.dataZawarcia));
+    if(aneksy.length)contractTipParts.push('Aneks: '+aneksy.map(fmtAptDate_).join(', '));
+    const contractTip=contractTipParts.join(' · ');
+    const contractSub=contractTipParts.length?`<div style="font-size:10px;color:var(--text-muted);margin-top:3px;line-height:1.35">${a.dataZawarcia?'od '+escapeHtml(fmtAptDate_(a.dataZawarcia)):''}${aneksy.length?`${a.dataZawarcia?'<br>':''}aneks ${escapeHtml(fmtAptDate_(aneksy[aneksy.length-1]))}${aneksy.length>1?` (+${aneksy.length-1})`:''}`:''}</div>`:'';
     const wifiCell=(a.wifiLogin||a.wifiPass)?`<button class="btn-show" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}')">📶 WiFi</button>`:'—';
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
     const nameStyle=(isExplicitlyExpired||isAutoExpired)?'text-decoration:line-through;color:var(--text-muted)':'font-weight:600';
     const signerBadge=a.signer==='Artur'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eff6ff;color:#2563eb;white-space:nowrap">Artur</span>`:a.signer==='OTV'?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a;white-space:nowrap">OTV</span>`:`<span style="color:var(--text-muted);font-size:11px">—</span>`;
     const ownerCell=splitOwnerNames_(a.owner).map(n=>`<span class="owner-link" style="cursor:pointer;color:#2563eb;text-decoration:underline;text-underline-offset:2px" onclick="openOwnerInfoModal('${escapeHtml(n.replace(/\\/g,'\\\\').replace(/'/g,"\\'"))}')">${escapeHtml(n)}</span>`).join(', ')||'—';
     return`<tr style="${rowStyle}">
-      <td style="text-align:center;color:var(--text-muted);font-size:12px">${i+1}</td>
+      <td class="nw" style="text-align:center;color:var(--text-muted);font-size:12px">${i+1}</td>
       <td style="${nameStyle}">${namePrefix}${a.name}</td>
-      <td>${typePill}</td>
-      <td style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
+      <td class="nw">${typePill}</td>
+      <td class="nw" style="font-weight:700;color:${(isExplicitlyExpired||isAutoExpired)?'var(--text-muted)':isApt?'#0d9488':'var(--purple)'}">${a.id}</td>
       <td style="color:var(--text-muted);font-size:12px"><div style="overflow-wrap:break-word;word-break:break-word" title="${escapeHtml(a.street||'')}">${escapeHtml(a.street||'')||'—'}</div></td>
-      <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.postalCode||'')||'—'}</td>
+      <td class="nw" style="color:var(--text-muted);font-size:12px">${escapeHtml(a.postalCode||'')||'—'}</td>
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.city||'')||'—'}</td>
-      <td style="text-align:center">${a.metraz?a.metraz+' m²':'—'}</td>
+      <td class="nw" style="text-align:center">${a.metraz?escapeHtml(a.metraz)+'&nbsp;m²':'—'}</td>
       <td>${ownerCell}</td>
-      <td>${umowaCell}</td>
-      <td>${signerBadge}</td>
-      <td>${wifiCell}</td>
+      <td class="nw" title="${escapeHtml(contractTip)}">${umowaCell}${contractSub}</td>
+      <td class="nw">${signerBadge}</td>
+      <td class="nw">${wifiCell}</td>
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
-      ${canConfig()?`<td><button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openApartmentModal('${String(a.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button></td>`:''}
+      ${canConfig()?`<td class="nw"><button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openApartmentModal('${String(a.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button></td>`:''}
     </tr>`;
   }).join('');
 
-  const aptColgroup=canConfig()?`<colgroup>
-          <col style="width:3%"><col style="width:9%"><col style="width:5%"><col style="width:5%"><col style="width:15%"><col style="width:7%"><col style="width:6%"><col style="width:4%"><col style="width:9%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:7%"><col style="width:8%">
-        </colgroup>`:`<colgroup>
-          <col style="width:3%"><col style="width:11%"><col style="width:5%"><col style="width:5%"><col style="width:16%"><col style="width:8%"><col style="width:7%"><col style="width:5%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:6%"><col style="width:6%">
+  const aptColgroup=`<colgroup>
+          <col style="width:48px"><col style="width:120px"><col style="width:62px"><col style="width:62px"><col><col style="width:92px"><col style="width:100px"><col style="width:86px"><col><col style="width:130px"><col style="width:116px"><col style="width:82px"><col style="width:110px">${canConfig()?'<col style="width:96px">':''}
         </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
       <table class="apts-fixed-table">
         ${aptColgroup}
         <thead class="apts-table"><tr>
-          <th style="text-align:center">Lp.</th>
+          <th class="nw" style="text-align:center">Lp.</th>
           <th style="text-align:left">Nazwa</th>
-          <th style="text-align:left">Typ</th>
-          <th style="text-align:left">ID</th>
+          <th class="nw" style="text-align:left">Typ</th>
+          <th class="nw" style="text-align:left">ID</th>
           <th style="text-align:left">Ulica</th>
-          <th style="text-align:left">Kod pocztowy</th>
+          <th style="text-align:left">Kod poczt.</th>
           <th style="text-align:left">Miasto</th>
-          <th>m²</th>
+          <th class="nw" style="text-align:center">m²</th>
           <th style="text-align:left">Właściciel</th>
-          <th style="text-align:left">Koniec umowy</th>
-          <th style="text-align:left">Podpisujący</th>
-          <th style="text-align:left">WiFi</th>
+          <th style="text-align:left">Umowa</th>
+          <th class="nw" style="text-align:left">Podpisujący</th>
+          <th class="nw" style="text-align:left">WiFi</th>
           <th style="text-align:left">Uwagi</th>
-          ${canConfig()?'<th style="text-align:left">Akcje</th>':''}
+          ${canConfig()?'<th class="nw" style="text-align:left">Akcje</th>':''}
         </tr></thead>
         <tbody class="apts-table">${rows}</tbody>
       </table>
@@ -5549,13 +5556,52 @@ function refreshAptOwnerDatalist_(){
   if(el)el.outerHTML=ownerNamesDatalist_();
 }
 
+/* ── daty umowy / aneksów (zapis w arkuszu jako DD-MM-RRRR) ── */
+function aptDateToIso_(v){
+  const t=String(v||'').trim();if(!t)return'';
+  let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=t.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
+  if(m)return`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return'';
+}
+function isoToAptDate_(iso){
+  const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m?`${m[3]}-${m[2]}-${m[1]}`:String(iso||'').trim();
+}
+function fmtAptDate_(v){const iso=aptDateToIso_(v);return iso?isoToAptDate_(iso):String(v||'').trim();}
+function splitAneksDates_(v){return String(v||'').split(/[,;]/).map(s=>s.trim()).filter(Boolean);}
+function renderAneksRows_(dates){
+  const list=(dates&&dates.length)?dates:[];
+  return list.map((d,i)=>`<div class="apt-aneks-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:#64748b;min-width:62px">Aneks ${i+1}</span>
+      <input class="apt-aneks-row-input" type="date" value="${escapeHtml(aptDateToIso_(d))}" style="flex:1">
+      <button type="button" onclick="removeAptAneksRow_(${i})" title="Usuń aneks" style="background:none;border:none;color:#94a3b8;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px">✕</button>
+    </div>`).join('');
+}
+function getAptAneksValues_(){
+  return Array.from(document.querySelectorAll('#apt-aneks-rows .apt-aneks-row-input')).map(el=>el.value.trim());
+}
+function addAptAneksRow_(){
+  const values=getAptAneksValues_();values.push('');
+  const wrap=document.getElementById('apt-aneks-rows');if(!wrap)return;
+  wrap.innerHTML=renderAneksRows_(values);
+  const inputs=wrap.querySelectorAll('.apt-aneks-row-input');
+  if(inputs.length)inputs[inputs.length-1].focus();
+}
+function removeAptAneksRow_(idx){
+  const values=getAptAneksValues_();values.splice(idx,1);
+  const wrap=document.getElementById('apt-aneks-rows');
+  if(wrap)wrap.innerHTML=renderAneksRows_(values);
+}
+
 function openApartmentModal(id){
   if(!canConfig())return;
   closeApartmentModal();
   const apts=(_state.data.apartments)||[];
   const editing=id?apts.find(a=>String(a.id)===String(id)):null;
   const isNew=!editing;
-  const a=editing||{id:nextApartmentId_(),name:'',type:'Apartament',adres:'',street:'',postalCode:'',city:'',metraz:'',owner:'',umowa:'nieokreślony',wifiLogin:'',wifiPass:'',uwagi:'',signer:''};
+  const a=editing||{id:nextApartmentId_(),name:'',type:'Apartament',adres:'',street:'',postalCode:'',city:'',metraz:'',owner:'',umowa:'nieokreślony',wifiLogin:'',wifiPass:'',uwagi:'',signer:'',dataZawarcia:'',dataAneksu:''};
 
   const modal=document.createElement('div');
   modal.id='apartmentModalOverlay';
@@ -5583,7 +5629,13 @@ function openApartmentModal(id){
         <button type="button" onclick="addAptOwnerRow_()" style="background:none;border:1px dashed #94a3b8;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#334155;cursor:pointer;margin-top:2px">➕ Dodaj kolejnego właściciela</button>
         ${ownerNamesDatalist_()}
       </div>
+      <div class="field"><label>Data zawarcia umowy</label><input id="apt-form-zawarcie" type="date" value="${escapeHtml(aptDateToIso_(a.dataZawarcia))}"></div>
       <div class="field"><label>Koniec umowy</label><input id="apt-form-umowa" value="${escapeHtml(a.umowa)}" placeholder="DD-MM-RRRR, nieokreślony lub wygasły"></div>
+      <div class="field" style="grid-column:1/-1">
+        <label>Aneksy do umowy <span style="font-weight:400;color:#94a3b8">(opcjonalnie — data podpisania aneksu)</span></label>
+        <div id="apt-aneks-rows">${renderAneksRows_(splitAneksDates_(a.dataAneksu))}</div>
+        <button type="button" onclick="addAptAneksRow_()" style="background:none;border:1px dashed #94a3b8;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#334155;cursor:pointer;margin-top:2px">➕ Dodaj aneks</button>
+      </div>
       <div class="field"><label>Kto podpisywał umowę</label><select id="apt-form-signer" class="filter-select">
         <option value="" ${!a.signer?'selected':''}>— nie wybrano —</option>
         <option value="Artur" ${a.signer==='Artur'?'selected':''}>Artur</option>
@@ -5629,6 +5681,8 @@ async function saveApartmentFromModal(){
     owner:ownerNames.join(', '),
     umowa:document.getElementById('apt-form-umowa').value.trim()||'nieokreślony',
     signer:document.getElementById('apt-form-signer').value.trim(),
+    dataZawarcia:isoToAptDate_(document.getElementById('apt-form-zawarcie').value),
+    dataAneksu:getAptAneksValues_().filter(Boolean).map(isoToAptDate_).join(', '),
     wifiLogin:document.getElementById('apt-form-wifilogin').value.trim(),
     wifiPass:document.getElementById('apt-form-wifipass').value.trim(),
     uwagi:document.getElementById('apt-form-uwagi').value.trim(),
