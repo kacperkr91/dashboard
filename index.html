@@ -105,6 +105,9 @@
     .chart-wrap{height:280px;}
 
     /* ── DAILY GRID ── */
+    .kontakty-table th,.kontakty-table td{text-align:left!important;padding:10px 12px;vertical-align:middle;}
+    .kontakty-table td{border-top:1px solid var(--border);}
+    .kontakty-table tbody tr:hover{background:#f8fafc;}
     .grid-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:24px 28px;animation:fadeUp 0.4s 0.15s ease both;}
     .daily-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-top:16px;}
     .day-card{border:1px solid var(--border);border-radius:10px;padding:14px 12px;position:relative;transition:box-shadow 0.2s;background:var(--white);}
@@ -4215,7 +4218,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','media-gaz','ksef','apartments','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','media-gaz','ksef','apartments','kontakty','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -4225,6 +4228,7 @@ const DASHBOARD_MODULE_LABELS={
   ksef:'KSeF',
   apartments:'Apartamenty',
   owners:'Właściciele',
+  kontakty:'Kontakty',
   housekeeping:'Housekeeping',
   otv:'Rezerwacje OTV',
   'otv-new':'Rezerwacje OTV New',
@@ -4249,6 +4253,7 @@ function hasModuleAccess(section){
   const user=_state.authUser;
   if(!user)return false;
   const modules=Array.isArray(user.modules)?user.modules:[];
+  if(section==='kontakty'&&modules.includes('apartments'))return true;
   return modules.includes('*')||modules.includes(section);
 }
 function canViewAgataFaktura(){
@@ -5548,7 +5553,7 @@ function removeAptOwnerRow_(idx){
   if(wrap)wrap.innerHTML=renderOwnerRows_(values);
 }
 function ownerNamesDatalist_(){
-  const owners=Array.isArray(_state.data.owners)?_state.data.owners:[];
+  const owners=ownersOnly_(_state.data.owners);
   return `<datalist id="apt-owner-names-datalist">${owners.map(o=>`<option value="${escapeHtml(o.name)}">`).join('')}</datalist>`;
 }
 function refreshAptOwnerDatalist_(){
@@ -5790,7 +5795,7 @@ async function saveApartmentFromModal(){
 function autoCreateMissingOwners_(names){
   if(!names||!names.length)return;
   const owners=(Array.isArray(_state.data.owners)?_state.data.owners:[]).slice();
-  const existingLower=new Set(owners.map(o=>String(o.name||'').trim().toLowerCase()));
+  const existingLower=new Set(ownersOnly_(owners).map(o=>String(o.name||'').trim().toLowerCase()));
   let changed=false;
   names.forEach(name=>{
     const key=name.trim().toLowerCase();
@@ -5892,7 +5897,7 @@ async function loadOwnersData(){
 
 function nextOwnerIdFrom_(list){
   let max=0;
-  (list||[]).forEach(o=>{const n=parseInt(String(o.id||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
+  (list||[]).forEach(o=>{if(isNonOwnerContactId_(o.id))return;const n=parseInt(String(o.id||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
   return String(max+1).padStart(3,'0');
 }
 function nextOwnerId_(){
@@ -5914,6 +5919,7 @@ function ownerLinkedApartments_(ownerName){
 }
 
 function isOwnersSubViewActive_(){
+  if(_state.section==='kontakty')return true;
   return _state.section==='apartments'&&(_state.aptsSubView||'list')==='owners';
 }
 function setAptsSubView(view){
@@ -6102,6 +6108,272 @@ async function syncDeleteOwner_(id){
   }catch(e){console.warn('deleteOwnerById failed:',e);}
 }
 
+/* ═══════════════ KONTAKTY (WSPÓLNA BAZA: WŁAŚCICIELE + INNE KONTAKTY) ═══════════════ */
+/* Wszystkie kontakty żyją w arkuszu „Właściciele” (ten sam zapis upsertOwner/deleteOwnerById).
+   Właściciele mają numeryczne ID (001, 002…). Pozostałe kontakty mają ID z prefiksem „K” (K001…),
+   a kategoria jest zapisana na początku kolumny Uwagi w formacie „[Kategoria] treść uwag”. */
+
+const CONTACT_OWNER_CATEGORY='Właściciel';
+const CONTACT_DEFAULT_CATEGORIES=['Właściciel','Wspólnota / Zarządca','Parking','Administracja budynku','Serwis / Techniczne','Sprzątanie / Pranie','Urząd / Instytucja','Inne'];
+const CONTACT_CATEGORY_COLORS={
+  'Właściciel':['#f3e8ff','#7c2d92'],
+  'Wspólnota / Zarządca':['#e0f2fe','#0369a1'],
+  'Parking':['#fef3c7','#b45309'],
+  'Administracja budynku':['#dcfce7','#166534'],
+  'Serwis / Techniczne':['#fee2e2','#b91c1c'],
+  'Sprzątanie / Pranie':['#ccfbf1','#0f766e'],
+  'Urząd / Instytucja':['#e2e8f0','#334155'],
+  'Inne':['#f1f5f9','#475569'],
+};
+
+function isNonOwnerContactId_(id){
+  return /^k/i.test(String(id||'').trim());
+}
+function isOwnerRecord_(o){
+  return !!o&&!isNonOwnerContactId_(o.id);
+}
+function ownersOnly_(list){
+  return (Array.isArray(list)?list:[]).filter(isOwnerRecord_);
+}
+function parseContactNotes_(notes){
+  const m=String(notes||'').match(/^\s*\[([^\]]+)\]\s*([\s\S]*)$/);
+  return m?{category:m[1].trim(),notes:m[2].trim()}:{category:'',notes:String(notes||'').trim()};
+}
+function toContact_(o){
+  if(isOwnerRecord_(o))return{...o,category:CONTACT_OWNER_CATEGORY,isOwner:true};
+  const p=parseContactNotes_(o.notes);
+  return{...o,category:p.category||'Inne',notes:p.notes,isOwner:false};
+}
+function allContacts_(){
+  return (Array.isArray(_state.data.owners)?_state.data.owners:[]).map(toContact_);
+}
+function nextContactId_(){
+  let max=0;
+  (Array.isArray(_state.data.owners)?_state.data.owners:[]).forEach(o=>{
+    if(!isNonOwnerContactId_(o.id))return;
+    const n=parseInt(String(o.id).replace(/\D/g,''),10);
+    if(!isNaN(n)&&n>max)max=n;
+  });
+  return 'K'+String(max+1).padStart(3,'0');
+}
+function contactCategoryBadge_(cat){
+  const [bg,fg]=CONTACT_CATEGORY_COLORS[cat]||['#f1f5f9','#475569'];
+  return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:${bg};color:${fg};font-size:11px;font-weight:700;white-space:nowrap">${escapeHtml(cat)}</span>`;
+}
+function contactCategoriesInUse_(){
+  const set=new Set(CONTACT_DEFAULT_CATEGORIES);
+  allContacts_().forEach(c=>{if(c.category)set.add(c.category);});
+  return [...set];
+}
+
+function ensureKontaktyDataLoaded_(){
+  ensureOwnersLoaded_();
+  if(_state.data.apartments===null){
+    loadApartmentsData().then(data=>{
+      _state.data.apartments=data;
+      if(_state.section==='kontakty')renderKontaktyList_();
+    }).catch(()=>{});
+  }
+}
+
+function setKontaktyFilter(type,val){
+  if(type==='search')_state.kontaktyFilterSearch=val;
+  else if(type==='category')_state.kontaktyFilterCategory=val;
+  if(_state.section!=='kontakty')return;
+  if(type==='category'){renderApp();return;}
+  renderKontaktyList_();
+}
+
+function filteredContacts_(){
+  const search=(_state.kontaktyFilterSearch||'').trim().toLowerCase();
+  const cat=_state.kontaktyFilterCategory||'';
+  return allContacts_()
+    .filter(c=>!cat||c.category===cat)
+    .filter(c=>{
+      if(!search)return true;
+      const apts=c.isOwner?ownerLinkedApartments_(c.name).map(a=>a.name):[];
+      return [c.name,c.category,c.email,c.phone,c.nip,c.address,c.notes,...apts].some(v=>String(v||'').toLowerCase().includes(search));
+    })
+    .sort((a,b)=>{
+      if(!cat&&a.category!==b.category){
+        const ia=CONTACT_DEFAULT_CATEGORIES.indexOf(a.category), ib=CONTACT_DEFAULT_CATEGORIES.indexOf(b.category);
+        return (ia<0?99:ia)-(ib<0?99:ib)||a.category.localeCompare(b.category,'pl');
+      }
+      return a.name.localeCompare(b.name,'pl');
+    });
+}
+
+function buildKontaktyListHtml_(){
+  const all=allContacts_();
+  const list=filteredContacts_();
+  const aptsLoaded=Array.isArray(_state.data.apartments);
+  const countBadge=`<span class="apt-count-badge" id="kontakty-count">${list.length} z ${all.length} kontaktów</span>`;
+  if(!all.length){
+    return {count:countBadge,html:`<div class="apt-empty"><span style="font-size:40px;opacity:0.3">📇</span><p>Brak kontaktów w bazie.${canConfig()?' Dodaj pierwszy przyciskiem powyżej.':''}</p></div>`};
+  }
+  if(!list.length){
+    return {count:countBadge,html:`<div class="apt-empty"><span style="font-size:40px;opacity:0.3">📇</span><p>Brak wyników dla podanych filtrów</p></div>`};
+  }
+  const rows=list.map(c=>{
+    const idArg=String(c.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    let aptsHtml='';
+    if(c.isOwner){
+      const apts=aptsLoaded?ownerLinkedApartments_(c.name):[];
+      aptsHtml=!aptsLoaded
+        ?`<span style="color:#94a3b8;font-size:12px">…</span>`
+        :apts.length?apts.map(a=>`<span class="apt-chip" style="margin:2px 4px 2px 0;display:inline-block">${escapeHtml(a.name)}</span>`).join(''):(c.notes?'':`<span style="color:#94a3b8">—</span>`);
+    }
+    const extra=[c.nip?`NIP ${escapeHtml(c.nip)}`:'',c.address?escapeHtml(c.address):''].filter(Boolean).join(' · ');
+    return `<tr>
+      <td style="min-width:180px">
+        <div style="font-weight:700;color:#0f172a">${escapeHtml(c.name)||'—'}</div>
+        ${extra?`<div style="font-size:11px;color:#64748b;margin-top:2px">${extra}</div>`:''}
+      </td>
+      <td>${contactCategoryBadge_(c.category)}</td>
+      <td style="white-space:nowrap">${c.phone?`<a href="tel:${escapeHtml(c.phone.replace(/\s+/g,''))}">${escapeHtml(c.phone)}</a>`:'<span style="color:#94a3b8">—</span>'}</td>
+      <td>${c.email?`<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>`:'<span style="color:#94a3b8">—</span>'}</td>
+      <td style="min-width:160px">${c.isOwner?aptsHtml:''}${c.notes?`<div style="font-size:12px;color:#64748b;${c.isOwner?'margin-top:4px':''}">${escapeHtml(c.notes)}</div>`:(c.isOwner?'':'<span style="color:#94a3b8">—</span>')}</td>
+      <td style="text-align:right;white-space:nowrap">${canConfig()?`<button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openContactModal('${idArg}')">✏️ Edytuj</button>`:''}</td>
+    </tr>`;
+  }).join('');
+  return {count:countBadge,html:`<div class="grid-card" style="padding:0;overflow-x:auto;animation:none">
+    <table style="width:100%;border-collapse:collapse;font-size:13px" class="kontakty-table">
+      <thead><tr style="background:#f8fafc;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+        <th style="padding:10px 12px">Nazwa</th><th style="padding:10px 12px">Kategoria</th><th style="padding:10px 12px">Telefon</th><th style="padding:10px 12px">Email</th><th style="padding:10px 12px">Apartamenty / Uwagi</th><th style="padding:10px 12px"></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`};
+}
+
+function renderKontaktyList_(){
+  const wrap=document.getElementById('kontakty-list-wrap');
+  if(!wrap){if(_state.section==='kontakty')renderApp();return;}
+  const r=buildKontaktyListHtml_();
+  wrap.innerHTML=r.html;
+  const cnt=document.getElementById('kontakty-count');
+  if(cnt)cnt.outerHTML=r.count;
+}
+
+function buildKontaktyView(){
+  const d=_state.data.owners;
+  if(!d){ensureKontaktyDataLoaded_();return renderLoading('Ładowanie kontaktów…');}
+  if(d.error)return renderError(d.error);
+  ensureKontaktyDataLoaded_();
+  const all=allContacts_();
+  const cat=_state.kontaktyFilterCategory||'';
+  const counts={};
+  all.forEach(c=>{counts[c.category]=(counts[c.category]||0)+1;});
+  const cats=contactCategoriesInUse_().filter(c=>counts[c]);
+  const chip=(key,label,n)=>{
+    const active=cat===key;
+    return `<button type="button" onclick="setKontaktyFilter('category','${key.replace(/'/g,"\\'")}')" style="padding:6px 12px;border-radius:999px;border:1px solid ${active?'#0f172a':'var(--border)'};background:${active?'#0f172a':'#fff'};color:${active?'#fff':'#334155'};font-weight:600;font-size:12px;cursor:pointer;font-family:inherit">${escapeHtml(label)} <span style="opacity:.6">${n}</span></button>`;
+  };
+  const chips=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${chip('','Wszystkie',all.length)}${cats.map(c=>chip(c,c,counts[c])).join('')}</div>`;
+  const r=buildKontaktyListHtml_();
+  const filters=`<div class="apt-filters">
+    <input class="filter-search" type="text" placeholder="🔍  Szukaj po nazwie, telefonie, e-mailu, apartamencie…" value="${escapeHtml(_state.kontaktyFilterSearch||'')}" oninput="setKontaktyFilter('search',this.value)"/>
+    ${canConfig()?`<button class="btn-icon" onclick="openContactModal('')">➕ Dodaj kontakt</button>`:''}
+    ${r.count}
+  </div>`;
+  return filters+chips+`<div id="kontakty-list-wrap">${r.html}</div>`;
+}
+
+function closeContactModal(){
+  document.getElementById('contactModalOverlay')?.remove();
+}
+
+function openContactModal(id){
+  if(!canConfig())return;
+  closeContactModal();
+  const raw=id?(Array.isArray(_state.data.owners)?_state.data.owners:[]).find(o=>String(o.id)===String(id)):null;
+  const isNew=!raw;
+  const presetCat=_state.kontaktyFilterCategory&&_state.kontaktyFilterCategory!==CONTACT_OWNER_CATEGORY?_state.kontaktyFilterCategory:'';
+  const c=raw?toContact_(raw):{id:'',name:'',email:'',phone:'',address:'',nip:'',notes:'',category:presetCat||'Wspólnota / Zarządca',isOwner:false};
+  const catOpts=contactCategoriesInUse_().map(x=>`<option value="${escapeHtml(x)}">`).join('');
+  const modal=document.createElement('div');
+  modal.id='contactModalOverlay';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.58);z-index:10005;display:flex;align-items:center;justify-content:center;padding:18px';
+  modal.innerHTML=`<div style="background:#fff;border:1px solid var(--border);border-radius:24px;max-width:560px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 28px 90px rgba(15,23,42,.28);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px">
+      <div>
+        <div style="font-size:22px;font-weight:800;color:#0f172a">${isNew?'Dodaj kontakt':'Edytuj kontakt'}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">Kategoria „Właściciel” = wpis w bazie właścicieli (widoczny też w Apartamentach).</div>
+      </div>
+      <button type="button" onclick="closeContactModal()" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#94a3b8">✕</button>
+    </div>
+    <input id="contact-form-id" type="hidden" value="${escapeHtml(c.id)}">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">
+      <div class="field" style="grid-column:1/-1"><label>Kategoria <span style="font-weight:400;color:#94a3b8">(wybierz z listy lub wpisz własną)</span></label><input id="contact-form-category" list="contact-categories-datalist" value="${escapeHtml(c.category)}" placeholder="np. Parking"><datalist id="contact-categories-datalist">${catOpts}</datalist></div>
+      <div class="field" style="grid-column:1/-1"><label>Imię i nazwisko / Nazwa firmy</label><input id="contact-form-name" value="${escapeHtml(c.name)}" placeholder="np. Jan Kowalski — nadzorca parkingu"></div>
+      <div class="field"><label>Telefon</label><input id="contact-form-phone" value="${escapeHtml(c.phone)}" placeholder="np. +48 600 000 000"></div>
+      <div class="field"><label>Email</label><input id="contact-form-email" type="email" value="${escapeHtml(c.email)}" placeholder="np. jan@przyklad.pl"></div>
+      <div class="field" style="grid-column:1/-1"><label>Adres</label><input id="contact-form-address" value="${escapeHtml(c.address)}" placeholder="np. ul. Przykładowa 1, 30-000 Kraków"></div>
+      <div class="field"><label>NIP</label><input id="contact-form-nip" value="${escapeHtml(c.nip)}"></div>
+      <div class="field"><label>Uwagi</label><input id="contact-form-notes" value="${escapeHtml(c.notes)}" placeholder="np. dotyczy Limanowskiego 4"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <div>${isNew?'':'<button type="button" class="task-ghost-btn" onclick="deleteContactFromModal()">🗑 Usuń kontakt</button>'}</div>
+      <div style="display:flex;gap:10px">
+        <button type="button" class="task-ghost-btn" onclick="closeContactModal()">Anuluj</button>
+        <button type="button" class="btn-primary" style="width:auto;padding:10px 16px" onclick="saveContactFromModal()">Zapisz</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById(isNew?'contact-form-name':'contact-form-phone')?.focus(),30);
+}
+
+function saveContactFromModal(){
+  const oldId=document.getElementById('contact-form-id').value.trim();
+  const name=document.getElementById('contact-form-name').value.trim();
+  if(!name){alert('Podaj przynajmniej imię i nazwisko lub nazwę firmy.');return;}
+  let category=document.getElementById('contact-form-category').value.trim().replace(/[\[\]]/g,'')||'Inne';
+  if(category.toLowerCase()===CONTACT_OWNER_CATEGORY.toLowerCase())category=CONTACT_OWNER_CATEGORY;
+  const wantOwner=category===CONTACT_OWNER_CATEGORY;
+  const notes=document.getElementById('contact-form-notes').value.trim();
+  const owners=(Array.isArray(_state.data.owners)?_state.data.owners:[]).slice();
+  // ID musi pasować do typu: właściciel = numeryczne, kontakt = K###. Zmiana typu → nowy ID, stary wpis usuwany.
+  const oldIsOwner=oldId?!isNonOwnerContactId_(oldId):null;
+  let id=oldId;
+  if(!oldId||oldIsOwner!==wantOwner)id=wantOwner?nextOwnerIdFrom_(ownersOnly_(owners)):nextContactId_();
+  const record={
+    id,
+    name,
+    email:document.getElementById('contact-form-email').value.trim(),
+    phone:document.getElementById('contact-form-phone').value.trim(),
+    address:document.getElementById('contact-form-address').value.trim(),
+    nip:document.getElementById('contact-form-nip').value.trim(),
+    notes:wantOwner?notes:`[${category}]${notes?' '+notes:''}`,
+  };
+  let next=owners;
+  if(oldId&&oldId!==id){
+    next=next.filter(o=>String(o.id)!==String(oldId));
+    syncDeleteOwner_(oldId);
+  }
+  const idx=next.findIndex(o=>String(o.id)===String(id));
+  if(idx>=0)next[idx]=record;else next.push(record);
+  _state.data.owners=next;
+  syncUpsertOwner_(record);
+  refreshAptOwnerDatalist_();
+  closeContactModal();
+  if(_state.section==='kontakty')renderApp();
+}
+
+function deleteContactFromModal(){
+  const id=document.getElementById('contact-form-id').value.trim();
+  if(!id)return;
+  const msg=isNonOwnerContactId_(id)
+    ?'Usunąć ten kontakt z bazy?'
+    :'Usunąć tego właściciela z bazy? (Apartamenty przypisane do niego pozostaną bez zmian — trzeba będzie ręcznie zaktualizować pole „Właściciel”.)';
+  if(!confirm(msg))return;
+  _state.data.owners=(Array.isArray(_state.data.owners)?_state.data.owners:[]).filter(o=>String(o.id)!==String(id));
+  syncDeleteOwner_(id);
+  refreshAptOwnerDatalist_();
+  closeContactModal();
+  if(_state.section==='kontakty')renderApp();
+}
+
 function closeWifiModal(){
   document.getElementById('wifiModalOverlay')?.remove();
 }
@@ -6137,7 +6409,7 @@ function ownerInfoModalBody_(ownerName){
     return `<div style="padding:20px 0;text-align:center;color:#94a3b8;font-size:13px">Ładowanie danych właściciela…</div>`;
   }
   const target=String(ownerName||'').trim().toLowerCase();
-  const o=owners.find(x=>String(x.name||'').trim().toLowerCase()===target);
+  const o=ownersOnly_(owners).find(x=>String(x.name||'').trim().toLowerCase()===target);
   if(!o){
     return `<div style="padding:12px 0;color:#94a3b8;font-size:13px">Brak danych w bazie właścicieli dla „${escapeHtml(ownerName)}”.</div>`;
   }
@@ -15074,7 +15346,7 @@ async function init(){
   const initialSection=_state.section||'oblozenie';
   const laundryOnlyUser=isLaundryOnlyUser();
   const needsPrimaryConfig=hasAnyModuleAccess([
-    'oblozenie','rental','ksef','apartments','housekeeping','otv','otv-new','summary','previo',
+    'oblozenie','rental','ksef','apartments','kontakty','housekeeping','otv','otv-new','summary','previo',
     'artur-payments','agata-faktura','czynsze','tasks','booking-payout','dyzury','noty','goscie','parking'
   ]);
   const needsLaundryConfig=hasModuleAccess('laundry-textiles');
@@ -15718,6 +15990,7 @@ function renderApp(){
     ${navButton('media-gaz','Media — Gaz','🔥',section==='media-gaz'?'background:#0e7490;border-color:#0e7490;color:#fff':'')}
     ${navButton('ksef','KSeF','🧾','background:#1d4ed8;border-color:#1d4ed8;color:#fff')}
     ${navButton('apartments','Apartamenty','🏠','background:#0d9488;border-color:#0d9488;color:#fff')}
+    ${navButton('kontakty','Kontakty','📇','background:#7c2d92;border-color:#7c2d92;color:#fff')}
     ${navButton('housekeeping','Housekeeping','🧹','background:#0d9488;border-color:#0d9488;color:#fff')}
     ${navButton('otv','Rezerwacje OTV','📋','background:#7c3aed;border-color:#7c3aed;color:#fff')}
     ${navButton('otv-new','Rezerwacje OTV New','🧾','background:#6d28d9;border-color:#6d28d9;color:#fff')}
@@ -15803,13 +16076,15 @@ function renderApp(){
       const d=data.owners;
       if(!d){content=subTabs+renderLoading('Ładowanie właścicieli…');ensureOwnersLoaded_();}
       else if(d.error){content=subTabs+renderError(d.error);}
-      else{content=subTabs+`<div id="owners-section-wrap">${buildOwnersView(d)}</div>`;}
+      else{content=subTabs+`<div id="owners-section-wrap">${buildOwnersView(ownersOnly_(d))}</div>`;}
     } else {
       const d=data.apartments;
       if(!d){content=subTabs+renderLoading('Ładowanie apartamentów…');}
       else if(d.error){content=subTabs+renderError(d.error);}
       else{content=subTabs+`<div id="apt-section-wrap">${buildApartmentsView(d)}</div>`;}
     }
+  } else if(section==='kontakty'){
+    content=buildKontaktyView();
   } else if(section==='housekeeping'){
     content=buildHousekeepingView();
   } else if(section==='otv'){
