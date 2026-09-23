@@ -5450,7 +5450,7 @@ function buildApartmentsView(apts){
     const contractTipParts=[];
     if(a.dataZawarcia)contractTipParts.push('Zawarcie: '+fmtAptDate_(a.dataZawarcia));
     if(aneksy.length)contractTipParts.push('Aneks: '+aneksy.map(fmtAptDate_).join(', '));
-    const contractTip=contractTipParts.join(' · ');
+    const contractTip=buildContractTip_(a,aneksy,isIndefinite,isExplicitlyExpired);
     const contractSub=contractTipParts.length?`<div style="font-size:10px;color:var(--text-muted);margin-top:3px;line-height:1.35">${a.dataZawarcia?'od '+escapeHtml(fmtAptDate_(a.dataZawarcia)):''}${aneksy.length?`${a.dataZawarcia?'<br>':''}aneks ${escapeHtml(fmtAptDate_(aneksy[aneksy.length-1]))}${aneksy.length>1?` (+${aneksy.length-1})`:''}`:''}</div>`:'';
     const wifiCell=(a.wifiLogin||a.wifiPass)?`<button class="btn-show" onclick="openWifiModal('${String(a.id).replace(/'/g,"\\'")}')">📶 WiFi</button>`:'—';
     const typePill=isApt?`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:#f0fdfa;color:#0d9488">Apt</span>`:`<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--purple-light);color:var(--purple)">Lokal</span>`;
@@ -5467,7 +5467,7 @@ function buildApartmentsView(apts){
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(a.city||'')||'—'}</td>
       <td class="nw" style="text-align:center">${a.metraz?escapeHtml(a.metraz)+'&nbsp;m²':'—'}</td>
       <td>${ownerCell}</td>
-      <td class="nw" title="${escapeHtml(contractTip)}">${umowaCell}${contractSub}</td>
+      <td class="nw" ${contractTip?`data-tip="${escapeHtml(contractTip)}" style="cursor:help"`:''}>${umowaCell}${contractSub}</td>
       <td class="nw">${signerBadge}</td>
       <td class="nw">${wifiCell}</td>
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
@@ -5555,6 +5555,68 @@ function refreshAptOwnerDatalist_(){
   const el=document.getElementById('apt-owner-names-datalist');
   if(el)el.outerHTML=ownerNamesDatalist_();
 }
+
+/* ── okresy umowy: ile trwa / ile zostało (lata, miesiące, dni) ── */
+function aptIsoToDate_(v){const iso=aptDateToIso_(v);if(!iso)return null;const[y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d);}
+function plPlural_(n,one,few,many){if(n===1)return one;const d=n%10,t=n%100;return(d>=2&&d<=4&&(t<12||t>14))?few:many;}
+function diffYMD_(from,to){
+  let a=from,b=to,neg=false;
+  if(b<a){[a,b]=[b,a];neg=true;}
+  let y=b.getFullYear()-a.getFullYear(),m=b.getMonth()-a.getMonth(),d=b.getDate()-a.getDate();
+  if(d<0){m--;d+=new Date(b.getFullYear(),b.getMonth(),0).getDate();}
+  if(m<0){y--;m+=12;}
+  return{y,m,d,neg,total:Math.round((b-a)/86400000)};
+}
+function fmtYMD_(r){
+  const p=[];
+  if(r.y)p.push(r.y+' '+plPlural_(r.y,'rok','lata','lat'));
+  if(r.m)p.push(r.m+' '+plPlural_(r.m,'miesiąc','miesiące','miesięcy'));
+  if(r.d||!p.length)p.push(r.d+' '+plPlural_(r.d,'dzień','dni','dni'));
+  return p.join(', ')+(r.y||r.m?` (${r.total} ${plPlural_(r.total,'dzień','dni','dni')})`:'');
+}
+function buildContractTip_(a,aneksy,isIndefinite,isArchived){
+  const today=new Date();today.setHours(0,0,0,0);
+  const L=[];
+  const start=aptIsoToDate_(a.dataZawarcia);
+  const end=aptIsoToDate_(a.umowa);
+  if(start){
+    L.push('📝 Zawarcie: '+fmtAptDate_(a.dataZawarcia));
+    L.push(start<=today?'    trwa już: '+fmtYMD_(diffYMD_(start,today)):'    startuje za: '+fmtYMD_(diffYMD_(today,start)));
+  }
+  aneksy.forEach((d,i)=>{
+    const dt=aptIsoToDate_(d);if(!dt)return;
+    const r=diffYMD_(dt,today);
+    L.push(`📎 Aneks${aneksy.length>1?' '+(i+1):''}: ${fmtAptDate_(d)} — ${r.neg?'za '+fmtYMD_(r):'minęło '+fmtYMD_(r)}`);
+  });
+  if(end){
+    L.push('⏳ Koniec umowy: '+fmtAptDate_(a.umowa));
+    const r=diffYMD_(today,end);
+    L.push(r.neg?'    wygasła: '+fmtYMD_(r)+' temu':(r.total===0?'    wygasa dziś':'    pozostało: '+fmtYMD_(r)));
+    if(start&&end>start)L.push('📅 Cały okres umowy: '+fmtYMD_(diffYMD_(start,end)));
+  }else if(isArchived){
+    L.push('❌ Umowa wygasła / zarchiwizowana');
+  }else if(isIndefinite&&(start||aneksy.length)){
+    L.push('🔵 Czas nieokreślony — brak daty końca');
+  }
+  return L.join('\n');
+}
+(function initAptDateTip_(){
+  if(window.__aptTipInit)return;window.__aptTipInit=true;
+  let tip=null;
+  const hide=()=>{if(tip)tip.style.display='none';};
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest&&e.target.closest('[data-tip]');
+    if(!el){hide();return;}
+    if(!tip){tip=document.createElement('div');tip.style.cssText='position:fixed;z-index:10050;max-width:360px;background:#0f172a;color:#f8fafc;font-size:12px;line-height:1.55;padding:10px 12px;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.28);white-space:pre;pointer-events:none;display:none';document.body.appendChild(tip);}
+    tip.textContent=el.getAttribute('data-tip');
+    tip.style.display='block';
+    const r=el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    let left=Math.min(Math.max(8,r.left),window.innerWidth-tw-8);
+    let top=r.bottom+6;if(top+th>window.innerHeight-8)top=r.top-th-6;
+    tip.style.left=left+'px';tip.style.top=Math.max(8,top)+'px';
+  });
+  window.addEventListener('scroll',hide,true);
+})();
 
 /* ── daty umowy / aneksów (zapis w arkuszu jako DD-MM-RRRR) ── */
 function aptDateToIso_(v){
