@@ -135,6 +135,8 @@
     .media-table-wrap{overflow-x:auto;margin-top:16px;}
     table{width:100%;border-collapse:collapse;font-size:12px;}
     .apts-fixed-table{table-layout:fixed;min-width:1460px;}
+    .apts-fixed-table th.apt-sort-th:hover{color:var(--text,#0f172a);background:rgba(13,148,136,.06);}
+    .apts-fixed-table th.apt-sort-active{color:#0d9488;}
     .apts-fixed-table .nw,.apts-fixed-table thead th.nw{white-space:nowrap!important;overflow-wrap:normal!important;word-break:normal!important;}
     .apts-fixed-table td{word-wrap:break-word;overflow-wrap:break-word;vertical-align:top;padding:10px 12px;}
     thead th{background:var(--bg);padding:10px 12px;text-align:right;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:2px solid var(--border);}
@@ -5349,6 +5351,26 @@ function buildApartmentsView(apts){
     return true;
   });
 
+  // sortowanie po kliknięciu nagłówka
+  const sortKey=_state.aptsSortKey||'';
+  const sortDir=_state.aptsSortDir==='desc'?-1:1;
+  if(sortKey){
+    const idx=new Map(filtered.map((a,i)=>[a,i]));
+    filtered=filtered.slice().sort((a,b)=>{
+      const va=aptSortValue_(a,sortKey),vb=aptSortValue_(b,sortKey);
+      const ea=va===null||va==='',eb=vb===null||vb==='';
+      if(ea||eb){if(ea&&eb)return idx.get(a)-idx.get(b);return ea?1:-1;} // puste zawsze na końcu
+      let c=(typeof va==='number'&&typeof vb==='number')?(va===vb?0:(va<vb?-1:1)):String(va).localeCompare(String(vb),'pl',{numeric:true,sensitivity:'base'});
+      if(c===0)c=String(a.id).localeCompare(String(b.id),'pl',{numeric:true});
+      return c*sortDir;
+    });
+  }
+  const sth=(key,label,cls,align)=>{
+    const active=sortKey===key;
+    const arrow=active?(sortDir===1?' ▲':' ▼'):' <span style="opacity:.35">↕</span>';
+    return`<th class="${cls||''} apt-sort-th${active?' apt-sort-active':''}" style="text-align:${align||'left'};cursor:pointer;user-select:none" title="Sortuj (kliknij ponownie aby odwrócić, 3× aby wyłączyć)" onclick="setAptsSort_('${key}')">${label}${arrow}</th>`;
+  };
+
   // alerts — contracts expiring within 30 days
   const alerts=apts.filter(a=>{const d=daysUntil(a.umowa);return d!==null&&d>=0&&d<=30;});
   const alertBanner=alerts.length?`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;display:flex;align-items:center;gap:10px;animation:fadeUp 0.3s ease both">
@@ -5489,18 +5511,18 @@ function buildApartmentsView(apts){
         ${aptColgroup}
         <thead class="apts-table"><tr>
           <th class="nw" style="text-align:center">Lp.</th>
-          <th style="text-align:left">Nazwa</th>
-          <th class="nw" style="text-align:left">Typ</th>
-          <th class="nw" style="text-align:left">ID</th>
-          <th style="text-align:left">Ulica</th>
-          <th style="text-align:left">Kod poczt.</th>
-          <th style="text-align:left">Miasto</th>
-          <th class="nw" style="text-align:center">m²</th>
-          <th style="text-align:left">Właściciel</th>
-          <th style="text-align:left">Umowa</th>
-          <th class="nw" style="text-align:left">Podpisujący</th>
+          ${sth('name','Nazwa')}
+          ${sth('type','Typ','nw')}
+          ${sth('id','ID','nw')}
+          ${sth('street','Ulica')}
+          ${sth('postal','Kod poczt.')}
+          ${sth('city','Miasto')}
+          ${sth('m2','m²','nw','center')}
+          ${sth('owner','Właściciel')}
+          ${sth('umowa','Umowa')}
+          ${sth('signer','Podpisujący','nw')}
           <th class="nw" style="text-align:left">WiFi</th>
-          <th style="text-align:left">Uwagi</th>
+          ${sth('uwagi','Uwagi')}
           ${canConfig()?'<th class="nw" style="text-align:left">Akcje</th>':''}
         </tr></thead>
         <tbody class="apts-table">${rows}</tbody>
@@ -16318,6 +16340,38 @@ function setKsefFilterState(type,val){
   }
 }
 
+function aptSortValue_(a,key){
+  switch(key){
+    case'name':return String(a.name||'').trim();
+    case'type':return String(a.type||'').trim();
+    case'id':return String(a.id||'').trim();
+    case'street':return String(a.street||'').trim();
+    case'postal':return String(a.postalCode||'').trim();
+    case'city':return String(a.city||'').trim();
+    case'owner':return String(a.owner||'').trim();
+    case'signer':return String(a.signer||'').trim();
+    case'uwagi':return String(a.uwagi||'').replace(/<[^>]*>/g,'').trim();
+    case'm2':{const n=parseFloat(String(a.metraz||'').replace(/\s/g,'').replace(',','.'));return isNaN(n)?null:n;}
+    case'umowa':{
+      // rosnąco: zarchiwizowane → wygasłe → najszybciej kończące → najdłuższe → czas nieokreślony
+      if(isArchivedApt_(a))return -1e9;
+      const d=daysUntil(a.umowa);
+      if(d!==null)return d;
+      return 1e9; // nieokreślony / brak daty = najdłużej
+    }
+  }
+  return null;
+}
+function setAptsSort_(key){
+  if(_state.aptsSortKey!==key){_state.aptsSortKey=key;_state.aptsSortDir='asc';}
+  else if(_state.aptsSortDir==='asc'){_state.aptsSortDir='desc';}
+  else{_state.aptsSortKey='';_state.aptsSortDir='asc';}
+  const d=_state.data.apartments;
+  if(d&&!d.error){
+    const wrap=document.getElementById('apt-section-wrap');
+    if(wrap)wrap.innerHTML=buildApartmentsView(d);
+  }
+}
 function setAptsFilter(type,val){
   if(type==='search')_state.aptsFilterSearch=val;
   else if(type==='owner')_state.aptsFilterOwner=val;
