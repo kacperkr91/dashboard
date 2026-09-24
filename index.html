@@ -5333,6 +5333,7 @@ function contractBadge(dateStr){
 }
 
 function buildApartmentsView(apts){
+  ensureSensorsLoaded_();
   const owners=[...new Set(apts.map(a=>a.owner).filter(Boolean))].sort();
   const filterOwner=_state.aptsFilterOwner||'';
   const filterSearch=_state.aptsFilterSearch||'';
@@ -5497,13 +5498,14 @@ function buildApartmentsView(apts){
       <td class="nw" ${contractTip?`data-tip="${escapeHtml(contractTip)}" style="cursor:help"`:''}>${umowaCell}${contractSub}</td>
       <td class="nw">${signerBadge}</td>
       <td class="nw">${wifiCell}</td>
+      ${aptSensorCells_(a)}
       <td style="color:var(--text-muted);font-size:12px">${a.uwagi||'—'}</td>
       ${canConfig()?`<td class="nw"><button class="btn-icon" style="padding:4px 10px;font-size:11px" onclick="openApartmentModal('${String(a.id).replace(/'/g,"\\'")}')">✏️ Edytuj</button></td>`:''}
     </tr>`;
   }).join('');
 
   const aptColgroup=`<colgroup>
-          <col style="width:48px"><col style="width:120px"><col style="width:62px"><col style="width:62px"><col><col style="width:92px"><col style="width:100px"><col style="width:86px"><col><col style="width:130px"><col style="width:116px"><col style="width:82px"><col style="width:110px">${canConfig()?'<col style="width:96px">':''}
+          <col style="width:48px"><col style="width:120px"><col style="width:62px"><col style="width:62px"><col><col style="width:92px"><col style="width:100px"><col style="width:86px"><col><col style="width:130px"><col style="width:116px"><col style="width:82px"><col style="width:84px"><col style="width:84px"><col style="width:110px">${canConfig()?'<col style="width:96px">':''}
         </colgroup>`;
   const table=`<div class="grid-card" style="animation:fadeUp 0.4s ease both;padding:0;overflow:hidden">
     <div class="media-table-wrap">
@@ -5522,6 +5524,8 @@ function buildApartmentsView(apts){
           ${sth('umowa','Umowa')}
           ${sth('signer','Podpisujący','nw')}
           <th class="nw" style="text-align:left">WiFi</th>
+          ${sth('temp','🌡️ Temp.','nw','center')}
+          ${sth('hum','💧 Wilg.','nw','center')}
           ${sth('uwagi','Uwagi')}
           ${canConfig()?'<th class="nw" style="text-align:left">Akcje</th>':''}
         </tr></thead>
@@ -16340,6 +16344,62 @@ function setKsefFilterState(type,val){
   }
 }
 
+/* ── Czujniki temperatury/wilgotności (Tuya → Apps Script getSensors) ── */
+// Tuya device ID → ID apartamentu w dashboardzie
+const SENSOR_APT_MAP={
+  'bff58fd7fcb152f7969hfz':'025', // Limanowskiego 4 → Biuro
+  'bfcc2406a135dcb549srjo':'001', // Rynek 1  → Apt 1
+  'bf5ee1b1a42a4a2b2eqnve':'002', // Rynek 7  → Apt 7
+  'bf98f0f63bc41f015dlvhw':'003', // Rynek 8  → Apt 8
+  'bf80954bf5cb885a481l2u':'004', // Rynek 9  → Apt 9
+  'bf66fd10f0774af399hhfo':'005', // Rynek 10 → Apt 10
+  'bf9987cb32bbfc1a2e0deq':'006', // Rynek 11 → Apt 11
+};
+const SENSOR_STALE_HOURS=3;
+let _sensorsFetchInFlight=false;
+function ensureSensorsLoaded_(){
+  if(_state.data.sensors!==undefined&&_state.data.sensors!==null)return;
+  if(_sensorsFetchInFlight||!_state.authToken)return;
+  _sensorsFetchInFlight=true;
+  fetchSyncJson(`${CONFIG.syncUrl}?action=getSensors&token=${encodeURIComponent(_state.authToken)}`).then(data=>{
+    _sensorsFetchInFlight=false;
+    const byApt={};
+    if(data&&Array.isArray(data.sensors)){
+      data.sensors.forEach(s=>{const aptId=SENSOR_APT_MAP[s.id];if(aptId)byApt[aptId]=s;});
+    }
+    _state.data.sensors=data&&data.error?{error:data.error,byApt:{}}:{byApt};
+    const d=_state.data.apartments;
+    const wrap=document.getElementById('apt-section-wrap');
+    if(wrap&&d&&!d.error)wrap.innerHTML=buildApartmentsView(d);
+  }).catch(e=>{
+    _sensorsFetchInFlight=false;
+    _state.data.sensors={error:e.message||'Błąd',byApt:{}};
+  });
+}
+function aptSensorReading_(a){
+  const s=_state.data.sensors;
+  return s&&s.byApt?s.byApt[String(a.id||'').trim()]||null:null;
+}
+function aptSensorCells_(a){
+  const r=aptSensorReading_(a);
+  if(!r)return`<td class="nw" style="text-align:center;color:var(--text-muted)">—</td><td class="nw" style="text-align:center;color:var(--text-muted)">—</td>`;
+  const last=r.lastReading?new Date(r.lastReading):null;
+  const ageH=last&&!isNaN(last)?(Date.now()-last.getTime())/3600000:null;
+  const stale=ageH===null||ageH>SENSOR_STALE_HOURS;
+  const fmtLast=last&&!isNaN(last)?last.toLocaleString('pl-PL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'brak';
+  const bat=String(r.battery??'').toLowerCase();
+  const batLow=bat==='low'||(typeof r.battery==='number'&&r.battery<=20);
+  const tip=[`Czujnik: ${r.name||''}`,`Ostatni odczyt: ${fmtLast}`,`Status: ${r.online?'online':'offline'}`,`Bateria: ${r.battery??'—'}`].join('\n');
+  const style=`text-align:center;cursor:help;${stale?'color:var(--text-muted);opacity:.6':''}`;
+  const t=typeof r.temperature==='number';
+  const h=typeof r.humidity==='number';
+  const tColor=!stale&&t?(r.temperature<18?'#2563eb':r.temperature>26?'#dc2626':'inherit'):'inherit';
+  const hColor=!stale&&h?(r.humidity>65?'#dc2626':r.humidity<30?'#d97706':'inherit'):'inherit';
+  const flags=`${stale?' <span title="Stary odczyt">⚠️</span>':''}${batLow?' <span title="Niska bateria">🪫</span>':''}`;
+  return`<td class="nw" data-tip="${escapeHtml(tip)}" style="${style};font-weight:600;color:${tColor}">${t?r.temperature.toFixed(1).replace('.',',')+'&nbsp;°C':'—'}${flags}</td>`+
+         `<td class="nw" data-tip="${escapeHtml(tip)}" style="${style};color:${hColor}">${h?Math.round(r.humidity)+'&nbsp;%':'—'}</td>`;
+}
+
 function aptSortValue_(a,key){
   switch(key){
     case'name':return String(a.name||'').trim();
@@ -16351,6 +16411,8 @@ function aptSortValue_(a,key){
     case'owner':return String(a.owner||'').trim();
     case'signer':return String(a.signer||'').trim();
     case'uwagi':return String(a.uwagi||'').replace(/<[^>]*>/g,'').trim();
+    case'temp':{const r=aptSensorReading_(a);return r&&typeof r.temperature==='number'?r.temperature:null;}
+    case'hum':{const r=aptSensorReading_(a);return r&&typeof r.humidity==='number'?r.humidity:null;}
     case'm2':{const n=parseFloat(String(a.metraz||'').replace(/\s/g,'').replace(',','.'));return isNaN(n)?null:n;}
     case'umowa':{
       // rosnąco: zarchiwizowane → wygasłe → najszybciej kończące → najdłuższe → czas nieokreślony
