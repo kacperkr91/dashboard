@@ -4222,7 +4222,7 @@ function getRoleLabel(role){
   return String(role||'').toLowerCase()==='admin'?'Admin':'Użytkownik';
 }
 function getModuleOrder(){
-  return['oblozenie','rental','media','media-gaz','ksef','apartments','kontakty','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','parking'];
+  return['oblozenie','rental','media','media-gaz','ksef','apartments','kontakty','housekeeping','otv','otv-new','summary','previo','agata-faktura','czynsze','laundry-textiles','parking-cards','artur-payments','tasks','booking-payout','dyzury','kalendarz','noty','goscie','legislacja','parking'];
 }
 const DASHBOARD_MODULE_LABELS={
   oblozenie:'Start',
@@ -4249,6 +4249,7 @@ const DASHBOARD_MODULE_LABELS={
   kalendarz:'Kalendarz',
   noty:'Noty',
   goscie:'Goście',
+  legislacja:'Legislacja',
   parking:'Parking'
 };
 function hasModuleAccess(section){
@@ -16285,6 +16286,13 @@ function renderApp(){
     ${navButton('kalendarz','Kalendarz','📆','background:#0369a1;border-color:#0369a1;color:#fff')}
     ${navButton('noty','Noty','🧾','background:#475569;border-color:#475569;color:#fff')}
     ${navButton('goscie','Goście','🌍','background:#0e7490;border-color:#0e7490;color:#fff')}
+    ${(()=>{
+      if(!hasModuleAccess('legislacja'))return'';
+      const n=legNewCount_();
+      const act=section==='legislacja';
+      const badge=n&&!act?`<span style="background:#dc2626;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">${n>99?'99+':n}</span>`:'';
+      return`<button class="nav-l1-btn ${act?'active':''}" style="${act?'background:#4c1d95;border-color:#4c1d95;color:#fff':''}" onclick="setSection('legislacja')"><span class="icon">⚖️</span> Legislacja${badge}</button>`;
+    })()}
     ${canConfig()?`<button class="nav-l1-btn ${section==='users-admin'?'active':''}" style="${section==='users-admin'?'background:#111827;border-color:#111827;color:#fff':''}" onclick="setSection('users-admin')"><span class="icon">👤</span> Użytkownicy</button>`:''}
     ${(()=>{
       if(!hasModuleAccess('parking'))return'';
@@ -16403,6 +16411,8 @@ function renderApp(){
     content=buildNotyView();
   } else if(section==='goscie'){
     content=buildGoscieView();
+  } else if(section==='legislacja'){
+    content=buildLegislacjaView();
   } else if(section==='oblozenie'){
     content=buildOblozenieLive();
   } else {
@@ -16562,6 +16572,259 @@ function setKsefFilterState(type,val){
       }
     });
   }
+}
+
+/* ── Legislacja: monitoring przepisów o najmie krótkoterminowym ──
+   Dane: arkusz „Legislacja” + „Legislacja Status” w pliku Previo Rezerwacje,
+   uzupełniane co 30 min przez Apps Script (Legislacja.gs → legRun).
+   Kolumny Legislacja: A ID | B Data publikacji | C Pobrano | D Typ | E Źródło | F Tytuł | G Link | H Opis | I Priorytet | J Tagi | K Zapytanie | L Streszczenie AI */
+const LEG_SHEET_NAME='Legislacja';
+const LEG_STATUS_SHEET_NAME='Legislacja Status';
+const LEG_TYPE_META={
+  news:        {label:'Media',        icon:'📰', color:'#2563eb', bg:'#eff6ff'},
+  etap:        {label:'Etap w Sejmie',icon:'🏛️', color:'#7c3aed', bg:'#f5f3ff'},
+  interpelacja:{label:'Interpelacja', icon:'❓', color:'#0e7490', bg:'#ecfeff'},
+  'odpowiedź': {label:'Stanowisko rządu',icon:'🗣️', color:'#b45309', bg:'#fffbeb'},
+};
+const LEG_PRIO_META={
+  '3':{label:'Pilne', color:'#dc2626', bg:'#fef2f2'},
+  '2':{label:'Ważne', color:'#d97706', bg:'#fffbeb'},
+  '1':{label:'Info',  color:'#64748b', bg:'#f8fafc'},
+};
+// Kanoniczna ścieżka ustawy – do paska postępu
+const LEG_PATH=[
+  {k:'start',  label:'Wpłynął',       re:/wpłynął|wpłynęł/i},
+  {k:'r1',     label:'I czytanie',    re:/^I czytanie/i},
+  {k:'kom',    label:'Komisje',       re:/sprawozdanie komisji|praca w komisjach/i},
+  {k:'r2',     label:'II czytanie',   re:/II czytanie/i},
+  {k:'r3',     label:'III czytanie',  re:/III czytanie|głosowanie/i},
+  {k:'senat',  label:'Senat',         re:/senat/i},
+  {k:'prez',   label:'Prezydent',     re:/prezydent|podpis/i},
+  {k:'dzu',    label:'Dz.U.',         re:/dziennik|ogłoszon|publikacj/i},
+];
+
+function legLsGet_(k,def){try{const v=localStorage.getItem(k);return v==null?def:v;}catch(e){return def;}}
+function legLsSet_(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+
+async function loadLegislacjaData(){
+  const apiKey=CONFIG.previoApiKey||CONFIG.apiKey;
+  const sid=CONFIG.previoSpreadsheetId;
+  if(!apiKey||!sid)throw new Error('MISSING_PREVIO_CONFIG');
+  const params=[`'${LEG_SHEET_NAME}'!A2:L6000`,`'${LEG_STATUS_SHEET_NAME}'!A2:I60`]
+    .map(r=>'ranges='+encodeURIComponent(r)).join('&')+`&valueRenderOption=FORMATTED_VALUE&key=${apiKey}`;
+  let data;
+  try{
+    data=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchGet?${params}`);
+  }catch(e){
+    if(/parse range/i.test(String(e.message||'')))return{items:[],status:[],missing:true};
+    throw e;
+  }
+  const [itemsVr,statusVr]=data.valueRanges||[];
+  const items=(itemsVr?.values||[]).filter(r=>r[0]&&r[5]).map(r=>({
+    id:String(r[0]), date:String(r[1]||''), fetched:String(r[2]||''), type:String(r[3]||'news'),
+    source:String(r[4]||''), title:String(r[5]||''), link:String(r[6]||''), desc:String(r[7]||''),
+    prio:String(r[8]||'1'), tags:String(r[9]||''), query:String(r[10]||''), ai:String(r[11]||''),
+  }));
+  items.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const status=(statusVr?.values||[]).filter(r=>r[0]).map(r=>{
+    let stages=[];try{stages=JSON.parse(r[8]||'[]');}catch(e){}
+    return{druk:String(r[0]),title:String(r[1]||''),lastStage:String(r[2]||''),lastDate:String(r[3]||''),link:String(r[4]||''),updated:String(r[5]||''),count:String(r[6]||''),passed:String(r[7]||'')==='TAK',stages};
+  });
+  // Rządowy projekt na górze
+  status.sort((a,b)=>(/rządowy/i.test(b.title)?1:0)-(/rządowy/i.test(a.title)?1:0)||String(b.lastDate).localeCompare(String(a.lastDate)));
+  return{items,status};
+}
+
+let _legFetchInFlight=false;
+function ensureLegislacjaLoaded_(force){
+  if(!force&&_state.data.legislacja!=null)return;
+  if(_legFetchInFlight)return;
+  _legFetchInFlight=true;
+  if(_state.legSeenAt==null)_state.legSeenAt=legLsGet_('leg_last_seen','');
+  loadLegislacjaData().then(d=>{
+    _state.data.legislacja=d;_legFetchInFlight=false;
+    if(_state.section==='legislacja')renderApp();
+  }).catch(e=>{
+    _state.data.legislacja={error:e.message||'Błąd'};_legFetchInFlight=false;
+    if(_state.section==='legislacja')renderApp();
+  });
+}
+function legislacjaReload(){ensureLegislacjaLoaded_(true);}
+function legNewCount_(){
+  const d=_state.data.legislacja;
+  if(!d||!Array.isArray(d.items))return 0;
+  const seen=_state.legSeenAt==null?legLsGet_('leg_last_seen',''):_state.legSeenAt;
+  if(!seen)return d.items.length?Math.min(d.items.length,99):0;
+  return d.items.filter(i=>i.fetched>seen).length;
+}
+function legislacjaMarkRead(){
+  const d=_state.data.legislacja;
+  const maxFetched=(d&&Array.isArray(d.items)?d.items:[]).reduce((m,i)=>i.fetched>m?i.fetched:m,'')||new Date().toISOString();
+  _state.legSeenAt=maxFetched;
+  legLsSet_('leg_last_seen',maxFetched);
+  renderApp();
+}
+function setLegFilter(key,val){
+  _state.legFilter=Object.assign({type:'all',prio:'all',range:'30',q:'',onlyNew:false},_state.legFilter||{});
+  _state.legFilter[key]=val;
+  if(key==='q'){
+    const pos=String(val||'').length;
+    renderApp();
+    const inp=document.getElementById('legSearchInput');
+    if(inp){inp.focus();try{inp.setSelectionRange(pos,pos);}catch(e){}}
+    return;
+  }
+  renderApp();
+}
+function legFmtDate_(iso,withTime){
+  const d=new Date(iso);
+  if(isNaN(d))return escapeHtml(iso||'');
+  return d.toLocaleString('pl-PL',withTime?{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function legRelTime_(iso){
+  const d=new Date(iso);if(isNaN(d))return'';
+  const m=Math.round((Date.now()-d.getTime())/60000);
+  if(m<1)return'przed chwilą';if(m<60)return`${m} min temu`;
+  const h=Math.round(m/60);if(h<24)return`${h} godz. temu`;
+  const dd=Math.round(h/24);return`${dd} ${dd===1?'dzień':'dni'} temu`;
+}
+function legSafeUrl_(u){return /^https?:\/\//i.test(String(u||''))?String(u):'#';}
+
+function buildLegislacjaStatus_(status){
+  if(!status.length)return'';
+  return status.map(s=>{
+    const names=(s.stages||[]).map(x=>x.n);
+    let reached=-1;
+    LEG_PATH.forEach((p,i)=>{if(names.some(n=>p.re.test(n)))reached=Math.max(reached,i);});
+    if(s.passed)reached=LEG_PATH.length-1;
+    const steps=LEG_PATH.map((p,i)=>{
+      const done=i<=reached, cur=i===reached;
+      return`<div style="flex:1;min-width:64px;text-align:center">
+        <div style="height:6px;border-radius:3px;background:${done?'#7c3aed':'#e2e8f0'};${cur?'box-shadow:0 0 0 3px #ddd6fe':''}"></div>
+        <div style="font-size:10.5px;margin-top:5px;color:${done?'#4c1d95':'#94a3b8'};font-weight:${cur?800:600}">${p.label}</div>
+      </div>`;
+    }).join('');
+    const hist=(s.stages||[]).slice().reverse().slice(0,8).map(x=>`<div style="display:flex;gap:10px;font-size:12px;padding:3px 0">
+        <span style="color:var(--text-muted);white-space:nowrap;min-width:78px">${escapeHtml(x.d||'')}</span>
+        <span>${x.l?`<a href="${escapeHtml(legSafeUrl_(x.l))}" target="_blank" rel="noopener" style="color:inherit">${escapeHtml(x.n)}</a>`:escapeHtml(x.n)}</span></div>`).join('');
+    const kind=/rządowy/i.test(s.title)?'Rządowy':(/poselski/i.test(s.title)?'Poselski':(/senacki/i.test(s.title)?'Senacki':'Projekt'));
+    return`<div class="grid-card" style="padding:16px 18px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.04em;color:#7c3aed;text-transform:uppercase">${kind} · druk ${escapeHtml(s.druk)}${s.passed?' · <span style="color:#15803d">uchwalona</span>':''}</div>
+          <div style="font-size:14px;font-weight:700;margin-top:3px;line-height:1.35">${escapeHtml(s.title)}</div>
+          <div style="font-size:12.5px;color:var(--text-muted);margin-top:4px">Ostatni etap: <b style="color:var(--text)">${escapeHtml(s.lastStage||'—')}</b>${s.lastDate?` · ${escapeHtml(s.lastDate)}`:''}</div>
+        </div>
+        <a href="${escapeHtml(legSafeUrl_(s.link))}" target="_blank" rel="noopener" class="btn-icon" style="text-decoration:none;white-space:nowrap">Przebieg w Sejmie ↗</a>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:14px;overflow-x:auto;padding-bottom:2px">${steps}</div>
+      ${hist?`<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6d28d9">Historia etapów (${(s.stages||[]).length})</summary><div style="margin-top:6px">${hist}</div></details>`:''}
+    </div>`;
+  }).join('');
+}
+
+function buildLegislacjaView(){
+  ensureLegislacjaLoaded_();
+  const d=_state.data.legislacja;
+  if(!d)return renderLoading('Ładowanie monitoringu legislacji…');
+  if(d.error)return renderError(d.error);
+  const f=Object.assign({type:'all',prio:'all',range:'30',q:'',onlyNew:false},_state.legFilter||{});
+  const seen=_state.legSeenAt==null?legLsGet_('leg_last_seen',''):_state.legSeenAt;
+  const isNew=i=>!seen||i.fetched>seen;
+  const items=d.items||[];
+
+  if(d.missing||!items.length&&!(d.status||[]).length){
+    return`<div class="grid-card" style="text-align:center;padding:40px;color:var(--text-muted)">
+      <div style="font-size:32px;margin-bottom:12px">⚖️</div>
+      <div style="font-weight:700;color:var(--text)">Brak danych monitoringu</div>
+      <div style="margin-top:6px;font-size:13px">Uruchom w Apps Script funkcję <code>legSetup()</code> — utworzy zakładki „${LEG_SHEET_NAME}” i trigger co 30 minut.</div>
+    </div>`;
+  }
+
+  const cutoff=f.range==='all'?'':new Date(Date.now()-Number(f.range)*86400000).toISOString();
+  const q=f.q.trim().toLowerCase();
+  const filtered=items.filter(i=>{
+    if(f.type!=='all'&&i.type!==f.type)return false;
+    if(f.prio==='3'&&i.prio!=='3')return false;
+    if(f.prio==='2'&&Number(i.prio)<2)return false;
+    if(cutoff&&i.date<cutoff)return false;
+    if(f.onlyNew&&!isNew(i))return false;
+    if(q&&!(`${i.title} ${i.desc} ${i.source} ${i.tags} ${i.ai}`.toLowerCase().includes(q)))return false;
+    return true;
+  });
+
+  const lastFetch=items.reduce((m,i)=>i.fetched>m?i.fetched:m,'');
+  const newCount=items.filter(isNew).length;
+  const wk=new Date(Date.now()-7*86400000).toISOString();
+  const kpi=(label,val,color)=>`<div class="kpi-card" style="padding:14px 16px"><div style="font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">${label}</div><div style="font-size:24px;font-weight:800;color:${color||'var(--text)'};margin-top:4px">${val}</div></div>`;
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+    ${kpi('Nowe od ostatniej wizyty',newCount,newCount?'#dc2626':'')}
+    ${kpi('Pilne (7 dni)',items.filter(i=>i.prio==='3'&&i.date>=wk).length,'#dc2626')}
+    ${kpi('Wpisy (7 dni)',items.filter(i=>i.date>=wk).length)}
+    ${kpi('Stanowiska rządu',items.filter(i=>i.type==='odpowiedź').length,'#b45309')}
+  </div>`;
+
+  const sel=(key,opts)=>`<select onchange="setLegFilter('${key}',this.value)" style="padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:13px;font-family:inherit">${opts.map(([v,l])=>`<option value="${v}" ${String(f[key])===v?'selected':''}>${l}</option>`).join('')}</select>`;
+  const filters=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <input id="legSearchInput" type="search" placeholder="Szukaj (np. wspólnota, Kraków, CWTON)…" value="${escapeHtml(f.q)}" oninput="setLegFilter('q',this.value)" style="flex:1;min-width:200px;padding:8px 12px;border-radius:10px;border:1px solid var(--border);font-size:13px;font-family:inherit"/>
+    ${sel('type',[['all','Wszystkie typy'],['news','📰 Media'],['etap','🏛️ Etapy w Sejmie'],['interpelacja','❓ Interpelacje'],['odpowiedź','🗣️ Stanowiska rządu']])}
+    ${sel('prio',[['all','Każdy priorytet'],['2','Ważne i pilne'],['3','Tylko pilne']])}
+    ${sel('range',[['7','7 dni'],['30','30 dni'],['90','90 dni'],['all','Całość']])}
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" ${f.onlyNew?'checked':''} onchange="setLegFilter('onlyNew',this.checked)"/> tylko nowe</label>
+  </div>`;
+
+  // grupowanie po dniu
+  const groups=[];let curKey=null;
+  filtered.slice(0,400).forEach(i=>{
+    const dd=new Date(i.date);
+    const key=isNaN(dd)?'—':dd.toLocaleDateString('pl-PL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    if(key!==curKey){groups.push({key,items:[]});curKey=key;}
+    groups[groups.length-1].items.push(i);
+  });
+  const card=i=>{
+    const t=LEG_TYPE_META[i.type]||LEG_TYPE_META.news;
+    const p=LEG_PRIO_META[i.prio]||LEG_PRIO_META['1'];
+    const dt=new Date(i.date);
+    const time=isNaN(dt)?'':dt.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+    const tags=i.tags?i.tags.split(',').map(s=>s.trim()).filter(Boolean).map(s=>`<span style="font-size:10.5px;padding:2px 7px;border-radius:8px;background:#f1f5f9;color:#475569">${escapeHtml(s)}</span>`).join(' '):'';
+    return`<div style="display:flex;gap:12px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid ${p.color};border-radius:10px;background:${isNew(i)?'#fffdf5':'#fff'};margin-bottom:8px">
+      <div style="font-size:20px;line-height:1.2">${t.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--text-muted)">
+          <span style="font-weight:700;color:${t.color};background:${t.bg};padding:1px 7px;border-radius:8px">${t.label}</span>
+          ${i.prio!=='1'?`<span style="font-weight:700;color:${p.color};background:${p.bg};padding:1px 7px;border-radius:8px">${p.label}</span>`:''}
+          ${isNew(i)?`<span style="font-weight:800;color:#fff;background:#dc2626;padding:1px 7px;border-radius:8px">NOWE</span>`:''}
+          <span>${escapeHtml(i.source)}</span>${time?`<span>· ${time}</span>`:''}
+        </div>
+        <a href="${escapeHtml(legSafeUrl_(i.link))}" target="_blank" rel="noopener" style="display:block;font-size:14px;font-weight:700;color:var(--text);text-decoration:none;margin-top:4px;line-height:1.35">${escapeHtml(i.title)} <span style="color:var(--text-muted);font-weight:500">↗</span></a>
+        ${i.ai?`<div style="font-size:12.5px;margin-top:6px;padding:6px 10px;border-radius:8px;background:#f5f3ff;color:#4c1d95">✨ ${escapeHtml(i.ai)}</div>`:''}
+        ${i.desc?`<div style="font-size:12.5px;color:#475569;margin-top:4px;line-height:1.45">${escapeHtml(i.desc)}</div>`:''}
+        ${tags?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${tags}</div>`:''}
+      </div>
+    </div>`;
+  };
+  const list=groups.length?groups.map(g=>`<div style="font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px">${escapeHtml(g.key)}</div>${g.items.map(card).join('')}`).join('')
+    :`<div class="grid-card" style="text-align:center;padding:30px;color:var(--text-muted)">Brak wpisów dla wybranych filtrów</div>`;
+
+  return`<div style="animation:fadeUp .3s ease">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div>
+        <div style="font-size:20px;font-weight:800">⚖️ Legislacja — najem krótkoterminowy</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">Media, Sejm (etapy, interpelacje, odpowiedzi ministerstw) · aktualizacja co 30 min${lastFetch?` · ostatnie pobranie: ${legFmtDate_(lastFetch,true)} (${legRelTime_(lastFetch)})`:''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-icon" onclick="legislacjaReload()">↻ Odśwież</button>
+        <button class="btn-icon" onclick="legislacjaMarkRead()" ${newCount?'':'disabled style="opacity:.5"'}>✓ Oznacz jako przeczytane</button>
+      </div>
+    </div>
+    ${kpis}
+    ${buildLegislacjaStatus_(d.status||[])}
+    <div class="grid-card" style="padding:16px 18px">
+      ${filters}
+      <div style="font-size:12px;color:var(--text-muted)">${filtered.length} ${filtered.length===1?'wpis':(filtered.length%10>=2&&filtered.length%10<=4&&(filtered.length%100<10||filtered.length%100>=20)?'wpisy':'wpisów')}${filtered.length>400?' (pokazano 400 najnowszych)':''}</div>
+      ${list}
+    </div>
+  </div>`;
 }
 
 /* ── Czujniki temperatury/wilgotności (Tuya → Apps Script getSensors) ── */
