@@ -16603,6 +16603,25 @@ const LEG_PATH=[
   {k:'dzu',    label:'Dz.U.',         re:/dziennik|ogłoszon|publikacj/i},
 ];
 
+// Filtr trafności: Google News zwraca artykuły, w których fraza pojawia się tylko w „powiązanych”
+// (sport, lifestyle, pogoda). Wpis „Media” zostaje tylko, gdy tytuł/opis dotyczy tematu.
+const LEG_REL_STR=/krótkoterm|na doby|na dobę|airbnb|booking|opłat\S* (turystyczn|miejscow|klimatyczn)|nocleg|apartament|aparthotel|usług\S* hotelarsk|turystyfik|ewidencj\S* obiekt|cwoot|wykaz\S* turystyczn/i;
+const LEG_REL_RENT=/\bnajm|\bnajem|\bnajemc|wynaj|lokator|czynsz/i;
+const LEG_REL_BIZ=/podat|\bpit\b|\bcit\b|\bvat\b|ryczałt|ksef|\bzus\b|składk\S* zdrowotn|spółk\S* z o\.?\s?o|sp\.\s?z\s?o\.?\s?o|spółek|spółk\S* (kapitałow|handlow|cywiln)|estońsk|fundacj\S* rodzinn|przedsiębiorc|działalnoś\S* gospodarcz|\bjdg\b|skarbówk|fiskus|urz\S* skarbow|split payment|biał\S* list\S* podatnik/i;
+const LEG_REL_KRK=/krak[oó]w|krakow/i;
+const LEG_REL_KRK_TOPIC=/turyst|nocleg|mieszka[nń](?!c)|opłat\S* (turystyczn|miejscow|za nocleg)|najm|najem|wynaj/i;
+const LEG_BAD_SRC=/sport|kobieta|kultura|pogoda|plotek|pudelek|zielony\.onet|podróże onet/i;
+const LEG_BAD_TITLE=/prognoza pogody|pogoda na dziś|odcinek \d|typy, kursy|gdzie oglądać/i;
+function legIsRelevant_(i){
+  if(i.type!=='news')return true; // Sejm, interpelacje, stanowiska rządu – zawsze
+  const t=`${i.title} ${i.desc||''}`;
+  if(LEG_BAD_TITLE.test(t))return false;
+  const str=LEG_REL_STR.test(t);
+  if(LEG_BAD_SRC.test(i.source)&&!str)return false;
+  if(str||LEG_REL_RENT.test(t)||LEG_REL_BIZ.test(t))return true;
+  return LEG_REL_KRK.test(t)&&LEG_REL_KRK_TOPIC.test(t);
+}
+
 function legLsGet_(k,def){try{const v=localStorage.getItem(k);return v==null?def:v;}catch(e){return def;}}
 function legLsSet_(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
@@ -16625,14 +16644,16 @@ async function loadLegislacjaData(){
     source:String(r[4]||''), title:String(r[5]||''), link:String(r[6]||''), desc:String(r[7]||''),
     prio:String(r[8]||'1'), tags:String(r[9]||''), query:String(r[10]||''), ai:String(r[11]||''),
   }));
-  items.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const relevant=items.filter(legIsRelevant_);
+  const hiddenCount=items.length-relevant.length;
+  relevant.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const status=(statusVr?.values||[]).filter(r=>r[0]).map(r=>{
     let stages=[];try{stages=JSON.parse(r[8]||'[]');}catch(e){}
     return{druk:String(r[0]),title:String(r[1]||''),lastStage:String(r[2]||''),lastDate:String(r[3]||''),link:String(r[4]||''),updated:String(r[5]||''),count:String(r[6]||''),passed:String(r[7]||'')==='TAK',stages};
   });
   // Rządowy projekt na górze
   status.sort((a,b)=>(/rządowy/i.test(b.title)?1:0)-(/rządowy/i.test(a.title)?1:0)||String(b.lastDate).localeCompare(String(a.lastDate)));
-  return{items,status};
+  return{items:relevant,status,hiddenCount};
 }
 
 let _legFetchInFlight=false;
@@ -16810,7 +16831,7 @@ function buildLegislacjaView(){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div>
         <div style="font-size:20px;font-weight:800">⚖️ Legislacja — najem krótkoterminowy</div>
-        <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">Media, Sejm (etapy, interpelacje, odpowiedzi ministerstw) · aktualizacja co 30 min${lastFetch?` · ostatnie pobranie: ${legFmtDate_(lastFetch,true)} (${legRelTime_(lastFetch)})`:''}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">Media, Sejm (etapy, interpelacje, odpowiedzi ministerstw) · aktualizacja co 30 min${d.hiddenCount?` · odfiltrowano ${d.hiddenCount} niezwiązanych`:''}${lastFetch?` · ostatnie pobranie: ${legFmtDate_(lastFetch,true)} (${legRelTime_(lastFetch)})`:''}</div>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn-icon" onclick="legislacjaReload()">↻ Odśwież</button>
