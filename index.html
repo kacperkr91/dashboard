@@ -666,7 +666,7 @@ const CONFIG={
   laundryRange:       'A1:F5000',
   czynszeApiKey:      localStorage.getItem('gs_czynsze_api_key')||'',
   czynszeSpreadsheetId: localStorage.getItem('gs_czynsze_spreadsheet_id')||'',
-  czynszeRange:       'A1:L200',
+  czynszeRange:       'A1:M200',
   parkingCardsSpreadsheetId:'183XOD7fCb5j-fJVNjUUSc1LYIptp301XxOjftyyMITk',
   parkingCardsSheet:  'Lista',
   parkingCardsRange:  'A1:B500',
@@ -2454,6 +2454,7 @@ async function loadCzynszeMonth(monthKey){
     caloscNetto:parseMoneyValue(row[9]||0),
     caloscBrutto:parseMoneyValue(row[10]||0),
     dataPrzelewu:czynszeDateToIso(row[11]||''),
+    notatka:String(row[12]||'').trim(),
   })).filter(item=>{
     const apartament=String(item.apartament||'').trim().toLowerCase();
     if(!apartament)return false;
@@ -3804,13 +3805,14 @@ async function saveCzynszeEntry(apartament){
   let oplataBrutto,czynszBrutto;
   try{oplataBrutto=readNum('oplata');czynszBrutto=readNum('czynsz');}catch(e){alert(e.message);return;}
   const dataPrzelewu=String(document.getElementById(czynszeInputId(apartament,'data'))?.value||'').trim();
+  const notatka=String(document.getElementById(czynszeInputId(apartament,'notatka'))?.value||'').trim().slice(0,300);
   _state.czynszeSaving={...(_state.czynszeSaving||{}),[apartament]:true};
   renderApp();
   try{
     const resp=await fetch(CONFIG.syncUrl,{
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'saveCzynszeEntry',token:_state.authToken,spreadsheetId:CONFIG.czynszeSpreadsheetId,monthKey,apartament,oplataBrutto,czynszBrutto,dataPrzelewu})
+      body:JSON.stringify({action:'saveCzynszeEntry',token:_state.authToken,spreadsheetId:CONFIG.czynszeSpreadsheetId,monthKey,apartament,oplataBrutto,czynszBrutto,dataPrzelewu,notatka})
     });
     const data=await resp.json();
     if(!resp.ok||data.error)throw new Error(data.error||'Nie udało się zapisać.');
@@ -3874,10 +3876,11 @@ function buildCzynszeView(){
               <div><label class="artur-small" style="display:block;margin-bottom:4px">Data przelewu</label><div style="display:flex;gap:6px"><input id="${czynszeInputId(item.apartament,'data')}" class="artur-input" type="date" value="${escapeHtml(item.dataPrzelewu||'')}"/><button class="btn-icon" style="padding:6px 10px" onclick="setCzynszeDateToday('${aptJs}')">Dziś</button></div></div>
               <div><button class="btn-primary" style="width:100%;padding:9px 14px" ${saving?'disabled':''} onclick="saveCzynszeEntry('${aptJs}')">${saving?'Zapisywanie…':'Zapisz'}</button></div>
             </div>
+            <div style="margin-top:10px"><label class="artur-small" style="display:block;margin-bottom:4px">Notatka</label><input id="${czynszeInputId(item.apartament,'notatka')}" class="artur-input" type="text" maxlength="300" placeholder="np. przelew razem z październikiem, korekta czynszu…" value="${escapeHtml(item.notatka||'')}" onkeydown="if(event.key==='Enter')saveCzynszeEntry('${aptJs}')"/></div>
           </div>`:'';
     return `
       <tr onclick="toggleCzynszeApartment('${aptJs}')" style="cursor:pointer;${tone}">
-        <td style="font-weight:700">${escapeHtml(czynszeDisplayName(item.apartament))}${editable?' <span class="artur-small" title="Edytowalny">✎</span>':''}</td>
+        <td style="font-weight:700">${escapeHtml(czynszeDisplayName(item.apartament))}${editable?' <span class="artur-small" title="Edytowalny">✎</span>':''}${item.notatka?`<div class="artur-small" style="font-weight:400;margin-top:2px;max-width:320px;white-space:normal">📝 ${escapeHtml(item.notatka)}</div>`:''}</td>
         ${nettoTd(item.oplata23Netto)}
         <td class="num">${fmt(item.oplata23Brutto)} zł</td>
         ${nettoTd(item.sumaCzynszNetto)}
@@ -3905,7 +3908,7 @@ function buildCzynszeView(){
       <div class="tasks-panel-inner">
         <div class="tasks-eyebrow">Miesięczne rozliczenia</div>
         <h2 class="tasks-lead">Czynsze i zaliczki apartamentów</h2>
-        <div class="tasks-desc">Widok brutto. Kliknij apartament, aby rozwinąć szczegóły. Przy Apt 30r, 32r, 33r, 36r, 37r i 31c (✎) wpiszesz kwoty brutto i datę przelewu — zapis od razu aktualizuje arkusz Faktury Artur.</div>
+        <div class="tasks-desc">Widok brutto. Kliknij apartament, aby rozwinąć szczegóły. Przy Apt 30r, 32r, 33r, 36r, 37r i 31c (✎) wpiszesz kwoty brutto, datę przelewu i notatkę — zapis od razu aktualizuje arkusz Faktury Artur.</div>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn-icon" style="padding:10px 16px" onclick="toggleCzynszeNetto()">${showNetto?'Ukryj netto':'Pokaż netto'}</button>
           ${canConfig()?`<button class="btn-primary" style="width:auto;padding:10px 16px" onclick="createNextCzynszeMonth()">Utwórz następny miesiąc</button>`:''}
