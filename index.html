@@ -666,7 +666,7 @@ const CONFIG={
   laundryRange:       'A1:F5000',
   czynszeApiKey:      localStorage.getItem('gs_czynsze_api_key')||'',
   czynszeSpreadsheetId: localStorage.getItem('gs_czynsze_spreadsheet_id')||'',
-  czynszeRange:       'A1:K200',
+  czynszeRange:       'A1:L200',
   parkingCardsSpreadsheetId:'183XOD7fCb5j-fJVNjUUSc1LYIptp301XxOjftyyMITk',
   parkingCardsSheet:  'Lista',
   parkingCardsRange:  'A1:B500',
@@ -2453,6 +2453,7 @@ async function loadCzynszeMonth(monthKey){
     sumaCzynszBrutto:parseMoneyValue(row[8]||0),
     caloscNetto:parseMoneyValue(row[9]||0),
     caloscBrutto:parseMoneyValue(row[10]||0),
+    dataPrzelewu:czynszeDateToIso(row[11]||''),
   })).filter(item=>{
     const apartament=String(item.apartament||'').trim().toLowerCase();
     if(!apartament)return false;
@@ -3764,6 +3765,63 @@ function setParkingCardsSort(key){
   }
   if(_state.section==='parking-cards')renderApp();
 }
+const CZYNSZE_EDITABLE_APTS=['rynek 30r','rynek 32r','rynek 33r','rynek 36r','rynek 37r','rynek 31c'];
+function isCzynszeEditable(apartament){return CZYNSZE_EDITABLE_APTS.includes(String(apartament||'').trim().toLowerCase());}
+function czynszeDisplayName(apartament){
+  return String(apartament||'').trim().replace(/^rynek\s+/i,'Apt ').replace(/^zamoyskiego\s+/i,'Apt ');
+}
+function czynszeDateToIso(v){
+  const t=String(v||'').trim();
+  if(!t)return '';
+  let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=t.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+function czynszeIsoToPl(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}.${m[2]}.${m[1]}`:'';}
+function czynszeInputId(apartament,field){return 'czy-'+field+'-'+String(apartament||'').toLowerCase().replace(/[^a-z0-9]+/g,'-');}
+function toggleCzynszeNetto(){
+  _state.czynszeShowNetto=!_state.czynszeShowNetto;
+  if(_state.section==='czynsze')renderApp();
+}
+function setCzynszeDateToday(apartament){
+  const el=document.getElementById(czynszeInputId(apartament,'data'));
+  if(el)el.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+async function saveCzynszeEntry(apartament){
+  if(!CONFIG.syncUrl){alert('Brak Sync URL w konfiguracji.');return;}
+  if(!CONFIG.czynszeSpreadsheetId){alert('Brak Spreadsheet ID arkusza czynszów.');return;}
+  if(!isCzynszeEditable(apartament))return;
+  const monthKey=_state.czynszeMonth;
+  const readNum=field=>{
+    const raw=String(document.getElementById(czynszeInputId(apartament,field))?.value||'').replace(/\s/g,'').replace(',','.');
+    if(raw==='')return null;
+    const n=Number(raw);
+    if(!isFinite(n))throw new Error('Nieprawidłowa kwota: '+raw);
+    return Math.round(n*100)/100;
+  };
+  let oplataBrutto,czynszBrutto;
+  try{oplataBrutto=readNum('oplata');czynszBrutto=readNum('czynsz');}catch(e){alert(e.message);return;}
+  const dataPrzelewu=String(document.getElementById(czynszeInputId(apartament,'data'))?.value||'').trim();
+  _state.czynszeSaving={...(_state.czynszeSaving||{}),[apartament]:true};
+  renderApp();
+  try{
+    const resp=await fetch(CONFIG.syncUrl,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'saveCzynszeEntry',token:_state.authToken,spreadsheetId:CONFIG.czynszeSpreadsheetId,monthKey,apartament,oplataBrutto,czynszBrutto,dataPrzelewu})
+    });
+    const data=await resp.json();
+    if(!resp.ok||data.error)throw new Error(data.error||'Nie udało się zapisać.');
+    _state.data.czynsze[monthKey]=await loadCzynszeMonth(monthKey);
+  }catch(e){
+    alert(e.message||'Nie udało się zapisać czynszu.');
+  }finally{
+    const next={...(_state.czynszeSaving||{})};delete next[apartament];_state.czynszeSaving=next;
+    if(_state.section==='czynsze')renderApp();
+  }
+}
 function setCzynszeMonth(key){
   _state.czynszeMonth=key;
   if(!_state.data.czynsze[key]){
@@ -3787,30 +3845,55 @@ function buildCzynszeView(){
   const payload=_state.data.czynsze[monthKey];
   if(!payload)return monthNav+renderLoading('Ładowanie czynszów…');
   if(payload.error)return monthNav+renderError(payload.error);
-  const items=payload.items||[];
+  const showNetto=!!_state.czynszeShowNetto;
+  const allItems=payload.items||[];
+  const items=allItems.filter(item=>!(item.caloscNetto===0&&item.caloscBrutto===0)||isCzynszeEditable(item.apartament));
   const summary=payload.summary||{};
+  const editableItems=allItems.filter(item=>isCzynszeEditable(item.apartament));
+  const paidCount=editableItems.filter(item=>item.dataPrzelewu).length;
+  const nettoTd=v=>showNetto?`<td class="num">${fmt(v)} zł</td>`:'';
+  const colCount=showNetto?8:5;
   const rows=items.map(item=>{
-    const isZero=item.caloscNetto===0&&item.caloscBrutto===0;
+    const editable=isCzynszeEditable(item.apartament);
     const expanded=!!_state.czynszeExpanded?.[item.apartament];
-    const tone=isZero?'background:#fff5f5;border-color:#fecaca':'background:#f8fffb;border-color:#d1fae5';
+    const aptJs=escapeHtml(item.apartament).replace(/'/g,"&#39;");
+    const tone=editable?'background:#f8fbff;border-color:#dbeafe':'background:#f8fffb;border-color:#d1fae5';
+    const dateBadge=editable
+      ?(item.dataPrzelewu
+        ?`<span class="artur-status paid" style="min-width:0">✓ ${czynszeIsoToPl(item.dataPrzelewu)}</span>`
+        :`<span class="artur-status open" style="min-width:0">Brak przelewu</span>`)
+      :'<span class="artur-small">—</span>';
+    const saving=!!_state.czynszeSaving?.[item.apartament];
+    const sub=(netto)=>showNetto?`<div class="s">Netto: ${fmt(netto)} zł</div>`:'';
+    const editForm=editable?`
+          <div style="margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:10px;background:#fff">
+            <div class="artur-small" style="font-weight:700;margin-bottom:8px">Wpisz kwoty brutto i datę przelewu — zapis trafia do arkusza Faktury Artur (${escapeHtml(monthMeta?.label||monthKey)})</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end">
+              <div><label class="artur-small">Opłata brutto (zł)</label><input id="${czynszeInputId(item.apartament,'oplata')}" class="artur-input" type="text" inputmode="decimal" value="${String(item.oplata23Brutto).replace('.',',')}"/></div>
+              <div><label class="artur-small">Czynsz brutto (zł)</label><input id="${czynszeInputId(item.apartament,'czynsz')}" class="artur-input" type="text" inputmode="decimal" value="${String(item.czynsz23Brutto).replace('.',',')}"/></div>
+              <div><label class="artur-small">Data przelewu</label><div style="display:flex;gap:6px"><input id="${czynszeInputId(item.apartament,'data')}" class="artur-input" type="date" value="${escapeHtml(item.dataPrzelewu||'')}"/><button class="btn-icon" style="padding:6px 10px" onclick="setCzynszeDateToday('${aptJs}')">Dziś</button></div></div>
+              <div><button class="btn-primary" style="width:100%;padding:9px 14px" ${saving?'disabled':''} onclick="saveCzynszeEntry('${aptJs}')">${saving?'Zapisywanie…':'Zapisz'}</button></div>
+            </div>
+          </div>`:'';
     return `
-      <tr onclick="toggleCzynszeApartment('${escapeHtml(item.apartament).replace(/'/g,"&#39;")}')" style="cursor:pointer;${tone}">
-        <td style="font-weight:700">${escapeHtml(item.apartament)}</td>
-        <td class="num">${fmt(item.oplata23Netto)} zł</td>
+      <tr onclick="toggleCzynszeApartment('${aptJs}')" style="cursor:pointer;${tone}">
+        <td style="font-weight:700">${escapeHtml(czynszeDisplayName(item.apartament))}${editable?' <span class="artur-small" title="Edytowalny">✎</span>':''}</td>
+        ${nettoTd(item.oplata23Netto)}
         <td class="num">${fmt(item.oplata23Brutto)} zł</td>
-        <td class="num">${fmt(item.sumaCzynszNetto)} zł</td>
+        ${nettoTd(item.sumaCzynszNetto)}
         <td class="num">${fmt(item.sumaCzynszBrutto)} zł</td>
-        <td class="num" style="font-weight:700;color:#0f766e">${fmt(item.caloscNetto)} zł</td>
+        ${showNetto?`<td class="num" style="font-weight:700;color:#0f766e">${fmt(item.caloscNetto)} zł</td>`:''}
         <td class="num" style="font-weight:800">${fmt(item.caloscBrutto)} zł</td>
+        <td style="text-align:center">${dateBadge}</td>
       </tr>
-      ${expanded?`<tr style="background:#f8fafc"><td colspan="7" style="padding:0">
+      ${expanded?`<tr style="background:#f8fafc"><td colspan="${colCount}" style="padding:0">
         <div style="padding:14px 16px;border-top:1px solid #e2e8f0">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
-            <div class="mini-stat"><div class="k">Opłata 23%</div><div class="v">${fmt(item.oplata23Netto)} zł</div><div class="s">Brutto: ${fmt(item.oplata23Brutto)} zł</div></div>
-            <div class="mini-stat"><div class="k">Czynsz 8%</div><div class="v">${fmt(item.czynsz8Netto)} zł</div><div class="s">Brutto: ${fmt(item.czynsz8Brutto)} zł</div></div>
-            <div class="mini-stat"><div class="k">Czynsz 23%</div><div class="v">${fmt(item.czynsz23Netto)} zł</div><div class="s">Brutto: ${fmt(item.czynsz23Brutto)} zł</div></div>
-            <div class="mini-stat"><div class="k">Suma zaliczek</div><div class="v">${fmt(item.sumaCzynszNetto)} zł</div><div class="s">Brutto: ${fmt(item.sumaCzynszBrutto)} zł</div></div>
-          </div>
+            <div class="mini-stat"><div class="k">Opłata brutto</div><div class="v">${fmt(item.oplata23Brutto)} zł</div>${sub(item.oplata23Netto)}</div>
+            <div class="mini-stat"><div class="k">Czynsz 8% brutto</div><div class="v">${fmt(item.czynsz8Brutto)} zł</div>${sub(item.czynsz8Netto)}</div>
+            <div class="mini-stat"><div class="k">Czynsz 23% brutto</div><div class="v">${fmt(item.czynsz23Brutto)} zł</div>${sub(item.czynsz23Netto)}</div>
+            <div class="mini-stat"><div class="k">Suma zaliczek brutto</div><div class="v">${fmt(item.sumaCzynszBrutto)} zł</div>${sub(item.sumaCzynszNetto)}</div>
+          </div>${editForm}
         </div>
       </td></tr>`:''}
     `;
@@ -3822,36 +3905,38 @@ function buildCzynszeView(){
       <div class="tasks-panel-inner">
         <div class="tasks-eyebrow">Miesięczne rozliczenia</div>
         <h2 class="tasks-lead">Czynsze i zaliczki apartamentów</h2>
-        <div class="tasks-desc">Domyślnie widzisz prosty podgląd netto i brutto. Kliknij wybrany apartament, aby rozwinąć pełne rozbicie opłaty 23%, czynszu 8%, czynszu 23% i sumy zaliczek.</div>
-        ${canConfig()?`<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn-primary" style="width:auto;padding:10px 16px" onclick="createNextCzynszeMonth()">Utwórz następny miesiąc</button>
-        </div>`:''}
+        <div class="tasks-desc">Widok brutto. Kliknij apartament, aby rozwinąć szczegóły. Przy Apt 30r, 32r, 33r, 36r, 37r i 31c (✎) wpiszesz kwoty brutto i datę przelewu — zapis od razu aktualizuje arkusz Faktury Artur.</div>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-icon" style="padding:10px 16px" onclick="toggleCzynszeNetto()">${showNetto?'Ukryj netto':'Pokaż netto'}</button>
+          ${canConfig()?`<button class="btn-primary" style="width:auto;padding:10px 16px" onclick="createNextCzynszeMonth()">Utwórz następny miesiąc</button>`:''}
+        </div>
       </div>
     </div>
   </div>
   <div class="kpi-row">
-    <div class="kpi-card c-blue"><div class="label">Łącznie netto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscNetto||0)}</div><div class="sub">${monthMeta?.label||monthKey}</div></div>
-    <div class="kpi-card c-purple"><div class="label">Łącznie brutto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscBrutto||0)}</div><div class="sub">Wszystkie lokale</div></div>
+    ${showNetto?`<div class="kpi-card c-blue"><div class="label">Łącznie netto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscNetto||0)}</div><div class="sub">${monthMeta?.label||monthKey}</div></div>`:''}
+    <div class="kpi-card c-purple"><div class="label">Łącznie brutto</div><div class="value"><span class="sym">zł</span>${fmt(summary.caloscBrutto||0)}</div><div class="sub">${monthMeta?.label||monthKey}</div></div>
     <div class="kpi-card c-green"><div class="label">Aktywne lokale</div><div class="value">${summary.aktywne||0}</div><div class="sub">Z kwotą do rozliczenia</div></div>
-    <div class="kpi-card c-red"><div class="label">Lokale 0 zł</div><div class="value">${summary.zero||0}</div><div class="sub">Nieaktywne lub zerowe</div></div>
+    <div class="kpi-card ${paidCount===editableItems.length&&editableItems.length?'c-green':'c-red'}"><div class="label">Przelewy</div><div class="value">${paidCount}/${editableItems.length}</div><div class="sub">Apt 30r–37r, 31c z datą przelewu</div></div>
   </div>
   <div class="grid-card">
     <div class="line-chart-label">
       <div>
         <div class="card-title">Lista czynszów</div>
-        <div class="card-subtitle">Widok uproszczony na start, szczegóły po kliknięciu w wiersz apartamentu.</div>
+        <div class="card-subtitle">Lokale z zerową kwotą są ukryte. Szczegóły po kliknięciu w wiersz apartamentu.</div>
       </div>
     </div>
     <div class="hk-table-wrap">
       <table class="hk-table">
         <thead><tr>
           <th>Apartament</th>
-          <th class="num">Opłaty netto</th>
+          ${showNetto?'<th class="num">Opłaty netto</th>':''}
           <th class="num">Opłaty brutto</th>
-          <th class="num">Zaliczki netto</th>
+          ${showNetto?'<th class="num">Zaliczki netto</th>':''}
           <th class="num">Zaliczki brutto</th>
-          <th class="num">Całość netto</th>
+          ${showNetto?'<th class="num">Całość netto</th>':''}
           <th class="num">Całość brutto</th>
+          <th style="text-align:center">Przelew</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -4164,6 +4249,8 @@ let _state={
   agataColumnPrefs:(()=>({osoby:true,partner:true,status:true,transakcja:true,prowizja:true,golaCena:true,cenaSystem:true,doplata:true,cenaCalkowita:true}))(),
   czynszeMonth:getMonthKeyFromDate(new Date()),
   czynszeExpanded:{},
+  czynszeShowNetto:false,
+  czynszeSaving:{},
   laundryApartment:'',
   laundrySearch:'',
   parkingCardsSearch:'',
