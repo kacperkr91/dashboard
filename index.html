@@ -16670,6 +16670,8 @@ function setKsefFilterState(type,val){
    Kolumny Legislacja: A ID | B Data publikacji | C Pobrano | D Typ | E Źródło | F Tytuł | G Link | H Opis | I Priorytet | J Tagi | K Zapytanie | L Streszczenie AI */
 const LEG_SHEET_NAME='Legislacja';
 const LEG_STATUS_SHEET_NAME='Legislacja Status';
+// Druki ukryte w pasku postępu (nieaktualne / zastąpione innym projektem)
+const LEG_HIDDEN_DRUKI=['2353'];
 const LEG_TYPE_META={
   news:        {label:'Media',        icon:'📰', color:'#2563eb', bg:'#eff6ff'},
   etap:        {label:'Etap w Sejmie',icon:'🏛️', color:'#7c3aed', bg:'#f5f3ff'},
@@ -16687,7 +16689,7 @@ const LEG_PATH=[
   {k:'r1',     label:'I czytanie',    re:/^I czytanie/i},
   {k:'kom',    label:'Komisje',       re:/sprawozdanie komisji|praca w komisjach/i},
   {k:'r2',     label:'II czytanie',   re:/II czytanie/i},
-  {k:'r3',     label:'III czytanie',  re:/III czytanie|głosowanie/i},
+  {k:'r3',     label:'III czytanie',  re:/III czytanie/i}, // samo „Głosowanie” bywa też po I czytaniu (wniosek o odrzucenie)
   {k:'senat',  label:'Senat',         re:/senat/i},
   {k:'prez',   label:'Prezydent',     re:/prezydent|podpis/i},
   {k:'dzu',    label:'Dz.U.',         re:/dziennik|ogłoszon|publikacj/i},
@@ -16737,7 +16739,7 @@ async function loadLegislacjaData(){
   const relevant=items.filter(legIsRelevant_);
   const hiddenCount=items.length-relevant.length;
   relevant.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  const status=(statusVr?.values||[]).filter(r=>r[0]).map(r=>{
+  const status=(statusVr?.values||[]).filter(r=>r[0]&&!LEG_HIDDEN_DRUKI.includes(String(r[0]).trim())).map(r=>{
     let stages=[];try{stages=JSON.parse(r[8]||'[]');}catch(e){}
     return{druk:String(r[0]),title:String(r[1]||''),lastStage:String(r[2]||''),lastDate:String(r[3]||''),link:String(r[4]||''),updated:String(r[5]||''),count:String(r[6]||''),passed:String(r[7]||'')==='TAK',stages};
   });
@@ -16807,7 +16809,8 @@ function buildLegislacjaStatus_(status){
     const names=(s.stages||[]).map(x=>x.n);
     let reached=-1;
     LEG_PATH.forEach((p,i)=>{if(names.some(n=>p.re.test(n)))reached=Math.max(reached,i);});
-    if(s.passed)reached=LEG_PATH.length-1;
+    // „passed” z API Sejmu = uchwalona przez Sejm (III czytanie), NIE koniec procesu
+    if(s.passed)reached=Math.max(reached,LEG_PATH.findIndex(p=>p.k==='r3'));
     const steps=LEG_PATH.map((p,i)=>{
       const done=i<=reached, cur=i===reached;
       return`<div style="flex:1;min-width:64px;text-align:center">
@@ -16822,7 +16825,7 @@ function buildLegislacjaStatus_(status){
     return`<div class="grid-card" style="padding:16px 18px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
         <div style="flex:1;min-width:240px">
-          <div style="font-size:11px;font-weight:800;letter-spacing:.04em;color:#7c3aed;text-transform:uppercase">${kind} · druk ${escapeHtml(s.druk)}${s.passed?' · <span style="color:#15803d">uchwalona</span>':''}</div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:.04em;color:#7c3aed;text-transform:uppercase">${kind} · druk ${escapeHtml(s.druk)}${s.passed?' · <span style="color:#15803d">uchwalona przez Sejm</span>':''}</div>
           <div style="font-size:14px;font-weight:700;margin-top:3px;line-height:1.35">${escapeHtml(s.title)}</div>
           <div style="font-size:12.5px;color:var(--text-muted);margin-top:4px">Ostatni etap: <b style="color:var(--text)">${escapeHtml(s.lastStage||'—')}</b>${s.lastDate?` · ${escapeHtml(s.lastDate)}`:''}</div>
         </div>
