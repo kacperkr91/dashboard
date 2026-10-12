@@ -2631,10 +2631,25 @@ function calcPrevioForecast(monthKey){
   // Estimate last-minute bookings using last year as base
   let estNewBookings=0;
   const earnedPerDay=daysDone>0?earned/daysDone:0;
-  const totalApts=29;
+  // Liczba apartamentów w sprzedaży = unikalne apartamenty z rezerwacjami w tym i poprzednim miesiącu (bez wyłączonych)
+  const countActiveApts=(...monthKeys)=>{
+    const set=new Set();
+    monthKeys.forEach(k=>{
+      const mRows=_state.data.previo[k];
+      if(!Array.isArray(mRows))return;
+      mRows.forEach(r=>{
+        const apt=String(r.apt||'').trim();
+        if(!r.cancelled&&apt&&!isWylaczonyApt(apt))set.add(apt);
+      });
+    });
+    return set.size;
+  };
+  const prevMonthKeyOf=(y,m)=>{const d=new Date(y,m-2,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
+  const totalApts=countActiveApts(monthKey,prevMonthKeyOf(yr,mo))||29;
+  const lyTotalApts=countActiveApts(`${yr-1}-${String(mo).padStart(2,'0')}`,prevMonthKeyOf(yr-1,mo))||totalApts;
   const futureStart=monthKey>currentMonthKey?monthStart:addDays(refDate,1);
   const possibleFutureNightCount=daysLeft>0?totalApts*daysLeft:0;
-  const occupiedFutureNightKeys=daysLeft>0?collectOccupiedNightKeys(active,futureStart,monthEnd):new Set();
+  const occupiedFutureNightKeys=daysLeft>0?collectOccupiedNightKeys(active.filter(r=>!isWylaczonyApt(r.apt)),futureStart,monthEnd):new Set();
   const confirmedFutureNightCount=occupiedFutureNightKeys.size;
   const currentOccRate=possibleFutureNightCount>0?confirmedFutureNightCount/possibleFutureNightCount:0;
   const currentAdrPerNight=averageNightValue(active)||averageNightValue(confirmedRows)||earnedPerDay||0;
@@ -2647,7 +2662,7 @@ function calcPrevioForecast(monthKey){
       avgLast7Pct:Math.round(avgLast7Pct*100),
       daysDone:daysInMon, daysLeft:0, daysInMon,
       pctDone:100,
-      confirmedApts:0, freeApts:29, totalApts:29,
+      confirmedApts:0, freeApts:totalApts, totalApts,
       earnedPerDay,
       isPastMonth:true,
     };
@@ -2665,11 +2680,12 @@ function calcPrevioForecast(monthKey){
 
     // What was the full last year total
     // Scale factor: how much faster/slower we're running vs last year
-    const pace=lyEarnedToDate>0?earned/lyEarnedToDate:1;
+    // Tempo liczone na apartament, żeby wzrost liczby lokali nie zawyżał prognozy
+    const pace=lyEarnedToDate>0&&totalApts>0&&lyTotalApts>0?(earned/totalApts)/(lyEarnedToDate/lyTotalApts):1;
 
     const lyMonthEnd=new Date(yr-1,mo,0);
     const lyFutureStart=monthKey>currentMonthKey?new Date(yr-1,mo-1,1):new Date(yr-1,mo-1,Math.min(daysDone+1,lyMonthEnd.getDate()));
-    const lyPossibleFutureNightCount=totalApts*Math.max(lyMonthEnd.getDate()-Math.max(daysDone,0),0);
+    const lyPossibleFutureNightCount=lyTotalApts*Math.max(lyMonthEnd.getDate()-Math.max(daysDone,0),0);
     const lyOccupiedFutureNightKeys=lyPossibleFutureNightCount>0?collectOccupiedNightKeys(lyActive,lyFutureStart,lyMonthEnd):new Set();
     const lyOccRate=lyPossibleFutureNightCount>0?lyOccupiedFutureNightKeys.size/lyPossibleFutureNightCount:currentOccRate;
     const targetOccRate=clamp(lyOccRate*pace, currentOccRate, 0.98);
