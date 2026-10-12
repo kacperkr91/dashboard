@@ -700,8 +700,8 @@ const NAV={
           {key:'may2026', label:'Maj',      short:'Maj', hasData:true},
           {key:'jun2026', label:'Czerwiec', short:'Cze', hasData:true},
           {key:'jul2026', label:'Lipiec',   short:'Lip', hasData:true},
-          {key:'aug2026', label:'Sierpień', short:'Sie', hasData:false},
-          {key:'sep2026', label:'Wrzesień', short:'Wrz', hasData:false},
+          {key:'aug2026', label:'Sierpień', short:'Sie', hasData:true},
+          {key:'sep2026', label:'Wrzesień', short:'Wrz', hasData:true},
           {key:'oct2026', label:'Październik',short:'Paź',hasData:false},
           {key:'nov2026', label:'Listopad', short:'Lis', hasData:false},
           {key:'dec2026', label:'Grudzień', short:'Gru', hasData:false},
@@ -15743,6 +15743,10 @@ async function init(){
   _state.rentalMonth=getRentalMonthKeyFromDate();
   _state.rentalYear=new Date().getFullYear();
   ensureRentalMonthEnabled(_state.rentalMonth);
+  // Włącz wszystkie miesiące od sty 2026 do bieżącego (dane ładowane dynamicznie z arkusza)
+  for(let _d=new Date(2026,0,1),_now=new Date();_d<=_now;_d.setMonth(_d.getMonth()+1)){
+    ensureRentalMonthEnabled(getRentalMonthKeyFromDate(_d));
+  }
   _state.data={mar2026:null,feb2026:null,jan2026:null,dec2025:null,apr2026:null,media:null,gas:null,apartments:null,owners:null,skrytki:null,housekeeping:{},otv:{},previo:{},agata:{},czynsze:{},laundry:null,parkingCards:null,parking:null,ksef:null};
   _kalCache=null;_paidCache=null;_doneCache=null;_ksefPaidCache=null;_arturPaymentsCache=null;_dyzuryCache=null;
   _backgroundPrefetchStarted=false;
