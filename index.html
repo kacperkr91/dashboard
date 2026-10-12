@@ -2654,7 +2654,8 @@ function calcPrevioForecast(monthKey){
   }
 
   if(Array.isArray(lastYearRows)&&lastYearRows.length&&lastYearTotal>0){
-    const lyActive=lastYearActiveRows;
+    // Bazę z zeszłego roku liczymy bez apartamentów, których już nie wynajmujemy
+    const lyActive=lastYearActiveRows.filter(r=>!isWylaczonyApt(r.apt));
 
     // What was earned in last year up to same day of month
     const lyEarnedToDate=lyActive.filter(r=>{
@@ -2702,7 +2703,7 @@ function calcPrevioForecast(monthKey){
   const apartmentForecasts={...bookedByApt};
 
   if(monthKey===currentMonthKey&&daysLeft>0&&estNewBookings>0){
-    const apts=[...new Set(active.map(r=>String(r.apt||'').trim()).filter(Boolean))];
+    const apts=[...new Set(active.map(r=>String(r.apt||'').trim()).filter(a=>a&&!isWylaczonyApt(a)))];
     const occupiedFutureCountByApt={};
     active.forEach(r=>{
       const from=parsePrevioRowDate(r,'dataOd');
@@ -2762,6 +2763,10 @@ function calcPrevioForecast(monthKey){
 }
 
 /* FORMATTERS */
+
+/* APARTAMENTY KTÓRYCH JUŻ NIE WYNAJMUJEMY — pomijane w Start (wolne) i w prognozach */
+const WYLACZONE_APT=['Orzeszkowej','Katowicka','Zamkowa'];
+const isWylaczonyApt=apt=>{const a=String(apt||'').trim().toLowerCase();return !!a&&WYLACZONE_APT.some(w=>a.includes(w.toLowerCase()));};
 
 /* DEFAULT APARTMENT ORDER */
 const APT_ORDER=[
@@ -4848,7 +4853,7 @@ function buildMonthView(days,opts={}){
         if(!raw)return false;
         if(isAgataApartment(apt))return false;
         if(isL25Apartment(apt))return false;
-        if(raw==='orzeszkowej')return false;
+        if(isWylaczonyApt(apt))return false;
         if(raw==='apt 7c')return false;
         if(raw==='apt 2')return false;
         return true;
@@ -14249,7 +14254,6 @@ function loadAllPrevioMonths(){
 
 
 /* OBŁOŻENIE LIVE */
-const WYLACZONE_APT=['Orzeszkowej']; // apartamenty których już nie wynajmujemy
 const ZEWNETRZNE_APT=['Wawel','Wawel II no. 15','Wawel II no. 14','Zamkowa','Bronowicka','Plac Szczepański B41','Plac Szczepański C41']; // nie-OTV
 
 function getStartCountryCardData(){
@@ -14419,7 +14423,7 @@ function buildOblozenieLive(){
     if(!raw)return false;
     if(isAgataApartment(apt))return false;
     if(isL25Apartment(apt))return false;
-    if(raw==='orzeszkowej')return false;
+    if(isWylaczonyApt(apt))return false;
     if(raw==='apt 7c')return false;
     if(raw==='apt 2')return false;
     return true;
