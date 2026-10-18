@@ -14280,11 +14280,14 @@ function getStartCountryCardData(){
     const parsed=parseDateDMY(String(value||'').trim());
     return parsed?dateKey(parsed):String(value||'').slice(0,10);
   };
-  const currentMonthRows=Array.isArray(_state.data.previo?.[currentMonthKey])
-    ? _state.data.previo[currentMonthKey].filter(r=>{
+  const countrySelectedKey=(_state.startCountryMonth&&_state.startCountryMonth<currentMonthKey)?_state.startCountryMonth:null;
+  if(countrySelectedKey)ensurePrevioMonthFresh(countrySelectedKey,'oblozenie');
+  const countryMonthKey=countrySelectedKey||currentMonthKey;
+  const currentMonthRows=Array.isArray(_state.data.previo?.[countryMonthKey])
+    ? _state.data.previo[countryMonthKey].filter(r=>{
         if(r.cancelled)return false;
         const checkout=normalizePrevioDate(r.dataDo||'');
-        return checkout.slice(0,7)===currentMonthKey;
+        return checkout.slice(0,7)===countryMonthKey;
       })
     : [];
   const isAgataApartment=apt=>{
@@ -14302,13 +14305,12 @@ function getStartCountryCardData(){
     : startCountryScope==='agata'
     ? currentMonthAgataRows
     : currentMonthRows;
-  const currentMonthCountryScopeLabel=startCountryScope==='otv'
-    ? 'Bieżący miesiąc · OTV'
-    : startCountryScope==='l25'
-    ? 'Bieżący miesiąc · L25'
-    : startCountryScope==='agata'
-    ? 'Bieżący miesiąc · Agata'
-    : 'Bieżący miesiąc · wszystkie';
+  const countryMonthMeta=PREVIO_MONTHS.find(m=>m.key===countryMonthKey);
+  const countryMonthName=countrySelectedKey?(countryMonthMeta?countryMonthMeta.label:countryMonthKey):'Bieżący miesiąc';
+  const currentMonthCountryScopeLabel=`${countryMonthName} · ${startCountryScope==='otv'?'OTV':startCountryScope==='l25'?'L25':startCountryScope==='agata'?'Agata':'wszystkie'}`;
+  const countryMonthOptions=PREVIO_MONTHS.filter(m=>m.key<=currentMonthKey).slice().reverse();
+  const countryMonthSelectorHtml=`<select onchange="setStartCountryMonth(this.value)" style="font-size:10px;font-weight:800;color:#0f766e;text-transform:uppercase;background:#fff;border:1px solid #99f6e4;border-radius:6px;padding:3px 6px;cursor:pointer;font-family:'Inter',sans-serif;max-width:150px;outline:none">${countryMonthOptions.map(m=>`<option value="${m.key}" ${m.key===countryMonthKey?'selected':''}>${m.key===currentMonthKey?'BIEŻĄCY · ':''}${m.label.toUpperCase()}</option>`).join('')}</select>`;
+  const countryDataLoading=countrySelectedKey&&!Array.isArray(_state.data.previo?.[countrySelectedKey]);
   const currentMonthCountryCounts=currentMonthCountryScopeRows.reduce((acc,row)=>{
     if(row.cancelled||!row.kraj)return acc;
     const code=String(row.kraj||'').toUpperCase().trim();
@@ -14325,11 +14327,11 @@ function getStartCountryCardData(){
       flag:getFlagEmoji(code),
       name:COUNTRY_NAMES[code]||code,
     }));
-  return {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries};
+  return {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries,countryMonthSelectorHtml,countryDataLoading};
 }
 
 function renderStartCountryCard(){
-  const {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries}=getStartCountryCardData();
+  const {startCountryScope,currentMonthCountryScopeLabel,currentMonthTopCountries,countryMonthSelectorHtml,countryDataLoading}=getStartCountryCardData();
   return `<div data-start-country-card style="position:relative;overflow:hidden;background:linear-gradient(145deg,#ffffff 0%,#eefcff 44%,#dff7ff 100%);border:1px solid #b6ebff;border-radius:20px;padding:16px 16px 14px;box-shadow:0 16px 36px rgba(14,165,233,.12)">
     <div style="position:absolute;inset:auto -38px -38px auto;width:160px;height:160px;border-radius:999px;background:rgba(34,211,238,.14);filter:blur(8px);pointer-events:none"></div>
     <div style="position:absolute;top:-36px;right:58px;width:118px;height:118px;border-radius:999px;background:rgba(125,211,252,.24);filter:blur(10px);pointer-events:none"></div>
@@ -14339,6 +14341,7 @@ function renderStartCountryCard(){
           <div style="font-size:11px;font-weight:900;color:#0f4c81;text-transform:uppercase;letter-spacing:.06em">Top 10 narodowości</div>
           <div style="font-size:10px;color:#0f766e;opacity:.84;margin-top:5px">${currentMonthCountryScopeLabel}</div>
         </div>
+        <div>${countryMonthSelectorHtml}</div>
         <div style="display:grid;grid-template-columns:1.45fr .9fr .9fr 1fr;gap:4px;width:100%">
           <button type="button" onclick="setStartCountryScope('wszystkie')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='wszystkie'?'#0f766e':'#99f6e4'};background:${startCountryScope==='wszystkie'?'#0f766e':'rgba(255,255,255,.82)'};color:${startCountryScope==='wszystkie'?'#fff':'#0f766e'}">Wszystkie</button>
           <button type="button" onclick="setStartCountryScope('otv')" style="padding:4px 0;border-radius:999px;font-size:8px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:1px solid ${startCountryScope==='otv'?'#1d4ed8':'#93c5fd'};background:${startCountryScope==='otv'?'#1d4ed8':'rgba(255,255,255,.82)'};color:${startCountryScope==='otv'?'#fff':'#1d4ed8'}">OTV</button>
@@ -14354,12 +14357,19 @@ function renderStartCountryCard(){
           <div style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
           <div style="font-size:10px;font-weight:800;color:#0f4c81">${item.count}</div>
         </div>
-      `).join(''):`<div style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.78);border:1px solid rgba(182,235,255,.92);border-radius:12px;padding:10px 12px">Brak narodowości w tym miesiącu.</div>`}
+      `).join(''):`<div style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.78);border:1px solid rgba(182,235,255,.92);border-radius:12px;padding:10px 12px">${countryDataLoading?'Ładowanie danych miesiąca…':'Brak narodowości w tym miesiącu.'}</div>`}
       </div>
     </div>
   </div>`;
 }
 
+function setStartCountryMonth(key){
+  const today=new Date();
+  const currentKey=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  _state.startCountryMonth=(key===currentKey)?null:key;
+  if(_state.startCountryMonth)ensurePrevioMonthFresh(_state.startCountryMonth,'oblozenie');
+  renderApp();
+}
 function setStartCountryScope(scope){
   _state.startCountryScope=scope;
   const card=document.querySelector('[data-start-country-card]');
@@ -14386,6 +14396,8 @@ function buildOblozenieLive(){
   const todayStr=localDk(today);
   const tmr=new Date(today);tmr.setDate(today.getDate()+1);
   const tmrStr=localDk(tmr);
+  const ystd=new Date(today);ystd.setDate(today.getDate()-1);
+  const ystdStr=localDk(ystd);
   const weatherCache=_state.data.weather;
   const weatherStale=!weatherCache?.loadedAt||(Date.now()-weatherCache.loadedAt)>45*60*1000;
   if((!weatherCache||weatherStale)&&!_state.weatherLoading){
@@ -14640,10 +14652,10 @@ function buildOblozenieLive(){
   const dzien=_state.oblozenieDzien||'dzis';
   const filtry=_state.oblozenieFiltry||'wszystkie';
   const showPhones=!!_state.oblozenieTelefony;
-  const targetDate=dzien==='dzis'?today:tmr;
+  const targetDate=dzien==='wczoraj'?ystd:dzien==='dzis'?today:tmr;
   const daysInMonth=new Date(targetDate.getFullYear(),targetDate.getMonth()+1,0).getDate();
   const monthDayProgress=Math.max(0,Math.min(100,(targetDate.getDate()/daysInMonth)*100));
-  const targetStr=dzien==='dzis'?todayStr:tmrStr;
+  const targetStr=dzien==='wczoraj'?ystdStr:dzien==='dzis'?todayStr:tmrStr;
   const DOW=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
   const MONTHS_PL=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
   const MONTHS_PL_UPPER=['STYCZEŃ','LUTY','MARZEC','KWIECIEŃ','MAJ','CZERWIEC','LIPIEC','SIERPIEŃ','WRZESIEŃ','PAŹDZIERNIK','LISTOPAD','GRUDZIEŃ'];
@@ -15011,8 +15023,11 @@ function buildOblozenieLive(){
       </div>
     </div>
 
-    <!-- Przełącznik Dziś / Jutro + filtr -->
+    <!-- Przełącznik Wczoraj / Dziś / Jutro + filtr -->
     <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
+      <button onclick="_state.oblozenieDzien='wczoraj';renderApp()" style="padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${dzien==='wczoraj'?'#0f766e':'var(--border)'};background:${dzien==='wczoraj'?'#0f766e':'var(--white)'};color:${dzien==='wczoraj'?'#fff':'var(--text-mid)'}">
+        📅 Wczoraj — ${dateLabel(ystd)}
+      </button>
       <button onclick="_state.oblozenieDzien='dzis';renderApp()" style="padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;border:2px solid ${dzien==='dzis'?'#0f766e':'var(--border)'};background:${dzien==='dzis'?'#0f766e':'var(--white)'};color:${dzien==='dzis'?'#fff':'var(--text-mid)'}">
         📅 Dziś — ${dateLabel(today)}
       </button>
