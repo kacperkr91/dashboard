@@ -14095,6 +14095,22 @@ function renderPrevioGuestRequestBadge(r,compact=false){
   </div>`;
 }
 
+function copyAmountToClipboard(text,el){
+  const value=String(text||'').replace(/\s|\u00a0/g,'').trim();
+  if(!value)return;
+  const flash=()=>{
+    if(!el)return;
+    el.style.background='#dcfce7';
+    el.style.outline='1px solid #22c55e';
+    setTimeout(()=>{el.style.background='';el.style.outline='';},700);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(value).then(flash).catch(()=>window.prompt('Skopiuj:',value));
+  }else{
+    window.prompt('Skopiuj:',value);
+  }
+}
+
 function copyTextToClipboard(text,btn){
   const value=String(text||'').trim();
   if(!value)return;
@@ -14900,7 +14916,7 @@ function buildOblozenieLive(){
     return`<div style="background:${r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)'};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
         <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
-        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span style="font-size:11px;font-weight:600;color:${accent}">${fmt(r.cena)} zł</span></div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:11px;font-weight:600;color:${accent};cursor:pointer;padding:1px 4px;border-radius:4px;transition:background .2s">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
