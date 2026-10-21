@@ -11462,10 +11462,10 @@ function buildDyzuryView(){
           <span style="color:${ARTUR_COLOR};font-weight:600">A:${aCount}</span>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-bottom:4px">
         ${DOW.map((d,i)=>`<div style="text-align:center;font-size:9px;font-weight:600;color:${i===6?'#ef4444':'var(--text-muted)'};padding:2px">${d}</div>`).join('')}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px">${cells}</div>
     </div>`;
   }).join('');
 
@@ -13220,17 +13220,17 @@ function buildKalendarzView(){
       return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
-    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
+    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;min-width:0;overflow:hidden;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
       <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--blue)':isWE?'var(--purple)':'var(--text-muted)'};margin-bottom:3px">${d}</div>
       ${evHtml}
     </div>`;
   }
 
   const grid=`<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px">
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:4px">
       ${DOW_PL.map((d,i)=>`<div style="text-align:center;font-size:11px;font-weight:700;color:${i>=5?'var(--purple)':'var(--text-muted)'};padding:4px">${d}</div>`).join('')}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cells}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">${cells}</div>
   </div>`;
 
   // Nadchodzące
@@ -13311,8 +13311,8 @@ function buildKalendarzView(){
   return`<div style="max-width:1200px;margin:0 auto">
     ${modal}
     ${header}
-    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start">
-      <div>${grid}</div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px;align-items:start">
+      <div style="min-width:0">${grid}</div>
       <div>${sidebar}</div>
     </div>
   </div>`;
