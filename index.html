@@ -14959,15 +14959,15 @@ function buildOblozenieLive(){
         </div>
       </div>
       <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;flex-wrap:nowrap;white-space:nowrap">
-        <div style="display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap">
-          ${iconBox(ico.cal,20,'#1d4ed8')}
-          <span style="font-size:10.5px;font-weight:600;color:var(--text)">${shortDate(r.dataOd)}${godz_od?` <span style="font-weight:800;color:#f97316">${godz_od}</span>`:''}</span>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap">
+          <span style="color:#1d4ed8;display:inline-flex">${ico.cal}</span>
+          <span style="font-size:10px;font-weight:600;color:var(--text)">${shortDate(r.dataOd)}${godz_od?` <span style="font-weight:800;color:#f97316">${godz_od}</span>`:''}</span>
           <span style="color:var(--text-muted);font-size:11px">→</span>
-          <span style="font-size:10.5px;font-weight:600;color:var(--text)">${shortDate(r.dataDo)}${godz_do?` <span style="font-weight:800;color:#f97316">${godz_do}</span>`:''}</span>
+          <span style="font-size:10px;font-weight:600;color:var(--text)">${shortDate(r.dataDo)}${godz_do?` <span style="font-weight:800;color:#f97316">${godz_do}</span>`:''}</span>
         </div>
-        <div style="display:flex;gap:7px;align-items:center;flex-shrink:0">
-          <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.moon}</span>${r.noce} ${noceLabel(r.noce)}</span>
-          ${r.osoby?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.user}</span>${r.osoby} os.</span>`:''}
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.moon}</span>${r.noce} ${noceLabel(r.noce)}</span>
+          ${r.osoby?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.user}</span>${r.osoby} os.</span>`:''}
         </div>
       </div>
       ${phoneBadge?`<div style="position:relative;margin-top:5px">${phoneBadge}</div>`:''}
