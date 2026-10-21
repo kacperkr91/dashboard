@@ -13217,10 +13217,10 @@ function buildKalendarzView(){
       const recurIcon=ev.recur==='monthly'?'↻ ':ev.recur==='yearly'?'↺ ':'';
       const moneyIcon=ev.cat==='platnosc'?'💰 ':'';
       const done=isEventDone(dk,ev.id);
-      return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:normal;overflow-wrap:break-word;line-height:1.25;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
+      return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
-    cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;min-width:0;overflow:hidden;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
+    cells+=`<div onclick="kalShowDay('${dk}')" style="min-height:90px;min-width:0;overflow:hidden;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
       <div style="font-size:12px;font-weight:${isToday?'700':'500'};color:${isToday?'var(--blue)':isWE?'var(--purple)':'var(--text-muted)'};margin-bottom:3px">${d}</div>
       ${evHtml}
     </div>`;
@@ -13308,8 +13308,56 @@ function buildKalendarzView(){
     </div>
   </div>`;
 
+  // Okno dnia
+  let dayModal='';
+  const openDk=_state.kalDayOpen;
+  if(openDk){
+    const [oy,om,od]=openDk.split('-').map(Number);
+    const oDate=new Date(oy,om-1,od);
+    const DOW_FULL=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
+    const MONTHS_GEN=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
+    const dEvs=(events[openDk]||[]).slice().sort((a,b)=>isEventDone(openDk,a.id)-isEventDone(openDk,b.id));
+    const rows=dEvs.length?dEvs.map(ev=>{
+      const cat=katColor(ev.cat);
+      const done=isEventDone(openDk,ev.id);
+      const recur=ev.recur==='monthly'?'↻ co miesiąc':ev.recur==='yearly'?'↺ co rok':'';
+      return`<div style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid ${done?'#bbf7d0':'var(--border)'};border-left:4px solid ${cat.color};border-radius:10px;margin-bottom:8px;background:${done?'#f0fdf4':'var(--white)'}">
+        <button onclick="toggleDone('${openDk}','${ev.id}')" title="${done?'Cofnij wykonanie':'Oznacz jako wykonane'}" style="flex-shrink:0;width:22px;height:22px;margin-top:1px;border-radius:6px;border:2px solid ${done?'#16a34a':'var(--border)'};background:${done?'#16a34a':'var(--white)'};color:#fff;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">${done?'✓':''}</button>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:${done?'#16a34a':'var(--text)'};${done?'text-decoration:line-through;':''}overflow-wrap:break-word">${ev.cat==='platnosc'?'💰 ':''}${ev.title}</div>
+          ${ev.desc?`<div style="font-size:12px;color:var(--text-muted);margin-top:3px;white-space:pre-wrap;overflow-wrap:break-word">${ev.desc}</div>`:''}
+          <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${cat.bg};color:${cat.color}">${cat.label}</span>
+            ${recur?`<span style="font-size:10px;color:var(--text-muted)">${recur}</span>`:''}
+            ${ev.isAuto?`<span style="font-size:10px;color:var(--text-muted)">auto</span>`:''}
+          </div>
+        </div>
+        <button onclick="kalEditEvent('${openDk}','${ev.id}')" style="flex-shrink:0;background:var(--white);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;color:var(--text-mid);cursor:pointer;font-family:'Inter',sans-serif">${ev.isAuto?'Szczegóły':'Edytuj'}</button>
+      </div>`;
+    }).join(''):`<div style="text-align:center;padding:28px 0;color:var(--text-muted);font-size:13px">Brak wydarzeń tego dnia</div>`;
+    const doneCnt=dEvs.filter(ev=>isEventDone(openDk,ev.id)).length;
+    dayModal=`<div onclick="if(event.target===this)kalCloseDay()" style="display:flex;position:fixed;inset:0;background:rgba(15,23,42,0.4);z-index:250;align-items:center;justify-content:center">
+      <div style="background:var(--white);border-radius:16px;padding:24px;width:520px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:90vh;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:12px">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:var(--text)">${DOW_FULL[oDate.getDay()]}, ${od} ${MONTHS_GEN[om-1]} ${oy}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${dEvs.length?`${dEvs.length} wydarz. · ${doneCnt} wykonane`:'Pusty dzień'}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="kalShowDay(kalShiftDay('${openDk}',-1))" title="Poprzedni dzień" style="background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;color:var(--text-muted)">‹</button>
+            <button onclick="kalShowDay(kalShiftDay('${openDk}',1))" title="Następny dzień" style="background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;color:var(--text-muted)">›</button>
+            <button onclick="kalCloseDay()" style="background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;color:var(--text-muted)">✕</button>
+          </div>
+        </div>
+        <div style="overflow-y:auto;flex:1;min-height:0">${rows}</div>
+        <button onclick="kalOpenDay('${openDk}')" style="margin-top:12px;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">+ Dodaj wydarzenie</button>
+      </div>
+    </div>`;
+  }
+
   return`<div style="max-width:1200px;margin:0 auto">
     ${modal}
+    ${dayModal}
     ${header}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px;align-items:start">
       <div style="min-width:0">${grid}</div>
@@ -13527,6 +13575,32 @@ function kalToggleDoneFromModal(){
     doneBtn.style.color=isDone?'#dc2626':'#16a34a';
   }
 }
+
+function kalShowDay(dk){
+  const [y,m]=dk.split('-').map(Number);
+  _state.kalDayOpen=dk;
+  _state.kalendarzYear=y;
+  _state.kalendarzMonth=m-1;
+  renderApp();
+}
+
+function kalCloseDay(){
+  _state.kalDayOpen=null;
+  renderApp();
+}
+
+function kalShiftDay(dk,delta){
+  const [y,m,d]=dk.split('-').map(Number);
+  const n=new Date(y,m-1,d+delta);
+  return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  const m=document.getElementById('kalModal');
+  if(m&&m.style.display==='flex'){kalCloseModal();return;}
+  if(_state&&_state.kalDayOpen)kalCloseDay();
+});
 
 function kalCloseModal(){
   document.getElementById('kalModal').style.display='none';
