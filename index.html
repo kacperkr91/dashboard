@@ -14919,6 +14919,7 @@ function buildOblozenieLive(){
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:11px;font-weight:600;color:${accent};cursor:pointer;padding:1px 4px;border-radius:4px;transition:background .2s">${fmt(r.cena)} zł</span></div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
+      ${(()=>{const nr=String(r.voucher||r.resId||'').replace(/^'/,'').trim();return nr?`<div style="margin-top:3px"><span onclick="copyAmountToClipboard('${escapeHtml(nr)}',this)" title="Kliknij, aby skopiować nr rezerwacji" style="font-size:10px;font-weight:600;color:var(--text-mid);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;padding:1px 4px;border-radius:4px;background:var(--bg,#f1f5f9);border:1px solid var(--border);transition:background .2s"># ${escapeHtml(nr)}</span></div>`:'';})()}
       ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
       ${renderPrevioInvoiceBadge(r,true)}
       ${renderPrevioGuestRequestBadge(r,true)}
