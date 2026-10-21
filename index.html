@@ -14944,18 +14944,18 @@ function buildOblozenieLive(){
       </div>`:'';
 
     const cardBg=r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)';
-    return`<div style="position:relative;overflow:hidden;background:${cardBg};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-radius:14px;padding:11px 12px;margin-bottom:9px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 4px 14px rgba(15,23,42,.05)">
+    return`<div style="position:relative;overflow:hidden;contain:inline-size;min-width:0;background:${cardBg};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-radius:14px;padding:11px 12px;margin-bottom:9px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 4px 14px rgba(15,23,42,.05)">
       <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 80% at 100% 0%,${accent}12,transparent 60%)"></div>
       <div style="position:relative;display:flex;gap:10px;align-items:flex-start">
         ${iconBox(ico.home,42,'#1d4ed8')}
         <div style="flex:1;min-width:0">
           <div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.15">${r.apt}</div>
-          <div style="font-size:12px;color:var(--text-mid);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.gosc||'—'}</div>
-          ${nr?`<span onclick="copyAmountToClipboard('${escapeHtml(nr)}',this)" title="Kliknij, aby skopiować nr rezerwacji" style="display:inline-block;margin-top:4px;font-size:10.5px;font-weight:600;color:var(--text-mid);cursor:pointer;padding:2px 7px;border-radius:6px;background:#eef2f7;transition:background .2s"># ${escapeHtml(nr)}</span>`:''}
+          <div style="font-size:12px;color:var(--text-mid);margin-top:1px;line-height:1.25;overflow-wrap:anywhere">${r.gosc||'—'}</div>
+          ${nr?`<span onclick="copyAmountToClipboard('${escapeHtml(nr)}',this)" title="Kliknij, aby skopiować nr rezerwacji" style="display:inline-block;margin-top:4px;font-size:10.5px;font-weight:600;color:var(--text-mid);cursor:pointer;padding:2px 7px;border-radius:6px;background:#eef2f7;white-space:nowrap;transition:background .2s"># ${escapeHtml(nr)}</span>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           <div style="display:flex;gap:4px;align-items:center">${flagBadge}${specBadge}${chanBadge(r)}</div>
-          <span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:16px;font-weight:800;color:#f97316;cursor:pointer;padding:2px 7px;border-radius:8px;background:#fff7ed;white-space:nowrap;transition:background .2s">${fmt(r.cena)} zł</span>
+          <span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:15px;font-weight:800;color:#f97316;cursor:pointer;padding:2px 6px;border-radius:8px;background:#fff7ed;white-space:nowrap;transition:background .2s">${fmt(r.cena)} zł</span>
         </div>
       </div>
       <div style="position:relative;display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">
