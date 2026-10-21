@@ -13217,7 +13217,7 @@ function buildKalendarzView(){
       const recurIcon=ev.recur==='monthly'?'↻ ':ev.recur==='yearly'?'↺ ':'';
       const moneyIcon=ev.cat==='platnosc'?'💰 ':'';
       const done=isEventDone(dk,ev.id);
-      return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
+      return`<div style="background:${done?'#f0fdf4':cat.bg};color:${done?'#16a34a':cat.color};font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-top:2px;white-space:normal;overflow-wrap:break-word;line-height:1.25;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;${done?'text-decoration:line-through;opacity:0.7':''}" onclick="kalEditEvent('${dk}','${ev.id}')" title="${ev.title}">${done?'✓ ':''}${moneyIcon}${recurIcon}${ev.title}</div>`;
     }).join('');
 
     cells+=`<div onclick="kalOpenDay('${dk}')" style="min-height:90px;min-width:0;overflow:hidden;background:${isToday?'#eff6ff':isWE?'#fafafa':'var(--white)'};border:${isToday?'2px solid var(--blue)':'1px solid var(--border)'};border-radius:8px;padding:6px;cursor:pointer;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
