@@ -14913,20 +14913,62 @@ function buildOblozenieLive(){
       :r._typ==='przedluzenie'
       ?`<span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px">↻ Przedłużenie</span>`
       :'';
-    return`<div style="background:${r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)'};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-left:3px solid ${accent};border-radius:6px;padding:8px 10px;margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
-        <div style="font-size:12px;font-weight:700;color:var(--text)">${r.apt}</div>
-        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${flagBadge}${specBadge}${chanBadge(r)}<span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:11px;font-weight:600;color:${accent};cursor:pointer;padding:1px 4px;border-radius:4px;transition:background .2s">${fmt(r.cena)} zł</span></div>
+    const nr=String(r.voucher||r.resId||'').replace(/^'/,'').trim();
+    const noceLabel=n=>n===1?'noc':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?'noce':'nocy';
+    const ico={
+      home:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/><circle cx="12" cy="11" r="1"/></svg>',
+      cal:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/></svg>',
+      moon:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+      user:'<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>',
+      doc:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+      copy:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+    };
+    const iconBox=(svg,size,color)=>`<div style="flex:0 0 ${size}px;width:${size}px;height:${size}px;border-radius:${Math.round(size/3.2)}px;background:${color}14;color:${color};display:flex;align-items:center;justify-content:center">${svg}</div>`;
+    const dateCol=(label,d,h)=>`<div style="display:flex;align-items:center;gap:7px;min-width:0">
+        ${iconBox(ico.cal,28,'#1d4ed8')}
+        <div style="line-height:1.2;min-width:0">
+          <div style="font-size:9px;color:var(--text-muted);font-weight:600">${label}</div>
+          <div style="font-size:11.5px;font-weight:600;color:var(--text);white-space:nowrap">${d||'—'}</div>
+          ${h?`<div style="font-size:12px;font-weight:800;color:#f97316">${h}</div>`:''}
+        </div>
+      </div>`;
+
+    // Faktura
+    const inv=getPrevioInvoiceState(r);
+    const invCompany=escapeHtml(r?.firmaFaktura||'');
+    const invSource=escapeHtml(r?.zrodloFaktura||'');
+    const invoiceStrip=inv.show?`<div style="margin-top:9px;background:${inv.bg};border:1px solid ${inv.border};border-radius:10px;padding:7px 9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:5px;color:${inv.color}">${ico.doc}<span style="font-size:11.5px;font-weight:800">${inv.label}</span></div>
+        ${inv.nip?`<span onclick="copyAmountToClipboard('${inv.nip}',this)" title="Kliknij, aby skopiować NIP" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer;padding:1px 5px;border-radius:5px;border-left:1px solid ${inv.border};transition:background .2s">NIP ${inv.nip} <span style="color:var(--text-muted);display:inline-flex">${ico.copy}</span></span>`:''}
+        ${invCompany||invSource?`<div style="flex:1 1 120px;min-width:0;line-height:1.25;border-left:1px solid ${inv.border};padding-left:8px">${invCompany?`<div style="font-size:11px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${invCompany}</div>`:''}${invSource?`<div style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${invSource}</div>`:''}</div>`:''}
+      </div>`:'';
+
+    const cardBg=r._typ==='przeprowadzka'?'#fffbeb':r._typ==='przedluzenie'?'#f5f3ff':'var(--white)';
+    return`<div style="position:relative;overflow:hidden;background:${cardBg};border:1px solid ${r._typ?'#fcd34d':'var(--border)'};border-radius:14px;padding:11px 12px;margin-bottom:9px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 4px 14px rgba(15,23,42,.05)">
+      <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 80% at 100% 0%,${accent}12,transparent 60%)"></div>
+      <div style="position:relative;display:flex;gap:10px;align-items:flex-start">
+        ${iconBox(ico.home,42,'#1d4ed8')}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.15">${r.apt}</div>
+          <div style="font-size:12px;color:var(--text-mid);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.gosc||'—'}</div>
+          ${nr?`<span onclick="copyAmountToClipboard('${escapeHtml(nr)}',this)" title="Kliknij, aby skopiować nr rezerwacji" style="display:inline-block;margin-top:4px;font-size:10.5px;font-weight:600;color:var(--text-mid);cursor:pointer;padding:2px 7px;border-radius:6px;background:#eef2f7;transition:background .2s"># ${escapeHtml(nr)}</span>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
+          <div style="display:flex;gap:4px;align-items:center">${flagBadge}${specBadge}${chanBadge(r)}</div>
+          <span onclick="copyAmountToClipboard('${fmt(r.cena)}',this)" title="Kliknij, aby skopiować kwotę" style="font-size:16px;font-weight:800;color:#f97316;cursor:pointer;padding:2px 7px;border-radius:8px;background:#fff7ed;white-space:nowrap;transition:background .2s">${fmt(r.cena)} zł</span>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${r.gosc||'—'}</div>
-      ${(()=>{const nr=String(r.voucher||r.resId||'').replace(/^'/,'').trim();return nr?`<div style="margin-top:3px"><span onclick="copyAmountToClipboard('${escapeHtml(nr)}',this)" title="Kliknij, aby skopiować nr rezerwacji" style="font-size:10px;font-weight:600;color:var(--text-mid);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;padding:1px 4px;border-radius:4px;background:var(--bg,#f1f5f9);border:1px solid var(--border);transition:background .2s"># ${escapeHtml(nr)}</span></div>`:'';})()}
-      ${phoneBadge?`<div style="margin-top:6px">${phoneBadge}</div>`:''}
-      ${renderPrevioInvoiceBadge(r,true)}
-      ${renderPrevioGuestRequestBadge(r,true)}
-      <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--text-muted)">${r.dataOd?.slice(0,10)||''} ${godz_od?`<strong style="color:${accent}">${godz_od}</strong>`:''} → ${r.dataDo?.slice(0,10)||''} ${godz_do?`<strong style="color:${accent}">${godz_do}</strong>`:''}</span>
-        <span style="font-size:10px;color:var(--text-muted)">· ${r.noce} nocy${r.osoby?` · ${r.osoby} os.`:''}</span>
+      <div style="position:relative;display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap">
+        ${dateCol('Przyjazd',r.dataOd?.slice(0,10),godz_od)}
+        <span style="color:var(--text-muted);font-size:14px">→</span>
+        ${dateCol('Wyjazd',r.dataDo?.slice(0,10),godz_do)}
+        <div style="display:flex;gap:10px;align-items:center;margin-left:auto;padding-left:8px;border-left:1px solid var(--border)">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.moon}</span>${r.noce} ${noceLabel(r.noce)}</span>
+          ${r.osoby?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-mid)"><span style="color:#1e3a8a;display:inline-flex">${ico.user}</span>${r.osoby} os.</span>`:''}
+        </div>
       </div>
+      ${phoneBadge?`<div style="position:relative;margin-top:8px">${phoneBadge}</div>`:''}
+      <div style="position:relative">${invoiceStrip}${renderPrevioGuestRequestBadge(r,true)}</div>
     </div>`;
   };
 
