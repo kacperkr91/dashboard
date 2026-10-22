@@ -1521,6 +1521,7 @@ async function loadKsefData(){
           updatedAt:''
         }
       : null;
+    baseItem._sheetPaidEntry=sheetEntry||(hasCredibleSheetPaymentEvidence?{paidDate:sheetPaidDate,paidAmount:sheetPaidAmount||(sheetPartial?Math.max(brutto-sheetRemainingAmount,0):(sheetPaid?brutto:0)),updatedAt:''}:null);
     applyKsefPaymentState(baseItem,manualPaid||sheetEntry);
     return baseItem;
   }).filter(item=>item.ksefNumber||item.seller);
@@ -12544,6 +12545,7 @@ async function syncPull(){
       const mergedKsefPaid=mergeKsefPaidMaps(localKsefPaid,remoteKsefPaid);
       _ksefPaidCache=mergedKsefPaid;
       localStorage.setItem('ksef_paid_map',JSON.stringify(_ksefPaidCache));
+      reapplyKsefPaidStateToRows();
       if(Object.keys(mergedKsefPaid).length!==Object.keys(remoteKsefPaid).length || JSON.stringify(mergedKsefPaid)!==JSON.stringify(remoteKsefPaid)){
         syncPushKsefPaid(mergedKsefPaid);
       }
@@ -12794,6 +12796,16 @@ function saveKsefPaidMap(map){
   _ksefPaidCache=map;
   localStorage.setItem('ksef_paid_map',JSON.stringify(map));
   syncPushKsefPaid(map);
+}
+
+function reapplyKsefPaidStateToRows(){
+  const rows=_state?.data?.ksef;
+  if(!Array.isArray(rows))return;
+  const map=getKsefPaidMap();
+  rows.forEach(item=>{
+    const key=String(item.ksefNumber||'').trim();
+    applyKsefPaymentState(item,(key&&map[key])||item._sheetPaidEntry||null);
+  });
 }
 
 function patchKsefRowPaidState(ksefNumber,entry=null){
