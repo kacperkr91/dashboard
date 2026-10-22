@@ -15359,7 +15359,7 @@ function tabToDate(name){const[dd,mm]=name.split('.').map(Number);return new Dat
 function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
-/* API — apiFetch i fetchSheetNames (z cache) zdefiniowane wyżej; duplikat usunięty, bo nadpisywał wersję z cache */
+/* API — apiFetch (z retry) i fetchSheetNames (z cache) zdefiniowane wyżej; duplikat usunięty, bo nadpisywał wersję z cache */
 
 /* DATA LOADERS */
 async function loadMarchData(){
