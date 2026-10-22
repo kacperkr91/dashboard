@@ -854,18 +854,36 @@ function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
 /* API */
-async function apiFetch(url){
+async function apiFetchOnce(url){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),12000);
   try{
     const res=await fetch(url,{signal:controller.signal,cache:'no-store'});
-    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+    if(!res.ok){
+      const e=await res.json().catch(()=>({}));
+      const err=new Error(e?.error?.message||`HTTP ${res.status}`);
+      err.status=res.status;
+      throw err;
+    }
     return res.json();
   }catch(err){
     if(err?.name==='AbortError')throw new Error('REQUEST_TIMEOUT');
     throw err;
   }finally{
     clearTimeout(timer);
+  }
+}
+// Limit Sheets API: 60 odczytów/min. Przy 429/"Quota exceeded" czekamy i ponawiamy zamiast od razu zwracać błąd.
+async function apiFetch(url){
+  const delays=[3000,8000,20000,35000];
+  for(let attempt=0;;attempt++){
+    try{
+      return await apiFetchOnce(url);
+    }catch(err){
+      const isQuota=err?.status===429||/quota exceeded|rate limit/i.test(err?.message||'');
+      if(!isQuota||attempt>=delays.length)throw err;
+      await new Promise(r=>setTimeout(r,delays[attempt]+Math.random()*1000));
+    }
   }
 }
 const _sheetNamesCache={};
@@ -15341,25 +15359,7 @@ function tabToDate(name){const[dd,mm]=name.split('.').map(Number);return new Dat
 function isWeekend(d){return d.getDay()===6||d.getDay()===0;}
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 
-/* API */
-async function apiFetch(url){
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),12000);
-  try{
-    const res=await fetch(url,{signal:controller.signal,cache:'no-store'});
-    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
-    return res.json();
-  }catch(err){
-    if(err?.name==='AbortError')throw new Error('REQUEST_TIMEOUT');
-    throw err;
-  }finally{
-    clearTimeout(timer);
-  }
-}
-async function fetchSheetNames(id,key){
-  const d=await apiFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties.title&key=${key}`);
-  return d.sheets.map(s=>s.properties.title);
-}
+/* API — apiFetch i fetchSheetNames (z cache) zdefiniowane wyżej; duplikat usunięty, bo nadpisywał wersję z cache */
 
 /* DATA LOADERS */
 async function loadMarchData(){
@@ -15855,19 +15855,32 @@ function ensurePrevioForecastLoadedForRentalKey(rentalKey){
     if(_state.section==='rental'||_state.section==='oblozenie')renderApp();
   });
 }
-function ensureRentalMonthDataLoaded(key, section='oblozenie'){
-  if(!key)return;
-  const existing=_state.data[key];
-  if(existing!==undefined&&existing!==null)return;
-  if(existing===null)return;
+// Ładowanie miesiąca Przychodów: null = nie załadowano, {error} = błąd (ponawiamy przy kolejnym wejściu),
+// _rentalInflight pilnuje, żeby szybkie klikanie nie odpalało kilku równoległych pobrań tego samego miesiąca.
+const _rentalInflight=new Set();
+function rentalMonthNeedsLoad(key){
+  if(!key||_rentalInflight.has(key))return false;
+  const v=_state.data[key];
+  return v===undefined||v===null||!!(v&&!Array.isArray(v)&&v.error);
+}
+function startRentalMonthLoad(key, section='rental'){
+  if(!key||_rentalInflight.has(key))return;
+  _rentalInflight.add(key);
   _state.data[key]=null;
+  if(_state.section===section)renderApp();
   loadRentalMonthDataByKey(key).then(rows=>{
     _state.data[key]=rows;
-    if(_state.section===section)renderApp();
   }).catch(e=>{
     _state.data[key]={error:e.message||'Błąd'};
-    if(_state.section===section)renderApp();
+  }).finally(()=>{
+    _rentalInflight.delete(key);
+    if(_state.section===section&&(section!=='rental'||_state.rentalMonth===key))renderApp();
   });
+}
+function ensureRentalMonthDataLoaded(key, section='oblozenie'){
+  if(!key)return;
+  if(!rentalMonthNeedsLoad(key))return;
+  startRentalMonthLoad(key,section);
 }
 function ensureRentalNamedMonthDataLoaded(key, section='oblozenie'){
   if(!key)return;
@@ -16169,11 +16182,14 @@ async function prefetchSecondaryModules(){
     jobs.push(async ()=>{
       const keys=['mar2026','feb2026','jan2026','dec2025'];
       for(const key of keys){
-        if(_state.data[key])continue;
+        if(_state.data[key]||_rentalInflight.has(key))continue;
+        _rentalInflight.add(key);
         try{
           _state.data[key]=await loadRentalMonthDataByKey(key);
         }catch(e){
           _state.data[key]={error:e.message||'Błąd'};
+        }finally{
+          _rentalInflight.delete(key);
         }
       }
     });
@@ -16356,16 +16372,8 @@ function ensureSectionDataLoaded(section){
   }
   if(section==='rental'){
     const key=_state.rentalMonth;
-    if(_state.data[key]===undefined || _state.data[key]===null){
-      _state.data[key]=null;
-      renderApp();
-      loadRentalMonthDataByKey(key).then(rows=>{
-        _state.data[key]=rows;
-        if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
-      }).catch(e=>{
-        _state.data[key]={error:e.message||'Błąd'};
-        if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
-      });
+    if(rentalMonthNeedsLoad(key)){
+      startRentalMonthLoad(key,'rental');
       return true;
     }
   }
@@ -17377,16 +17385,8 @@ function setRentalMonth(key){
   if(parsed)_state.rentalYear=parsed.year;
   ensurePrevioForecastLoadedForRentalKey(key);
   ensureRentalMonthEnabled(key);
-  if(_state.data[key]===undefined || _state.data[key]===null){
-    _state.data[key]=null;
-    renderApp();
-    loadRentalMonthDataByKey(key).then(rows=>{
-      _state.data[key]=rows;
-      if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
-    }).catch(e=>{
-      _state.data[key]={error:e.message||'Błąd'};
-      if(_state.section==='rental'&&_state.rentalMonth===key)renderApp();
-    });
+  if(rentalMonthNeedsLoad(key)){
+    startRentalMonthLoad(key,'rental');
     return;
   }
   renderApp();
