@@ -887,6 +887,11 @@ async function apiFetch(url){
   }
 }
 const _sheetNamesCache={};
+function invalidateSheetNamesCache(id){
+  const keys=id?[`sheet_names_${id}`]:Object.keys(_sheetNamesCache);
+  keys.forEach(k=>{delete _sheetNamesCache[k];try{localStorage.removeItem(k);}catch(e){}});
+  if(!id){try{Object.keys(localStorage).filter(k=>k.startsWith('sheet_names_')).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+}
 async function fetchSheetNames(id,key){
   const cacheKey=`sheet_names_${id}`;
   const now=Date.now();
@@ -15800,7 +15805,11 @@ function exportHkPdf(monthKey, monthLabel){
 
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function safeLoad(fn){try{return{status:'fulfilled',value:await fn()};}catch(e){return{status:'rejected',reason:e};}}
-async function refresh(){await init();}
+async function refresh(){
+  invalidateSheetNamesCache();
+  _hkMonthsDetected=false;_otvMonthsDetected=false;_agataMonthsDetected=false;_czynszeMonthsDetected=false;
+  await init();
+}
 
 function shiftMonthKey(monthKey, delta){
   if(!monthKey||!/^(\d{4})-(\d{2})$/.test(monthKey))return'';
@@ -16782,6 +16791,7 @@ async function createNextCzynszeMonth(){
     });
     const data=await resp.json();
     if(!resp.ok||data.error)throw new Error(data.error||'Nie udało się utworzyć nowego miesiąca.');
+    invalidateSheetNamesCache(CONFIG.czynszeSpreadsheetId);
     _czynszeMonthsDetected=false;
     await detectCzynszeMonths();
     if(data.targetMonthKey){
