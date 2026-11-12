@@ -2704,8 +2704,20 @@ function calcPrevioForecast(monthKey){
 
     // What was the full last year total
     // Scale factor: how much faster/slower we're running vs last year
-    // Tempo liczone na apartament, żeby wzrost liczby lokali nie zawyżał prognozy
-    const pace=lyEarnedToDate>0&&totalApts>0&&lyTotalApts>0?(earned/totalApts)/(lyEarnedToDate/lyTotalApts):1;
+    // Tempo liczone na apartament, żeby wzrost liczby lokali nie zawyżał prognozy.
+    // W bieżącym miesiącu tempo = obłożenie (zajęte noce / lokal) vs zeszły rok, bez ceny —
+    // cena wchodzi tylko przez currentAdrPerNight, więc nie jest liczona podwójnie
+    // (niższa średnia cena z nowych/tańszych lokali nie obniża już docelowego obłożenia).
+    let pace=lyEarnedToDate>0&&totalApts>0&&lyTotalApts>0?(earned/totalApts)/(lyEarnedToDate/lyTotalApts):1;
+    if(monthKey===currentMonthKey&&daysDone>0&&totalApts>0&&lyTotalApts>0){
+      const pastEnd=new Date(yr,mo-1,daysDone);
+      const lyPastEnd=new Date(yr-1,mo-1,Math.min(daysDone,new Date(yr-1,mo,0).getDate()));
+      const cyPastNights=collectOccupiedNightKeys(active.filter(r=>!isWylaczonyApt(r.apt)),monthStart,pastEnd).size;
+      const lyPastNights=collectOccupiedNightKeys(lyActive,new Date(yr-1,mo-1,1),lyPastEnd).size;
+      const cyPastOcc=cyPastNights/(totalApts*daysDone);
+      const lyPastOcc=lyPastNights/(lyTotalApts*lyPastEnd.getDate());
+      if(lyPastOcc>0)pace=clamp(cyPastOcc/lyPastOcc,0.5,1.5);
+    }
 
     const lyMonthEnd=new Date(yr-1,mo,0);
     const lyFutureStart=monthKey>currentMonthKey?new Date(yr-1,mo-1,1):new Date(yr-1,mo-1,Math.min(daysDone+1,lyMonthEnd.getDate()));
